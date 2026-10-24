@@ -15,6 +15,11 @@ export class BodyRoster {
     this.slots = [null, null]; // { id, kp, torso, view }
   }
 
+  // Forget everyone (camera stall): slots refill from the next skeletons.
+  reset() {
+    this.slots = [null, null];
+  }
+
   // bodies: [{ id, kp }] in camera coords (docs/protocol.md). Returns { slots, rejected }.
   update(bodies) {
     const rejected = [];

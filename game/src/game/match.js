@@ -15,6 +15,7 @@ const INCANTATION_WARD_MS = 1500;
 const INCANTATION_GATHER = 0.5;
 const SPELLS = ['bolt', 'ward', 'gather', 'ultimate'];
 const BODY_STALE_MS = 500; // body slots are trusted for hand attachment while this fresh
+const INPUT_STALE_MS = 400; // no hand / body input for this long (camera stall): forget it all
 
 const emptyStats = () => ({ casts: 0, hits: 0, blocked: 0, damageDealt: 0, bestHit: 0, evaded: 0 });
 
@@ -25,6 +26,9 @@ export class Match {
     this.bodyRoster = new BodyRoster({ mirror });
     this.postures = [new PostureDetector(), new PostureDetector()];
     this.lastBodiesMs = -Infinity;
+    // Monotonic match clock (sum of step dt), independent of the source's timestamps.
+    this.clockMs = 0;
+    this.seenAt = { hands: -Infinity, bodies: -Infinity };
     this.casters = [new PlayerCaster(), new PlayerCaster()];
     this.combat = createCombat();
     this.flow = createFlow();
@@ -47,6 +51,7 @@ export class Match {
     const previous = this.bodyRoster.slots.map((b) => b?.id);
     const { slots, rejected } = this.bodyRoster.update(bodies);
     this.lastBodiesMs = tMs;
+    this.seenAt.bodies = this.clockMs;
     this.view.bodies = slots;
     this.view.rejectedBodies = rejected;
     const fx = [];
@@ -66,6 +71,7 @@ export class Match {
   ingest(observations, tMs) {
     const bodies = tMs - this.lastBodiesMs <= BODY_STALE_MS ? this.bodyRoster : null;
     const { slots, triangles, rejected } = this.roster.update(observations, tMs, bodies);
+    this.seenAt.hands = this.clockMs;
     Object.assign(this.view, { slots, triangles, rejected });
     const fx = [];
     const live = isCombatLive(this.flow);
@@ -84,7 +90,8 @@ export class Match {
 
   // Advances real time. Returns fx events (hits, KO, flow changes, countdown ticks).
   step(dtMs) {
-    const fx = [];
+    this.clockMs += dtMs;
+    const fx = [...this.#expireStaleInput()];
     const palms = [0, 1].map((slot) => this.view.slots[slot].some((h) => h.sign === SIGNS.WARD));
     const present = [0, 1].map((slot) => this.view.slots[slot].length > 0 || Boolean(this.view.bodies[slot]));
     const hp = this.combat.players.map((p) => p.hp);
@@ -108,6 +115,31 @@ export class Match {
     if (spellName === 'gather') player.charge = Math.min(1, player.charge + INCANTATION_GATHER * power);
     if (spellName === 'ward') this.incantationWardUntil[slot] = this.combat.clockMs + INCANTATION_WARD_MS * power;
     return [];
+  }
+
+  // A stalled camera must not keep the last frame alive (gathering, warding, stance, presence).
+  #expireStaleInput() {
+    const fx = [];
+    const isStale = (kind) => this.clockMs - this.seenAt[kind] > INPUT_STALE_MS;
+    const hasHands = this.view.slots.some((hands) => hands.length) || this.combat.players.some((p) => p.isGathering || p.isWarding);
+    if (isStale('hands') && hasHands) {
+      this.roster.reset();
+      Object.assign(this.view, { slots: [[], []], triangles: [{ active: false }, { active: false }], rejected: [] });
+      this.casters.forEach((caster, slot) => {
+        caster.reset();
+        const player = this.combat.players[slot];
+        this.view.casters[slot] = caster.update({ hands: [], triangle: { active: false }, tMs: 0, player, now: this.combat.clockMs });
+        fx.push(...applyIntent(this.combat, slot, { gathering: false, warding: this.combat.clockMs < this.incantationWardUntil[slot] }));
+      });
+    }
+    const hasBodies = this.view.bodies.some(Boolean) || this.combat.players.some((p) => p.stance !== STANCE.NEUTRAL);
+    if (isStale('bodies') && hasBodies) {
+      this.bodyRoster.reset();
+      this.postures.forEach((posture) => posture.reset());
+      Object.assign(this.view, { bodies: [null, null], postures: [null, null], rejectedBodies: [] });
+      [0, 1].forEach((slot) => fx.push(...setStance(this.combat, slot, STANCE.NEUTRAL)));
+    }
+    return fx;
   }
 
   #combatRuns() {

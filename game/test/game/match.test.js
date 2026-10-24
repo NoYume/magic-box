@@ -4,6 +4,8 @@ import { test } from 'node:test';
 import { PHASE } from '../../src/game/rounds.js';
 import { Match } from '../../src/game/match.js';
 import { DemoBot, botToInputs } from '../../src/sources/demo-bot.js';
+import { makeBody } from '../../src/vision/synthetic-body.js';
+import { observation } from '../helpers/hands.js';
 
 const FRAME_W = 960;
 const FRAME_H = 600;
@@ -54,4 +56,32 @@ test('incantation_hook_should_cast_only_during_fight', () => {
   match.flow.phase = PHASE.FIGHT;
   assert.equal(match.castIncantation(0, 'bolt', 1)[0].kind, 'cast');
   assert.deepEqual(match.castIncantation(0, 'fireworks', 1), []);
+});
+
+// Regression (review P1): a camera stall must not keep the last input alive.
+function fightWithFist() {
+  const match = new Match();
+  match.flow.phase = PHASE.FIGHT;
+  let t = 0;
+  for (; t < 900; t += TICK_MS) {
+    match.ingestBodies([makeBody({ id: 1, cx: 0.75, z: 0.8, wrists: { r: { x: 0.75, y: 0.62, z: 0.7 } } })], t);
+    match.ingest([observation('fist', { cx: 0.75, cy: 0.62 })], t);
+    match.step(TICK_MS);
+  }
+  return match;
+}
+
+test('should_expire_hands_and_bodies_when_the_camera_stalls', () => {
+  const match = fightWithFist();
+  const player = match.combat.players[0];
+  assert.ok(player.isGathering, 'gathering while the fist is seen');
+  const chargeAtStall = player.charge;
+  player.stance = 'leanIn';
+  for (let t = 0; t < 5000; t += TICK_MS) match.step(TICK_MS); // no input for 5 s
+  assert.equal(player.isGathering, false);
+  assert.ok(player.charge <= chargeAtStall, `charge rose to ${player.charge} during the outage`);
+  assert.equal(player.stance, 'neutral');
+  assert.deepEqual(match.view.slots, [[], []]);
+  assert.deepEqual(match.view.bodies, [null, null]);
+  assert.equal(match.view.casters[0].handStates.size, 0);
 });
