@@ -1,0 +1,4 @@
+# pyzed comes from the ZED SDK installer (python3 /usr/local/zed/get_python_api.py), not pip.
+websockets==13.1
+opencv-python-headless==4.10.0.84
+numpy<2
