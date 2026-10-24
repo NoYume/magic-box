@@ -38,10 +38,12 @@ DEPTH_WIDTH = 160  # depth map width; height follows the camera aspect ratio
 JPEG_QUALITY = 70
 MSG_FRAME = 0x01
 MSG_DEPTH = 0x02
-DEPTH_HEADER = struct.Struct("<BBHH")  # type, reserved, width, height
+FRAME_HEADER = struct.Struct("<BBI")  # type, reserved, capture seq
+DEPTH_HEADER = struct.Struct("<BBIHH")  # type, reserved, capture seq, width, height
 MM_PER_M = 1000.0
 UINT16_MAX = 65535
 STATS_PERIOD_S = 5
+SEQ_MODULO = 2**32  # capture seq is a u32 on the wire
 
 
 def parse_args():
@@ -107,31 +109,31 @@ def to_point(kp2d, kp3d, width, height):
     return {"x": x / width, "y": y / height, "z": z}
 
 
-def serialize_bodies(bodies, width, height):
+def serialize_bodies(bodies, width, height, seq):
     out = []
     for body in bodies.body_list:
         if body.tracking_state != sl.OBJECT_TRACKING_STATE.OK:
             continue
         kp = {name: to_point(body.keypoint_2d[i], body.keypoint[i], width, height) for name, i in KEYPOINTS.items()}
         out.append({"id": int(body.id), "kp": kp})
-    return json.dumps({"type": "bodies", "t": int(time.time() * 1000), "bodies": out})
+    return json.dumps({"type": "bodies", "seq": seq, "t": int(time.time() * 1000), "bodies": out})
 
 
 def scaled_size(camera_res, width):
     return width, round(width * camera_res.height / camera_res.width)
 
 
-def encode_depth(depth_m):
+def encode_depth(depth_m, seq):
     """float32 meters (NaN/inf = unknown) -> typed binary message of uint16 millimeters (0 = unknown)."""
     valid = np.isfinite(depth_m) & (depth_m > 0)
     mm = np.where(valid, np.clip(depth_m * MM_PER_M, 1, UINT16_MAX), 0).astype("<u2")
     height, width = mm.shape
-    return DEPTH_HEADER.pack(MSG_DEPTH, 0, width, height) + mm.tobytes()
+    return DEPTH_HEADER.pack(MSG_DEPTH, 0, seq, width, height) + mm.tobytes()
 
 
-def encode_frame(bgra):
+def encode_frame(bgra, seq):
     ok, jpeg = cv2.imencode(".jpg", cv2.cvtColor(bgra, cv2.COLOR_BGRA2BGR), [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
-    return bytes([MSG_FRAME]) + jpeg.tobytes() if ok else None
+    return FRAME_HEADER.pack(MSG_FRAME, 0, seq) + jpeg.tobytes() if ok else None
 
 
 class CaptureThread(threading.Thread):
@@ -175,12 +177,14 @@ class CaptureThread(threading.Thread):
             self.zed.retrieve_bodies(bodies, body_runtime)
             self.zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, self.frame_res)
             self.zed.retrieve_measure(depth, sl.MEASURE.DEPTH, sl.MEM.CPU, self.depth_res)
-            frame = encode_frame(image.get_data())
+            # One capture sequence number ties this grab's frame, depth map and bodies together.
+            capture = (self.seq + 1) % SEQ_MODULO
+            frame = encode_frame(image.get_data(), capture)
             if frame is None:
                 continue
             # Keypoints are in full camera-resolution pixels; normalize by that, not the JPEG size.
-            text = serialize_bodies(bodies, self.camera_res.width, self.camera_res.height)
-            self.latest = (frame, encode_depth(depth.get_data()), text)
+            text = serialize_bodies(bodies, self.camera_res.width, self.camera_res.height, capture)
+            self.latest = (frame, encode_depth(depth.get_data(), capture), text)
             self.seq += 1
             now = time.perf_counter()
             self.fps = 0.9 * self.fps + 0.1 / max(now - last, 1e-6)

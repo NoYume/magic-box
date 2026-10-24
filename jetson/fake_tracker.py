@@ -25,7 +25,8 @@ FRAME_W, FRAME_H = 960, 600  # ZED X SVGA aspect (16:10)
 DEPTH_W, DEPTH_H = 160, 100
 MSG_FRAME = 0x01
 MSG_DEPTH = 0x02
-DEPTH_HEADER = struct.Struct("<BBHH")
+FRAME_HEADER = struct.Struct("<BBI")  # type, reserved, capture seq
+DEPTH_HEADER = struct.Struct("<BBIHH")  # type, reserved, capture seq, width, height
 WALL_MM = 0  # the back wall is beyond max range, so it reads as unknown
 HAND_REST_MM = 650
 THRUST_MM = 250
@@ -54,7 +55,7 @@ def player_pose(index, t):
     return cx + dodge, BODY_Z
 
 
-def fake_bodies(t):
+def fake_bodies(t, seq):
     point = lambda x, y, z: {"x": round(x, 4), "y": round(y, 4), "z": round(z, 3)}
     bodies = []
     for index in range(len(PLAYERS)):
@@ -72,19 +73,19 @@ def fake_bodies(t):
                 "pelvis": None,
             },
         })
-    return json.dumps({"type": "bodies", "t": int(time.time() * 1000), "bodies": bodies})
+    return json.dumps({"type": "bodies", "seq": seq, "t": int(time.time() * 1000), "bodies": bodies})
 
 
-def fake_depth(t):
+def fake_depth(t, seq):
     depth = np.full((DEPTH_H, DEPTH_W), WALL_MM, np.uint16)
     for index in range(len(PLAYERS)):
         cx, z = player_pose(index, t)
         depth[ellipse_mask(DEPTH_W, DEPTH_H, cx, 0.78, 0.13, 0.36)] = int(z * 1000)
     depth[ellipse_mask(DEPTH_W, DEPTH_H, *HAND)] = HAND_REST_MM - thrust_mm(t)
-    return DEPTH_HEADER.pack(MSG_DEPTH, 0, DEPTH_W, DEPTH_H) + depth.astype("<u2").tobytes()
+    return DEPTH_HEADER.pack(MSG_DEPTH, 0, seq, DEPTH_W, DEPTH_H) + depth.astype("<u2").tobytes()
 
 
-def fake_frame(t):
+def fake_frame(t, seq):
     ramp = np.linspace(70, 30, FRAME_H, dtype=np.float32)[:, None, None]
     frame = np.broadcast_to(ramp * np.array([1.0, 0.8, 0.7]), (FRAME_H, FRAME_W, 3)).astype(np.uint8).copy()
     for index in range(len(PLAYERS)):
@@ -96,7 +97,7 @@ def fake_frame(t):
     cx, cy, rx, ry = HAND
     cv2.ellipse(frame, (int(cx * FRAME_W), int(cy * FRAME_H)), (int(rx * FRAME_W * scale), int(ry * FRAME_H * scale)), 0, 0, 360, (150, 170, 200), -1)
     cv2.putText(frame, "FAKE TRACKER", (24, FRAME_H - 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (170, 170, 170), 1, cv2.LINE_AA)
-    return bytes([MSG_FRAME]) + cv2.imencode(".jpg", frame)[1].tobytes()
+    return FRAME_HEADER.pack(MSG_FRAME, 0, seq) + cv2.imencode(".jpg", frame)[1].tobytes()
 
 
 async def main():
@@ -114,11 +115,13 @@ async def main():
     async with websockets.serve(handler, "0.0.0.0", PORT):
         print(f"fake tracker on ws://localhost:{PORT}")
         start = time.time()
+        seq = 0
         while True:
             t = time.time() - start
-            websockets.broadcast(clients, fake_depth(t))
-            websockets.broadcast(clients, fake_frame(t))
-            websockets.broadcast(clients, fake_bodies(t))
+            seq = (seq + 1) % 2**32  # one capture: depth, frame and bodies share the seq
+            websockets.broadcast(clients, fake_depth(t, seq))
+            websockets.broadcast(clients, fake_frame(t, seq))
+            websockets.broadcast(clients, fake_bodies(t, seq))
             await asyncio.sleep(1 / FPS)
 
 

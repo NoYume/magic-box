@@ -13,22 +13,26 @@ function flatMap(width, height, mm) {
 
 test('should_round_trip_depth_message_through_wire_format', () => {
   const data = Uint16Array.from({ length: 12 }, (_, i) => 500 + i);
-  const parsed = parseBinaryMessage(encodeDepthMessage(4, 3, data));
+  const parsed = parseBinaryMessage(encodeDepthMessage(4, 3, data, 70000));
   assert.equal(parsed.type, 'depth');
+  assert.equal(parsed.seq, 70000);
   assert.equal(parsed.width, 4);
   assert.equal(parsed.height, 3);
   assert.deepEqual([...parsed.data], [...data]);
 });
 
-test('should_split_jpeg_frame_message', () => {
-  const buffer = Uint8Array.from([0x01, 0xff, 0xd8, 0xff]).buffer;
+test('should_split_jpeg_frame_message_with_capture_sequence', () => {
+  // type, reserved, u32 LE seq = 258, then JPEG bytes
+  const buffer = Uint8Array.from([0x01, 0, 0x02, 0x01, 0, 0, 0xff, 0xd8, 0xff]).buffer;
   const parsed = parseBinaryMessage(buffer);
   assert.equal(parsed.type, 'frame');
+  assert.equal(parsed.seq, 258);
   assert.deepEqual([...parsed.jpeg], [0xff, 0xd8, 0xff]);
 });
 
 test('should_reject_unknown_and_truncated_messages', () => {
   assert.throws(() => parseBinaryMessage(Uint8Array.from([0x07, 1]).buffer), ProtocolError);
+  assert.throws(() => parseBinaryMessage(Uint8Array.from([0x01, 0, 1]).buffer), ProtocolError);
   const short = encodeDepthMessage(4, 3, new Uint16Array(12)).slice(0, 20);
   assert.throws(() => parseBinaryMessage(short), ProtocolError);
 });

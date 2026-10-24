@@ -8,7 +8,10 @@ import { dist } from './vec.js';
 
 export const MSG_FRAME = 0x01;
 export const MSG_DEPTH = 0x02;
-const DEPTH_HEADER_BYTES = 6; // type, reserved, u16 width, u16 height (little endian)
+// Little endian. Every binary message carries the capture sequence number of the camera grab it
+// came from, so a frame, its depth map and its bodies can be kept or dropped together.
+const FRAME_HEADER_BYTES = 6; // type, reserved, u32 seq, then JPEG
+const DEPTH_HEADER_BYTES = 10; // type, reserved, u32 seq, u16 width, u16 height, then u16 mm
 const MM_PER_M = 1000;
 
 export class ProtocolError extends Error {}
@@ -18,27 +21,32 @@ export function parseBinaryMessage(buffer) {
   const bytes = new Uint8Array(buffer);
   if (bytes.length < 1) throw new ProtocolError('Empty binary message');
   const type = bytes[0];
-  if (type === MSG_FRAME) return { type: 'frame', jpeg: bytes.subarray(1) };
+  if (type === MSG_FRAME) {
+    if (bytes.length < FRAME_HEADER_BYTES) throw new ProtocolError('Truncated frame header');
+    return { type: 'frame', seq: new DataView(buffer, 2, 4).getUint32(0, true), jpeg: bytes.subarray(FRAME_HEADER_BYTES) };
+  }
   if (type !== MSG_DEPTH) throw new ProtocolError(`Unknown binary message type 0x${type.toString(16)}`);
   if (bytes.length < DEPTH_HEADER_BYTES) throw new ProtocolError('Truncated depth header');
   const view = new DataView(buffer, 0, DEPTH_HEADER_BYTES);
-  const width = view.getUint16(2, true);
-  const height = view.getUint16(4, true);
+  const seq = view.getUint32(2, true);
+  const width = view.getUint16(6, true);
+  const height = view.getUint16(8, true);
   const expected = DEPTH_HEADER_BYTES + width * height * 2;
   if (bytes.length !== expected) throw new ProtocolError(`Depth map is ${bytes.length} bytes, expected ${expected} for ${width}x${height}`);
   const data = new Uint16Array(width * height);
   const src = new DataView(buffer, DEPTH_HEADER_BYTES);
   for (let i = 0; i < data.length; i++) data[i] = src.getUint16(i * 2, true);
-  return { type: 'depth', width, height, data };
+  return { type: 'depth', seq, width, height, data };
 }
 
-// Builds the wire form of a depth map (used by tests and the scripted demo).
-export function encodeDepthMessage(width, height, data) {
+// Builds the wire form of a depth map (used by tests).
+export function encodeDepthMessage(width, height, data, seq = 0) {
   const buffer = new ArrayBuffer(DEPTH_HEADER_BYTES + width * height * 2);
   const view = new DataView(buffer);
   view.setUint8(0, MSG_DEPTH);
-  view.setUint16(2, width, true);
-  view.setUint16(4, height, true);
+  view.setUint32(2, seq, true);
+  view.setUint16(6, width, true);
+  view.setUint16(8, height, true);
   data.forEach((mm, i) => view.setUint16(DEPTH_HEADER_BYTES + i * 2, mm, true));
   return buffer;
 }
