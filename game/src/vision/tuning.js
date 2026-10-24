@@ -11,9 +11,6 @@ export const SIGN = {
   // Open palm must face the camera: |palm normal . view axis|.
   FACING_MIN: 0.45,
   FACING_FULL: 0.75,
-  // Sword sign: index and middle tips together (gap / palm size).
-  SWORD_GAP_MAX: 0.5,
-  SWORD_GAP_FULL: 0.3,
   // Fist: thumb tip must not stick out past the knuckles (rise above the middle MCP / palm size),
   // which separates a fist from a thumbs-up.
   FIST_THUMB_RISE_MAX: 0.3,
@@ -58,9 +55,9 @@ export const DEPTH = {
 };
 
 export const THRUST = {
-  WINDOW_MS: 140, // velocity is measured across this span to reject single-frame noise
-  MIN_SPEED: 0.55, // [ZED] m/s toward the camera
-  MIN_TRAVEL: 0.07, // [ZED] meters toward the camera within the window
+  WINDOW_MS: 200, // velocity is measured across this span to reject single-frame noise
+  MIN_SPEED: 0.4, // [ZED] m/s toward the camera
+  MIN_TRAVEL: 0.05, // [ZED] meters toward the camera within the window
   FULL_SPEED: 1.6, // m/s at which thrust power saturates
 };
 

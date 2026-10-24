@@ -6,8 +6,8 @@ import { makeTrianglePair, placeHand } from '../../src/vision/synthetic-hand.js'
 import { vec } from '../../src/vision/vec.js';
 import { FRAME, NOISE_M, NOISE_SEEDS, VARIATIONS, handFixture } from '../helpers/hands.js';
 
-const CANONICAL = { open: SIGNS.WARD, fist: SIGNS.GATHER, sword: SIGNS.AIM };
-const NEGATIVES = ['point', 'peace', 'claw', 'relaxed', 'thumbsUp', 'rock'];
+const CANONICAL = { open: SIGNS.WARD, fist: SIGNS.GATHER, sword: SIGNS.AIM, peace: SIGNS.AIM };
+const NEGATIVES = ['point', 'claw', 'relaxed', 'thumbsUp', 'rock'];
 
 for (const [pose, expected] of Object.entries(CANONICAL)) {
   test(`should_classify_${pose}_as_${expected}_across_orientations_and_noise`, () => {

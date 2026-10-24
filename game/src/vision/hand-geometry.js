@@ -35,8 +35,6 @@ export function palmFacing(image3d) {
   return Math.abs(normal.z);
 }
 
-// Index-middle tip gap relative to palm size (small = fingers held together).
-export const swordGap = (world) => dist(world[INDEX[3]], world[MIDDLE[3]]) / palmSize(world);
 
 // How far the thumb tip rises past the knuckle line along the palm's up axis, relative to palm
 // size (<= 0 when the thumb is wrapped over a fist, large for a thumbs-up).
@@ -62,7 +60,6 @@ export function describeHand({ world, image3d }) {
   return {
     ext: fingerExtensions(world),
     facing: palmFacing(image3d),
-    swordGap: swordGap(world),
     thumbRise: thumbRise(world),
   };
 }

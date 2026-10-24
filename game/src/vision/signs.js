@@ -13,13 +13,14 @@ export const SIGNS = Object.freeze({ NONE: 'none', WARD: 'ward', GATHER: 'gather
 const SINGLE_HAND_SIGNS = [SIGNS.WARD, SIGNS.GATHER, SIGNS.AIM];
 
 export function scoreSigns(features) {
-  const { ext, facing, swordGap, thumbRise } = features;
+  const { ext, facing, thumbRise } = features;
   const open = [ext.index, ext.middle, ext.ring, ext.pinky];
   const curled = open.map((e) => 1 - e);
   return {
     [SIGNS.WARD]: Math.min(...open, smoothstep(SIGN.FACING_MIN, SIGN.FACING_FULL, facing)),
     [SIGNS.GATHER]: Math.min(...curled, smoothstep(SIGN.FIST_THUMB_RISE_MAX, SIGN.FIST_THUMB_RISE_FULL, thumbRise)),
-    [SIGNS.AIM]: Math.min(ext.index, ext.middle, 1 - ext.ring, 1 - ext.pinky, smoothstep(SIGN.SWORD_GAP_MAX, SIGN.SWORD_GAP_FULL, swordGap)),
+    // Index + middle out, together or in a V: the thrust that fires it is what makes it deliberate.
+    [SIGNS.AIM]: Math.min(ext.index, ext.middle, 1 - ext.ring, 1 - ext.pinky),
   };
 }
 
