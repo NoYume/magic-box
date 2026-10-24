@@ -1,0 +1,14 @@
+.venv/
+.env
+config.local.yaml
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+recordings/*
+!recordings/.gitkeep
+*.svo
+*.svo2
+.superpowers/
+.DS_Store
+dist/
