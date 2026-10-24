@@ -13,18 +13,18 @@
 .spellbook--p0 { left: var(--gutter); }
 .spellbook--p1 { right: var(--gutter); }
 .spellbook[data-mode='hidden'] { opacity: 0; transform: translateY(16px); }
-.spellbook[data-mode='compact'] { width: auto; padding: 8px 10px; opacity: 0.86; }
+.spellbook[data-mode='compact'] { width: auto; padding: 10px 14px 8px; opacity: 0.94; }
 
 .spellbook__title { margin: 0 0 10px; font: 600 11px/1 var(--font-display); letter-spacing: 0.36em; text-transform: uppercase; color: var(--gold); }
 .spellbook--p1 .spellbook__title { text-align: right; }
 .spellbook[data-mode='compact'] .spellbook__title { display: none; }
 .spellbook__sub { margin: 12px 0 6px; padding-top: 10px; border-top: 1px solid var(--hairline); font: 600 10px/1 var(--font-display); letter-spacing: 0.36em; text-transform: uppercase; color: var(--goldDim); }
 .spellbook--p1 .spellbook__sub { text-align: right; }
-.spellbook[data-mode='compact'] { display: flex; align-items: center; gap: 8px; }
+.spellbook[data-mode='compact'] { display: flex; align-items: stretch; gap: 12px; }
 .spellbook--p1[data-mode='compact'] { flex-direction: row-reverse; }
 .spellbook[data-mode='compact'] .spellbook__sub { display: none; }
-.spellbook[data-mode='compact'] .spellbook__list--body { padding-left: 8px; border-left: 1px solid var(--hairline); }
-.spellbook--p1[data-mode='compact'] .spellbook__list--body { padding: 0 8px 0 0; border-left: 0; border-right: 1px solid var(--hairline); }
+.spellbook[data-mode='compact'] .spellbook__list--body { padding-left: 12px; border-left: 1px solid var(--hairline); }
+.spellbook--p1[data-mode='compact'] .spellbook__list--body { padding: 0 12px 0 0; border-left: 0; border-right: 1px solid var(--hairline); }
 
 .spellbook__list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0; padding: 0; list-style: none; }
 .spellbook__list--body { grid-template-columns: repeat(3, 1fr); }
@@ -33,7 +33,7 @@
 .spellbook__list--body .spell-card { padding: 2px 4px; }
 .spellbook__list--body .how { margin-top: 3px; }
 .spellbook__list--body .note { font-size: 13px; }
-.spellbook[data-mode='compact'] .spellbook__list { grid-template-columns: repeat(4, auto); gap: 6px; }
+.spellbook[data-mode='compact'] .spellbook__list { grid-template-columns: repeat(4, auto); gap: 4px; }
 .spellbook[data-mode='compact'] .spellbook__list--body { grid-template-columns: repeat(3, auto); }
 
 .spell-card {
@@ -51,11 +51,12 @@
 .spell-card .how { display: block; margin-top: 5px; font: 500 12px/1.25 var(--font-ui); color: var(--parchment); }
 .spell-card .note { display: block; margin-top: 3px; font: italic 500 14px/1.2 var(--font-story); color: var(--parchmentDim); }
 
-.spellbook[data-mode='compact'] .spell-card { grid-template-columns: none; grid-auto-flow: column; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; text-align: left; }
-.spellbook[data-mode='compact'] .sign-art { width: 34px; height: 34px; }
-.spellbook[data-mode='compact'] .spellbook__list--body .sign-art { width: 28px; height: 28px; }
+/* Duel strip: read from across a desk, so big icons with a name underneath. */
+.spellbook[data-mode='compact'] .spell-card { grid-template-columns: none; grid-auto-flow: row; justify-items: center; align-items: start; gap: 4px; min-width: 76px; padding: 6px 6px 4px; text-align: center; }
+.spellbook[data-mode='compact'] .sign-art { width: 56px; height: 56px; }
+.spellbook[data-mode='compact'] .spellbook__list--body .sign-art { width: 50px; height: 50px; margin: 3px 0; }
 .spellbook[data-mode='compact'] .how, .spellbook[data-mode='compact'] .note { display: none; }
-.spellbook[data-mode='compact'] .spell-card__text b { font-size: 11px; letter-spacing: 0.12em; }
+.spellbook[data-mode='compact'] .spell-card__text b { font-size: 14px; letter-spacing: 0.14em; }
 
 .spell-card.is-active {
   border-color: var(--gold);
@@ -78,7 +79,13 @@
 .art-motion { fill: none; stroke: var(--gold); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
 /* Narrow screens: the duel strip keeps only the icons so both books fit beside the seam. */
-@media (max-width: 1500px) {
+@media (max-width: 1400px) {
+  .spellbook[data-mode='compact'] .spell-card { min-width: 60px; }
+  .spellbook[data-mode='compact'] .sign-art { width: 46px; height: 46px; }
+  .spellbook[data-mode='compact'] .spellbook__list--body .sign-art { width: 40px; height: 40px; }
+  .spellbook[data-mode='compact'] .spell-card__text b { font-size: 12px; letter-spacing: 0.08em; }
+}
+@media (max-width: 1100px) {
   .spellbook[data-mode='compact'] .spell-card__text { display: none; }
-  .spellbook[data-mode='compact'] .spell-card { padding: 4px; }
+  .spellbook[data-mode='compact'] .spell-card { min-width: 0; padding: 4px; }
 }
