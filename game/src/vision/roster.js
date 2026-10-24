@@ -5,7 +5,11 @@
 //  - Detections are dropped if low-confidence, partially out of frame, or outside the play depth
 //    range (bystanders behind the players).
 //  - Each slot keeps at most two tracks (the nearest hands), matched frame to frame by position,
-//    each with its own sign smoother and depth history.
+//    each with its own sign smoother and depth history. A detection only continues a track if it
+//    is the same hand: same handedness, same body, and no impossible depth jump. Anything else
+//    starts a fresh track, so a replacement hand never inherits a sign or a thrust history.
+//  - Depth comes from the stereo map (ZED) or palm size (webcam), per observation.depthSource.
+//    A stereo dropout is "depth unknown" for that frame (no thrust), never a palm-size guess.
 
 import { depthFromPalmSize, isInPlayRange } from './depth.js';
 import { MIDDLE, PALM_POINTS, WRIST } from './landmarks.js';
@@ -15,6 +19,8 @@ import { dist, vec } from './vec.js';
 
 const MAX_HANDS_PER_SLOT = 2;
 const DEPTH_HISTORY_MS = THRUST.WINDOW_MS * 3;
+
+export const DEPTH_SOURCE = Object.freeze({ STEREO: 'stereo', PALM: 'palm' });
 
 export const REJECT = Object.freeze({ CONFIDENCE: 'low confidence', EDGE: 'partly out of frame', RANGE: 'out of play range' });
 
@@ -38,7 +44,7 @@ export class HandRoster {
     this.depthScale = [1, 1]; // webcam calibration per slot
   }
 
-  // obs: { landmarks, world, handedness, handScore, frameW, frameH, depth (m) | null }
+  // obs: { landmarks, world, handedness, handScore, frameW, frameH, depth (m) | null, depthSource }
   // bodies (optional): a BodyRoster that already saw this frame's skeletons.
   update(observations, tMs, bodies = null) {
     const rejected = [];
@@ -49,7 +55,9 @@ export class HandRoster {
       if (reason) rejected.push({ ...hand, reason });
       else candidates.push(hand);
     }
-    this.#match(candidates, tMs);
+    // A stereo dropout may continue a known hand, but an unknown hand with no depth could be a
+    // bystander beyond range (the map reads 0 there), so it never starts a track.
+    for (const hand of this.#match(candidates, tMs)) rejected.push({ ...hand, reason: REJECT.RANGE });
     this.tracks = this.tracks.filter((t) => tMs - t.lastSeen <= HANDS.LOST_MS);
     return { slots: [this.handsIn(0), this.handsIn(1)], triangles: [this.#triangle(0), this.#triangle(1)], rejected };
   }
@@ -74,17 +82,28 @@ export class HandRoster {
     const view = { x: this.mirror ? 1 - cam.u : cam.u, y: cam.v };
     const bodySlot = bodies?.slotForHand(landmarks[WRIST]) ?? null;
     const slotGuess = bodySlot ?? (view.x < 0.5 ? 0 : 1);
-    const rawDepth = obs.depth ?? depthFromPalmSize(image3d, frameW);
-    const depth = obs.depth ?? (rawDepth === null ? null : rawDepth * this.depthScale[slotGuess]);
+    const depthSource = obs.depthSource ?? (obs.depth == null ? DEPTH_SOURCE.PALM : DEPTH_SOURCE.STEREO);
+    const isStereo = depthSource === DEPTH_SOURCE.STEREO;
+    const rawDepth = isStereo ? obs.depth ?? null : depthFromPalmSize(image3d, frameW);
+    const depth = isStereo || rawDepth === null ? rawDepth : rawDepth * this.depthScale[slotGuess];
     const palmSpan = dist(image3d[WRIST], image3d[MIDDLE[0]]) / frameH; // fraction of frame height
-    return { ...obs, image3d, cam, view, slotGuess, bodySlot, depth, rawDepth, palmSpan };
+    return { ...obs, image3d, cam, view, slotGuess, bodySlot, depth, depthSource, rawDepth, palmSpan };
   }
 
   #rejectReason(obs, hand) {
     if ((obs.handScore ?? 1) < HANDS.MIN_HANDEDNESS_SCORE) return REJECT.CONFIDENCE;
     if (!isInsideFrame(obs.landmarks)) return REJECT.EDGE;
-    if (!isInPlayRange(hand.depth)) return REJECT.RANGE;
+    const isDropout = hand.depth === null && hand.depthSource === DEPTH_SOURCE.STEREO;
+    if (!isDropout && !isInPlayRange(hand.depth)) return REJECT.RANGE;
     return null;
+  }
+
+  // Same physical hand? Handedness and body owner must agree and depth cannot teleport.
+  #isSameHand(hand, track) {
+    if (hand.handedness !== track.handedness) return false;
+    if (hand.bodySlot !== null && track.bodySlot !== null && hand.bodySlot !== track.bodySlot) return false;
+    if (hand.depth === null || track.lastDepth === null) return true;
+    return Math.abs(hand.depth - track.lastDepth) <= HANDS.MAX_DEPTH_JUMP_M;
   }
 
   #slotFor(hand, track) {
@@ -94,11 +113,16 @@ export class HandRoster {
     return past > HANDS.SEAM_HYSTERESIS ? 1 - track.slot : track.slot;
   }
 
+  // Returns the candidates that could not be placed (unknown hands without depth).
   #match(candidates, tMs) {
     this.tracks.forEach((t) => (t.fresh = false));
-    // Greedy nearest-neighbour matching, closest pairs first.
+    // Greedy nearest-neighbour matching, closest pairs first, same physical hand only.
     const pairs = [];
-    candidates.forEach((hand, ci) => this.tracks.forEach((track, ti) => pairs.push({ ci, ti, d: Math.hypot(hand.view.x - track.view.x, hand.view.y - track.view.y) })));
+    candidates.forEach((hand, ci) =>
+      this.tracks.forEach((track, ti) => {
+        if (this.#isSameHand(hand, track)) pairs.push({ ci, ti, d: Math.hypot(hand.view.x - track.view.x, hand.view.y - track.view.y) });
+      }),
+    );
     pairs.sort((a, b) => a.d - b.d);
     const usedC = new Set();
     const usedT = new Set();
@@ -108,17 +132,26 @@ export class HandRoster {
       usedT.add(ti);
       this.#refresh(this.tracks[ti], candidates[ci], tMs);
     }
+    const unplaced = [];
     candidates.forEach((hand, ci) => {
       if (usedC.has(ci)) return;
-      const track = { id: this.nextId++, smoother: new SignSmoother(), depthHistory: [] };
+      if (hand.depth === null) {
+        unplaced.push(hand);
+        return;
+      }
+      const track = { id: this.nextId++, smoother: new SignSmoother(), depthHistory: [], lastDepth: null };
       this.tracks.push(track);
       this.#refresh(track, hand, tMs);
     });
     this.#capPerSlot();
+    return unplaced;
   }
 
   #refresh(track, hand, tMs) {
     const frame = classifyHand(hand);
+    // Palm-size and stereo depth have different biases: never difference one against the other.
+    if (track.depthSource !== undefined && track.depthSource !== hand.depthSource) track.depthHistory = [];
+    if (hand.depth !== null) track.lastDepth = hand.depth;
     Object.assign(track, hand, { slot: this.#slotFor(hand, track.slot === undefined ? null : track), lastSeen: tMs, fresh: true });
     track.frameSign = frame.sign;
     track.frameScore = frame.score;
@@ -132,7 +165,7 @@ export class HandRoster {
   // Bystanders reaching into a half: keep only the nearest hands per slot.
   #capPerSlot() {
     for (const slot of [0, 1]) {
-      const fresh = this.handsIn(slot).sort((a, b) => a.depth - b.depth);
+      const fresh = this.handsIn(slot).sort((a, b) => a.lastDepth - b.lastDepth);
       fresh.slice(MAX_HANDS_PER_SLOT).forEach((t) => (t.fresh = false));
     }
   }

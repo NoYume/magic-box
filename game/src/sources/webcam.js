@@ -4,6 +4,7 @@
 
 import { createHandDetector } from '../vision/hands.js';
 import { createPoseDetector } from '../vision/pose.js';
+import { DEPTH_SOURCE } from '../vision/roster.js';
 
 const VIDEO_CONSTRAINTS = { video: { width: { ideal: 1280 }, height: { ideal: 720 } } };
 
@@ -36,6 +37,7 @@ export async function createWebcamSource(onStatus) {
     lastVideoTime = video.currentTime;
     ctx.drawImage(video, 0, 0);
     const observations = hands.detect(video, canvas.width, canvas.height, tMs);
+    observations?.forEach((obs) => (obs.depthSource = DEPTH_SOURCE.PALM));
     const bodies = pose.detect(video, tMs);
     if (!observations && !bodies) return null;
     return { observations: observations ?? undefined, bodies: bodies ?? undefined };

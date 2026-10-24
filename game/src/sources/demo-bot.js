@@ -128,6 +128,7 @@ export function specToObservations(spec, frameW, frameH) {
     frameW,
     frameH,
     depth: spec.depth,
+    depthSource: 'stereo', // scripted metric depth, like the ZED map
   });
   if (spec.triangle) {
     const { left, right } = makeTrianglePair();

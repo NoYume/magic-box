@@ -22,6 +22,7 @@ export const SIGN = {
   TOUCH_MAX: 0.55,
   TOUCH_FULL: 0.3,
   DIAMOND_MIN_HEIGHT: 0.6,
+  TRIANGLE_DEPTH_MAX_M: 0.1, // both ultimate hands must be this close in metric depth (touching)
   // Plausibility gate against garbage detections: palm width / palm length, finger length / palm length.
   PALM_WIDTH_RATIO: [0.4, 0.95],
   FINGER_LENGTH_RATIO: [0.55, 1.5],
@@ -40,6 +41,7 @@ export const HANDS = {
   MIN_HANDEDNESS_SCORE: 0.5,
   EDGE_MARGIN: 0.015, // palm points closer than this to the frame edge = partially in frame
   MATCH_RADIUS: 0.12, // view-normalized distance to keep a hand's identity frame to frame
+  MAX_DEPTH_JUMP_M: 0.25, // a bigger depth change between updates means a different hand
   LOST_MS: 350, // drop a hand track after this long unseen
   SEAM_HYSTERESIS: 0.03, // a tracked hand must cross the seam by this much to change sides
   INFERENCE_HZ: 30, // cap on hand inference rate (independent of render rate)

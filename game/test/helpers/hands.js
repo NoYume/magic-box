@@ -29,9 +29,11 @@ export const NOISE_M = 0.003; // 3 mm landmark jitter
 export const NOISE_SEEDS = [1, 2, 3, 4, 5];
 
 // A roster observation (what a source + MediaPipe produce for one hand) with ZED-style depth.
-export function observation(poseName, { cx = 0.7, cy = 0.5, depth = 0.7, handScore = 0.95, ...rest } = {}) {
-  const { world, landmarks } = handFixture(poseName, { cx, cy, depth, ...rest });
-  return { landmarks, world, handedness: rest.handedness ?? 'Right', handScore, ...FRAME, depth };
+// depth: the source's metric sample (null = the stereo map had no valid pixels there).
+// placeDepth: where the hand really is (sets its apparent size); defaults to depth.
+export function observation(poseName, { cx = 0.7, cy = 0.5, depth = 0.7, placeDepth = depth ?? 0.7, depthSource = 'stereo', handScore = 0.95, ...rest } = {}) {
+  const { world, landmarks } = handFixture(poseName, { cx, cy, depth: placeDepth, ...rest });
+  return { landmarks, world, handedness: rest.handedness ?? 'Right', handScore, ...FRAME, depth, depthSource };
 }
 
 export const FRAME_MS = 33;
