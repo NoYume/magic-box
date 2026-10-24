@@ -17,6 +17,9 @@ const SHAKE_PER_DAMAGE = 0.9;
 const KO_SHAKE = 34;
 const STANCE_LABELS = { leanIn: 'Focus', leanBack: 'Brace' };
 const STANCE_LABEL_DROP = 0.16; // view units below the torso anchor
+const FLOATER_LIFT = 0.2; // view units above the hit point: clears the hand mark and its sign label
+const MAX_STACK = 6;
+const STACK_STEP = 0.9; // of a floater's height
 
 const easeOutCubic = (t) => 1 - (1 - t) ** 3;
 const easeOutBack = (t) => 1 + 2.2 * (t - 1) ** 3 + 1.2 * (t - 1) ** 2;
@@ -54,16 +57,25 @@ export class Effects {
     this.transient.push({ sprite: s, life, maxLife: life, kind: 'ring', size });
   }
 
-  #floater(at, text, color, big, size = null) {
+  // Floating words and numbers rise from above the hand mark (clear of its sign label) and stack
+  // on top of any floater still in the way, so two never overlap.
+  #floater(at, text, color, { big = false, size = null, lift = FLOATER_LIFT } = {}) {
     const label = new Text({
       text,
       style: { fontFamily: FONT.display, fontWeight: '700', fontSize: size ?? (big ? 56 : 40), fill: color, stroke: { color: COLOR.inkDeep, width: 6, join: 'round' }, letterSpacing: 1 },
     });
     label.anchor.set(0.5);
     const p = this.#screen(at);
-    label.position.set(p.x, p.y - this.#unit() * 0.06);
+    label.position.set(p.x, p.y - this.#unit() * lift);
+    this.#unstack(label);
     this.floatLayer.addChild(label);
     this.transient.push({ sprite: label, life: FLOATER_LIFE, maxLife: FLOATER_LIFE, kind: 'floater' });
+  }
+
+  #unstack(label) {
+    const others = this.transient.filter((t) => t.kind === 'floater').map((t) => t.sprite);
+    const overlaps = (o) => Math.abs(o.x - label.x) < (o.width + label.width) / 2 && Math.abs(o.y - label.y) < (o.height + label.height) / 2;
+    for (let i = 0; i < MAX_STACK && others.some(overlaps); i++) label.y -= label.height * STACK_STEP;
   }
 
   onFx(ev) {
@@ -100,14 +112,14 @@ export class Effects {
     if (ev.blocked > 0) this.auras.pulseWard(ev.slot);
     const tint = isBlocked ? COLOR.verdant : element;
     this.#ring(ev.at, tint, u * (heavy ? 0.42 : 0.28));
-    this.particles.burst({ ...p, count: heavy ? 90 : 45, speed: u * (heavy ? 1.3 : 0.9), texture: this.stage.textures.spark, tint, dir: ev.dir, spread: isBlocked ? 2.6 : 1.5, life: 0.5, scale: 0.6, alignToVelocity: true, stretch: 0.003, drag: 4 });
+    this.particles.burst({ ...p, count: isBlocked ? 22 : heavy ? 90 : 45, speed: u * (heavy ? 1.3 : 0.9), texture: this.stage.textures.spark, tint, dir: ev.dir, spread: isBlocked ? 2.6 : 1.5, life: 0.5, scale: 0.6, alpha: isBlocked ? 0.7 : 1, alignToVelocity: true, stretch: 0.003, drag: 4 });
     this.particles.burst({ ...p, count: heavy ? 8 : 4, speed: u * 0.15, texture: this.stage.textures.wisp, tint, life: 0.9, alpha: 0.5, scale: heavy ? 1.1 : 0.7, endScale: 1.6, drag: 2 });
     this.stage.kick(ev.dir, (heavy ? 10 : 5) + ev.damage * SHAKE_PER_DAMAGE);
     if (ev.damage > 0) {
-      this.#floater(ev.at, `${ev.damage}`, heavy ? COLOR.goldBright : COLOR.parchment, heavy);
+      this.#floater(ev.at, `${ev.damage}`, heavy ? COLOR.goldBright : COLOR.parchment, { big: heavy });
       this.stage.flash(element, heavy ? 0.16 : 0.08);
     } else {
-      this.#floater(ev.at, 'Warded', COLOR.verdant, false);
+      this.#floater(ev.at, 'Warded', COLOR.verdant);
     }
   }
 
@@ -118,13 +130,13 @@ export class Effects {
   // Stance names sit below the chest so they never collide with damage numbers above it.
   #stanceLabel(ev) {
     const core = this.#core(ev.slot);
-    this.#floater({ x: core.x, y: core.y + STANCE_LABEL_DROP }, STANCE_LABELS[ev.stance], COLOR.gold, false, 26);
+    this.#floater({ x: core.x, y: core.y + STANCE_LABEL_DROP }, STANCE_LABELS[ev.stance], COLOR.gold, { size: 26, lift: 0 });
   }
 
   #evade(ev) {
     const p = this.#screen(ev.at);
     this.particles.burst({ ...p, count: 16, speed: this.#unit() * 0.4, texture: this.stage.textures.mote, tint: COLOR.parchmentDim, life: 0.4, scale: 0.35 });
-    this.#floater(ev.at, 'Evaded', COLOR.parchment, false);
+    this.#floater(ev.at, 'Evaded', COLOR.parchment);
   }
 
   #shatter(ev) {
@@ -132,7 +144,7 @@ export class Effects {
     const u = this.#unit();
     this.#ring(ev.at, COLOR.verdantCore, u * 0.5, 0.6);
     this.particles.burst({ ...p, count: 60, speed: u * 0.9, texture: this.stage.textures.spark, tint: COLOR.verdant, life: 0.8, scale: 0.8, spin: 8, gravity: u * 1.4, drag: 1.5 });
-    this.#floater(ev.at, 'Shattered', COLOR.verdant, true);
+    this.#floater(ev.at, 'Shattered', COLOR.verdant, { big: true });
     this.stage.flash(COLOR.verdant, 0.14);
   }
 

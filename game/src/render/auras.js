@@ -38,7 +38,7 @@ export class AuraLayer {
     const root = new Container();
     const glow = sprite(textures.glow, COLOR.verdant);
     const outer = sprite(textures.sigil, COLOR.verdant);
-    const inner = sprite(textures.sigil, COLOR.verdantCore);
+    const inner = sprite(textures.sigil, COLOR.verdant); // tinted, not white: keeps rune detail under bloom
     const ripple = sprite(textures.ring, COLOR.verdantCore);
     root.addChild(glow, outer, inner, ripple);
     root.visible = false;
@@ -98,14 +98,14 @@ export class AuraLayer {
     w.root.position.set(w.x, w.y);
     w.outer.width = w.outer.height = size;
     w.outer.rotation += dt * 0.5;
-    w.outer.alpha = w.open * shimmer * flicker * (0.75 + w.pulse * 0.25);
+    w.outer.alpha = w.open * shimmer * flicker * (0.7 + w.pulse * 0.2);
     w.inner.width = w.inner.height = size * 0.62;
     w.inner.rotation -= dt * 0.9;
-    w.inner.alpha = w.open * 0.45 * flicker;
-    w.glow.width = w.glow.height = size * 1.9;
-    w.glow.alpha = w.open * (0.22 + w.pulse * 0.35) * flicker;
+    w.inner.alpha = w.open * 0.32 * flicker;
+    w.glow.width = w.glow.height = size * 1.5;
+    w.glow.alpha = w.open * (0.12 + w.pulse * 0.18) * flicker;
     w.ripple.width = w.ripple.height = size * (1 + w.rippleT * 0.8);
-    w.ripple.alpha = (1 - w.rippleT) * 0.9;
+    w.ripple.alpha = (1 - w.rippleT) * 0.6;
   }
 
   #updateCharge(c, charge, fist, dt) {
