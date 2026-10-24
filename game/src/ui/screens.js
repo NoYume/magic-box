@@ -34,9 +34,9 @@ export class Screens {
     root.innerHTML = `
       <section class="screen screen--attract">
         <div class="title">
-          <p class="title__kicker"><span class="live-dot" aria-hidden="true"></span> No controllers. Just you.</p>
+          <p class="title__kicker"><span class="live-dot" aria-hidden="true"></span> Two houses. One circle.</p>
           <h1 class="title__name">Arena<svg class="title__mark" viewBox="0 0 100 100" aria-hidden="true"><path d="M8 26 34 50 8 74M92 26 66 50 92 74M50 35 60 50 50 65 40 50Z" fill="none" stroke="currentColor" stroke-width="8" /></svg></h1>
-          <div class="title__aside"><p class="title__sub">Make a sign.<br>Pick a fight.</p><p class="title__format">2 players / Best of 3</p></div>
+          <div class="title__aside"><p class="title__sub">Trace a sign.<br>Cast your spell.</p><p class="title__format">2 players / Best of 3</p></div>
         </div>
         ${joinCard(0)}${joinCard(1)}
       </section>

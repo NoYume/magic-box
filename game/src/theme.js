@@ -1,17 +1,17 @@
 // Design tokens: the one palette and type scale for both the Pixi layer and the DOM UI.
-// Cabinet / 01: charcoal, warm paper and signal orange. Shared by DOM and Pixi.
+// Brass, midnight ink and vellum. Element colors remain distinct in combat.
 
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 
 export const COLOR = {
-  ink: 0x181917, // panel ground
-  inkDeep: 0x0e100f,
-  inkRaised: 0x292c27,
-  gold: 0xff6434, // signal / call to action (legacy token name)
-  goldBright: 0xff946f,
-  goldDim: 0x9b6652,
-  parchment: 0xf0eee6, // warm paper
-  parchmentDim: 0xa6aaa0,
+  ink: 0x191b24, // panel ground
+  inkDeep: 0x101219,
+  inkRaised: 0x2a2d38,
+  gold: 0xc5a466, // engraved brass
+  goldBright: 0xead5a1,
+  goldDim: 0x786441,
+  parchment: 0xe9dfc9, // vellum
+  parchmentDim: 0xaaa596,
   ember: 0xff6238, // player 01 - punchy solar flame
   emberCore: 0xffeedd,
   frost: 0x00d9d2, // player 02 - vivid arctic cyan
@@ -30,6 +30,7 @@ export const PLAYER_THEME = [
 
 export const FONT = {
   display: "'Barlow Condensed', Impact, sans-serif",
+  arcane: "'Cormorant Garamond', Georgia, serif",
   story: "'Barlow', sans-serif",
   ui: "'IBM Plex Mono', monospace",
 };

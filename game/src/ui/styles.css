@@ -1,10 +1,10 @@
-/* Camera-first cabinet UI. Paper, charcoal, signal orange. */
+/* A compact dueling grimoire: ink, brass, and elemental signals. */
 @import url('./screens.css');
 @import url('./spellbook.css');
 
 :root {
   --gutter: clamp(16px, 2.6vw, 48px);
-  --hairline: rgb(240 238 230 / 0.22);
+  --hairline: rgb(197 164 102 / 0.28);
   --panel: rgb(18 21 18 / 0.92);
   --panel-frame: none;
 }
@@ -26,13 +26,13 @@ button:focus-visible { outline: 2px solid var(--parchment); outline-offset: 4px;
 /* The scoreboard reads like a fight broadcast, not a dashboard. */
 .hud { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 200ms; }
 .hud.is-shown { opacity: 1; }
-.plate { position: absolute; top: 64px; width: min(340px, calc(40% - var(--gutter))); padding: 8px 10px; background: rgb(18 21 18 / 0.78); border-top: 2px solid var(--el); transform: translateY(-10px); transition: transform 300ms var(--easeOut); }
+.plate { position: absolute; top: 64px; width: min(340px, calc(40% - var(--gutter))); padding: 8px 10px; background: rgb(16 18 25 / 0.84); border-top: 1px solid var(--goldDim); border-bottom: 1px solid var(--hairline); transform: translateY(-10px); transition: transform 300ms var(--easeOut); }
 .hud.is-shown .plate { transform: none; }
 .plate--p0 { left: var(--gutter); --el: var(--p0); }
 .plate--p1 { right: var(--gutter); --el: var(--p1); }
 .plate__head { display: flex; align-items: center; gap: 12px; }
 .plate--p1 .plate__head { flex-direction: row-reverse; text-align: right; }
-.plate__numeral { flex: none; font: 700 28px/0.9 var(--font-display); color: var(--el); letter-spacing: -0.04em; }
+.plate__numeral { flex: none; font: 600 28px/0.9 var(--font-arcane); color: var(--el); letter-spacing: -0.04em; }
 .plate__names { flex: 1; min-width: 0; }
 .plate__names h2 { margin: 0; font: 600 19px/1 var(--font-display); text-transform: uppercase; }
 .plate__names p { margin: 3px 0 0; font: 500 9px/1 var(--font-ui); text-transform: uppercase; color: var(--parchmentDim); letter-spacing: 0.12em; }
@@ -41,7 +41,7 @@ button:focus-visible { outline: 2px solid var(--parchment); outline-offset: 4px;
 .pip.is-won { background: var(--el); }
 .plate__crystals { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; margin: 7px 0 4px; }
 .plate--p1 .plate__crystals { direction: rtl; }
-.crystal { position: relative; height: 8px; background: rgb(240 238 230 / 0.12); }
+.crystal { position: relative; clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%); height: 8px; background: rgb(240 238 230 / 0.12); }
 .crystal > i { position: absolute; inset: 0; background: var(--el); transform-origin: left; transform: scaleX(var(--fill, 1)); transition: transform 220ms var(--easeOut); }
 .plate--p1 .crystal > i { transform-origin: right; }
 .plate.is-low .crystal > i { animation: low-hp 700ms ease-in-out infinite alternate; }
@@ -77,6 +77,11 @@ button:focus-visible { outline: 2px solid var(--parchment); outline-offset: 4px;
 .plate__ult-beacon { display: none; margin-top: 5px; font: 500 9px/1 var(--font-ui); color: var(--el); }
 .has-ult .plate__ult-beacon { display: block; }
 .medallion__frame { display: grid; justify-items: center; gap: 3px; }
+.medallion { background: rgb(16 18 25 / 0.84); border-top: 1px solid var(--goldDim); border-bottom: 1px solid var(--goldDim); }
+.medallion::after { content: '✧'; position: absolute; top: 100%; color: var(--gold); font: 18px/1 var(--font-arcane); }
+.plate__crest-block { border-bottom: 1px solid var(--el); padding-bottom: 3px; }
+.cabinet-brand { color: var(--goldBright); }
+.seam { background: linear-gradient(transparent, var(--goldDim), transparent); opacity: 0.45; }
 .medallion.is-urgent { color: var(--gold); }
 
 /* Diagnostics sit above the instructions instead of covering them. */

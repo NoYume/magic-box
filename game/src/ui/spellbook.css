@@ -1,10 +1,11 @@
-/* Quick-reference strip: printed codex in the lobby; floating tactical combat dock in duel. */
+/* Vellum reference leaves in the lobby; narrow ink-and-brass rails in combat. */
 .spellbook {
   position: absolute;
   bottom: 18px;
   width: calc(50% - 1.5 * var(--gutter));
   padding: 10px 12px;
   background: var(--parchment);
+  border-top: 2px solid var(--goldDim);
   color: var(--inkDeep);
   pointer-events: none;
   transition: opacity 220ms var(--easeOut), transform 280ms var(--easeOut);
@@ -30,6 +31,8 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+.spellbook__title::before { content: '✧'; color: var(--goldDim); }
+.spellbook__title span:first-child { margin-right: auto; }
 .spellbook__title span:last-child, .spellbook__sub span:last-child {
   color: #555850;
   font-weight: 500;
@@ -117,7 +120,7 @@
 .spell-card.is-active .art-edge { stroke: var(--inkDeep); }
 
 /* ==========================================================================
-   COMBAT MODE: Floating Tactical Equipment Dock
+   COMBAT MODE: Compact spell rail
    ========================================================================== */
 .spellbook[data-mode='compact'] {
   display: flex;
@@ -125,9 +128,10 @@
   align-items: center;
   bottom: 14px;
   padding: 6px 14px;
-  background: rgb(14 16 15 / 0.82);
+  background: rgb(16 18 25 / 0.86);
   color: var(--parchment);
   border: 0;
+  border-top: 1px solid var(--goldDim);
   border-bottom: 1px solid var(--el);
   border-radius: 0;
   box-shadow: none;
