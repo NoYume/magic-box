@@ -48,15 +48,15 @@ test('should_not_classify_random_landmark_clouds', () => {
   }
 });
 
-function trianglePair(separation = 0) {
+function trianglePair(separation = 0, { depths = [0.7, 0.7], zShift = 0 } = {}) {
   const { left, right } = makeTrianglePair();
   const shift = (points, dx) => points.map((p) => vec(p.x + dx, p.y, p.z));
   const opts = { cx: 0.5, cy: 0.5, depth: 0.7, ...FRAME, anchor: vec() };
   const a = shift(left, -separation);
   const b = shift(right, separation);
   return [
-    { world: a, image3d: placeHand(a, opts).image3d },
-    { world: b, image3d: placeHand(b, opts).image3d },
+    { world: a, image3d: placeHand(a, opts).image3d, depth: depths[0] },
+    { world: b, image3d: placeHand(b, opts).image3d.map((p) => vec(p.x, p.y, p.z + zShift)), depth: depths[1] },
   ];
 }
 
@@ -66,6 +66,20 @@ test('should_score_touching_diamond_as_ultimate_triangle', () => {
 
 test('should_reject_triangle_when_hands_are_apart', () => {
   assert.equal(scoreTriangle(...trianglePair(0.05)), 0);
+});
+
+// Regression (review P2): MediaPipe z is relative to each hand's own wrist, so it can't be
+// compared across hands. Touch is tested in 2D; metric depth decides whether the hands meet.
+test('should_accept_touching_diamond_regardless_of_per_hand_relative_z', () => {
+  assert.ok(scoreTriangle(...trianglePair(0, { zShift: 400 })) > 0.9);
+});
+
+test('should_reject_diamond_when_hands_are_at_different_metric_depths', () => {
+  assert.equal(scoreTriangle(...trianglePair(0, { depths: [0.5, 0.9] })), 0);
+});
+
+test('should_reject_diamond_when_a_hand_has_no_metric_depth', () => {
+  assert.equal(scoreTriangle(...trianglePair(0, { depths: [0.7, null] })), 0);
 });
 
 test('should_reject_two_open_palms_side_by_side_as_triangle', () => {

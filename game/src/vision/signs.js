@@ -6,7 +6,7 @@
 import { describeHand, isPlausibleHand, palmSize } from './hand-geometry.js';
 import { INDEX, THUMB } from './landmarks.js';
 import { SIGN, SMOOTHING } from './tuning.js';
-import { dist, mid, smoothstep } from './vec.js';
+import { mid, smoothstep } from './vec.js';
 
 export const SIGNS = Object.freeze({ NONE: 'none', WARD: 'ward', GATHER: 'gather', AIM: 'aim', ULTIMATE: 'ultimate' });
 
@@ -36,12 +36,18 @@ export function classifyHand(hand) {
   return { ...best, scores, features };
 }
 
-// Two hands of the same player, in shared image space. Returns a 0..1 triangle score.
+const dist2d = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+
+// Two hands of the same player. Returns a 0..1 triangle score.
+// MediaPipe landmark z is relative to each hand's own wrist, so it cannot be compared across
+// hands: touch is tested in 2D image space, and the hands' metric depths (stereo or palm-size)
+// must agree, which rules out one hand far in front of the other overlapping in the image.
 export function scoreTriangle(a, b) {
+  if (a.depth == null || b.depth == null || Math.abs(a.depth - b.depth) > SIGN.TRIANGLE_DEPTH_MAX_M) return 0;
   const palm = (palmSize(a.image3d) + palmSize(b.image3d)) / 2;
   if (!(palm > 0)) return 0;
-  const indexGap = dist(a.image3d[INDEX[3]], b.image3d[INDEX[3]]) / palm;
-  const thumbGap = dist(a.image3d[THUMB[3]], b.image3d[THUMB[3]]) / palm;
+  const indexGap = dist2d(a.image3d[INDEX[3]], b.image3d[INDEX[3]]) / palm;
+  const thumbGap = dist2d(a.image3d[THUMB[3]], b.image3d[THUMB[3]]) / palm;
   const indexTop = mid(a.image3d[INDEX[3]], b.image3d[INDEX[3]]);
   const thumbBottom = mid(a.image3d[THUMB[3]], b.image3d[THUMB[3]]);
   const height = (thumbBottom.y - indexTop.y) / palm; // image y grows downward
