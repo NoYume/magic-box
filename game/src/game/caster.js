@@ -24,9 +24,12 @@ export const PHASE = Object.freeze({
 const CAST_FLASH_MS = 220;
 const RECOCK_SPEED_RATIO = 0.35; // the hand must slow below this share of MIN_SPEED before re-firing
 
+const NO_THRUST = Object.freeze({ speed: 0, travel: 0 });
+
 // Approach speed (m/s, positive = toward the camera) and travel (m) over the thrust window.
-export function measureThrust(history, tMs) {
-  const samples = history.filter((s) => s.z !== null && tMs - s.t <= THRUST.WINDOW_MS);
+// sinceMs: ignore samples before this (travel made before the aim sign was armed).
+export function measureThrust(history, tMs, sinceMs = -Infinity) {
+  const samples = history.filter((s) => s.z !== null && tMs - s.t <= THRUST.WINDOW_MS && s.t >= sinceMs);
   if (samples.length < 2) return { speed: 0, travel: 0 };
   const first = samples[0];
   const last = samples[samples.length - 1];
@@ -63,7 +66,7 @@ export class PlayerCaster {
   }
 
   #state(hand) {
-    if (!this.hands.has(hand.id)) this.hands.set(hand.id, { sign: SIGNS.NONE, since: 0, armedUntil: -Infinity, recocked: true, flashUntil: -Infinity });
+    if (!this.hands.has(hand.id)) this.hands.set(hand.id, { sign: SIGNS.NONE, since: 0, armedAt: null, armedUntil: -Infinity, recocked: true, flashUntil: -Infinity });
     return this.hands.get(hand.id);
   }
 
@@ -73,9 +76,14 @@ export class PlayerCaster {
     const held = tMs - s.since;
     const confirm = CONFIRM_MS[s.sign] ?? Infinity;
     const isConfirmed = held >= confirm;
-    const thrust = measureThrust(hand.depthHistory ?? [], tMs);
-    if (!s.recocked && thrust.speed < THRUST.MIN_SPEED * RECOCK_SPEED_RATIO) s.recocked = true;
-    if (s.sign === SIGNS.AIM && isConfirmed) s.armedUntil = tMs + BOLT.ARM_GRACE_MS;
+    if (s.sign === SIGNS.AIM && isConfirmed) {
+      if (tMs >= s.armedUntil) s.armedAt = tMs; // newly armed: only travel from here on counts
+      s.armedUntil = tMs + BOLT.ARM_GRACE_MS;
+    }
+    // No metric depth this frame (stereo dropout): the hand cannot trigger anything.
+    const thrust = hand.depth === null ? NO_THRUST : measureThrust(hand.depthHistory ?? [], tMs, s.armedAt ?? -Infinity);
+    // Re-cocking looks at the whole window, so one long push cannot fire twice.
+    if (!s.recocked && hand.depth !== null && measureThrust(hand.depthHistory ?? [], tMs).speed < THRUST.MIN_SPEED * RECOCK_SPEED_RATIO) s.recocked = true;
 
     if (tMs < s.flashUntil) return { phase: PHASE.CAST, sign: SIGNS.AIM, progress: 1 };
     if (tMs < s.armedUntil) return this.#aim(hand, s, { tMs, thrust, player, now, out });

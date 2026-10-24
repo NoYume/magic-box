@@ -17,7 +17,8 @@ function play(frames, { charge = 0 } = {}) {
   const phases = [];
   frames.forEach((f, i) => {
     const tMs = i * FRAME_MS;
-    const obs = f.pose ? [observation(f.pose, { depth: f.depth ?? 0.7, cx: f.cx ?? 0.7, cy: f.cy ?? 0.5, seed: i + 1, noise: 0.002 })] : [];
+    const depth = 'depth' in f ? f.depth : 0.7;
+    const obs = f.pose ? [observation(f.pose, { depth, placeDepth: f.placeDepth, cx: f.cx ?? 0.7, cy: f.cy ?? 0.5, seed: i + 1, noise: 0.002 })] : [];
     const { slots, triangles } = roster.update(obs, tMs);
     const out = caster.update({ hands: slots[0], triangle: triangles[0], tMs, player: combat.players[0], now: tMs });
     casts.push(...out.casts);
@@ -79,4 +80,18 @@ test('should_measure_approach_speed_over_window', () => {
   const { speed, travel } = measureThrust(history, 100);
   assert.ok(Math.abs(travel - 0.15) < 1e-9);
   assert.ok(Math.abs(speed - 1.5) < 1e-9);
+});
+
+// Regression (review P1): a one-frame stereo dropout on a stationary armed hand fired a bolt.
+test('should_not_cast_when_stereo_depth_drops_out_on_a_still_hand', () => {
+  const dropout = { pose: 'sword', depth: null, placeDepth: 0.9 / 1.15 };
+  const { casts } = play([...hold('sword', 18, 0.9), dropout, ...hold('sword', 2, 0.9), dropout, ...hold('sword', 8, 0.9)]);
+  assert.equal(casts.length, 0);
+});
+
+// Regression (review P2): travel made while the aim sign was still confirming must not count.
+test('should_only_count_thrust_travel_after_aim_is_armed', () => {
+  const approach = Array.from({ length: 12 }, (_, i) => ({ pose: 'sword', depth: 0.9 - 0.03 * (i + 1) }));
+  const { casts } = play([...hold('sword', 4, 0.9), ...approach, ...hold('sword', 12, 0.54)]);
+  assert.equal(casts.length, 0);
 });
