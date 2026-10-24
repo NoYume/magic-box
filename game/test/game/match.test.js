@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { PHASE } from '../../src/game/rounds.js';
 import { Match } from '../../src/game/match.js';
-import { DemoBot, specToObservations } from '../../src/sources/demo-bot.js';
+import { DemoBot, botToInputs } from '../../src/sources/demo-bot.js';
 
 const FRAME_W = 960;
 const FRAME_H = 600;
@@ -19,8 +19,9 @@ function runDemoMatch() {
   let t = 0;
   for (; t < MAX_MATCH_MS; t += TICK_MS) {
     const context = { phase: match.flow.phase, phaseMs: match.flow.phaseMs, combat: match.combat };
-    const observations = bots.flatMap((b) => b.update(t, context)).flatMap((s) => specToObservations(s, FRAME_W, FRAME_H));
-    events.push(...match.ingest(observations, t), ...match.step(TICK_MS));
+    const inputs = bots.map((b, slot) => botToInputs(slot, b.update(t, context), FRAME_W, FRAME_H));
+    events.push(...match.ingestBodies(inputs.map((i) => i.body), t));
+    events.push(...match.ingest(inputs.flatMap((i) => i.observations), t), ...match.step(TICK_MS));
     phases.add(match.flow.phase);
     if (events.some((e) => e.kind === 'matchOver')) break;
   }
@@ -35,6 +36,9 @@ test('demo_bots_should_play_a_full_best_of_three_match', () => {
   assert.ok(kinds('cast').some((e) => e.projectile.kind === 'bolt'), 'bolts are cast');
   assert.ok(kinds('cast').some((e) => e.projectile.empowered), 'gather empowers a bolt');
   assert.ok(kinds('hit').some((e) => e.blocked > 0), 'wards block');
+  assert.ok(kinds('evade').length > 0, 'dodges evade bolts');
+  assert.ok(kinds('stance').some((e) => e.stance === 'leanIn'), 'players lean in to focus');
+  assert.ok(kinds('stance').some((e) => e.stance === 'leanBack'), 'players lean back to brace');
   assert.ok(kinds('ko').length >= 2, 'rounds end by knockout');
   assert.equal(kinds('matchOver').length, 1);
   assert.ok([PHASE.ATTRACT, PHASE.COUNTDOWN, PHASE.FIGHT, PHASE.KO, PHASE.ROUND_END, PHASE.RESULTS].every((p) => phases.has(p)));

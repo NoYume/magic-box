@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { BOLT, PLAYER, ULTIMATE, WARD } from '../../src/game/balance.js';
-import { applyIntent, castBolt, castUltimate, createCombat, stepCombat } from '../../src/game/rules.js';
+import { BODY_MOVES, BOLT, PLAYER, ULTIMATE, WARD } from '../../src/game/balance.js';
+import { applyIntent, castBolt, castUltimate, createCombat, dodge, setStance, stepCombat } from '../../src/game/rules.js';
 
 const STEP_MS = 16;
 
@@ -112,4 +112,48 @@ test('should_decay_charge_after_hold_window', () => {
   assert.equal(combat.players[0].charge, 1, 'kept during hold window');
   for (let i = 0; i < 100; i++) stepCombat(combat, 50);
   assert.equal(combat.players[0].charge, 0);
+});
+
+test('should_reduce_damage_while_braced', () => {
+  const combat = createCombat();
+  setStance(combat, 1, 'leanBack');
+  castBolt(combat, 0);
+  runUntilLanded(combat);
+  assert.equal(combat.players[1].hp, PLAYER.MAX_HP - Math.round(BOLT.BASE_DAMAGE * (1 - BODY_MOVES.BRACE_REDUCTION)));
+});
+
+test('should_gather_faster_while_leaning_in', () => {
+  const combat = createCombat();
+  setStance(combat, 0, 'leanIn');
+  applyIntent(combat, 0, { gathering: true, warding: false });
+  stepCombat(combat, 250);
+  assert.equal(combat.players[0].charge, 0.25 * BODY_MOVES.FOCUS_GATHER_MULT);
+});
+
+test('should_evade_bolt_when_dodge_window_covers_impact', () => {
+  const combat = createCombat();
+  castBolt(combat, 0);
+  for (let t = 0; t < 300; t += STEP_MS) stepCombat(combat, STEP_MS);
+  assert.equal(dodge(combat, 1, -1)[0].kind, 'dodge');
+  const fx = runUntilLanded(combat);
+  assert.ok(fx.some((e) => e.kind === 'evade'));
+  assert.equal(combat.players[1].hp, PLAYER.MAX_HP);
+});
+
+test('should_not_evade_when_dodging_too_early_or_on_cooldown', () => {
+  const combat = createCombat();
+  dodge(combat, 1, 1);
+  assert.deepEqual(dodge(combat, 1, 1), [], 'cooldown');
+  stepCombat(combat, BODY_MOVES.EVADE_MS + 10);
+  castBolt(combat, 0);
+  runUntilLanded(combat);
+  assert.ok(combat.players[1].hp < PLAYER.MAX_HP);
+});
+
+test('should_never_damage_from_body_moves_alone', () => {
+  const combat = createCombat();
+  for (const stance of ['leanIn', 'leanBack', 'neutral']) setStance(combat, 0, stance);
+  dodge(combat, 0, 1);
+  for (let i = 0; i < 100; i++) stepCombat(combat, 50);
+  assert.deepEqual(combat.players.map((p) => p.hp), [PLAYER.MAX_HP, PLAYER.MAX_HP]);
 });

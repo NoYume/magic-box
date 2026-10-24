@@ -66,3 +66,11 @@ export const ROUND = {
 // Rest positions (view space) used when a player has no hands in frame.
 export const SEATS = [{ x: 0.25, y: 0.55 }, { x: 0.75, y: 0.55 }];
 export const HIT_RADIUS = 0.04; // view units: a projectile within this of its target lands
+
+// Body moves modify and defend; they never deal damage on their own.
+export const BODY_MOVES = {
+  FOCUS_GATHER_MULT: 2, // lean in: gather charges twice as fast
+  BRACE_REDUCTION: 0.4, // lean back: 40% less damage from anything that gets through
+  EVADE_MS: 450, // dodge: bolts landing within this window miss (ultimates can't be dodged)
+  DODGE_COOLDOWN_MS: 2500,
+};

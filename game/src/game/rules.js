@@ -3,7 +3,7 @@
 // Each frame the caller provides per-player intent (from the caster) and anchors (where the
 // player's body and ward are on screen); rules return fx events for the renderer and audio.
 
-import { BOLT, GATHER, HIT_RADIUS, PLAYER, SEATS, ULTIMATE, WARD } from './balance.js';
+import { BODY_MOVES, BOLT, GATHER, HIT_RADIUS, PLAYER, SEATS, ULTIMATE, WARD } from './balance.js';
 
 export function createCombat() {
   return { players: [newPlayer(0), newPlayer(1)], projectiles: [], nextId: 1, clockMs: 0, isDecided: false };
@@ -22,9 +22,12 @@ function newPlayer(slot) {
     lastWardMs: -Infinity,
     boltReadyAt: 0,
     ultimateReadyAt: 0,
+    stance: 'neutral', // body: 'neutral' | 'leanIn' (focus) | 'leanBack' (brace)
+    evadeUntil: 0,
+    dodgeReadyAt: 0,
     core: { ...SEATS[slot] },
     wardAt: null,
-    stats: { casts: 0, hits: 0, blocked: 0, damageDealt: 0, bestHit: 0 },
+    stats: { casts: 0, hits: 0, blocked: 0, damageDealt: 0, bestHit: 0, evaded: 0 },
   };
 }
 
@@ -39,6 +42,25 @@ export const canRaiseWard = (p, now) => now >= p.wardBrokenUntil && p.mana >= WA
 export const boltCooldown = (p, now) => Math.max(0, p.boltReadyAt - now) / BOLT.COOLDOWN_MS;
 export const ultimateCooldown = (p, now) => Math.max(0, p.ultimateReadyAt - now) / ULTIMATE.COOLDOWN_MS;
 export const isUltimateReady = (p, now) => now >= p.ultimateReadyAt && p.charge >= 1;
+export const dodgeCooldown = (p, now) => Math.max(0, p.dodgeReadyAt - now) / BODY_MOVES.DODGE_COOLDOWN_MS;
+
+// Body stance from the posture detector: 'neutral' | 'leanIn' | 'leanBack'.
+export function setStance(combat, slot, stance) {
+  const p = combat.players[slot];
+  if (p.stance === stance) return [];
+  p.stance = stance;
+  return [{ kind: 'stance', slot, stance }];
+}
+
+// A sideways dodge: bolts that land in the next EVADE_MS miss. dir: -1 | 1 (view space).
+export function dodge(combat, slot, dir) {
+  const p = combat.players[slot];
+  const now = combat.clockMs;
+  if (now < p.dodgeReadyAt) return [];
+  p.evadeUntil = now + BODY_MOVES.EVADE_MS;
+  p.dodgeReadyAt = now + BODY_MOVES.DODGE_COOLDOWN_MS;
+  return [{ kind: 'dodge', slot, dir, at: { ...p.core } }];
+}
 
 // anchors: { core: {x, y}, wardAt: {x, y} | null }
 export function setAnchors(combat, slot, { core, wardAt }) {
@@ -124,7 +146,8 @@ export function stepCombat(combat, dtMs) {
 
 function updateResources(p, now, dt) {
   if (p.isGathering) {
-    p.charge = Math.min(1, p.charge + GATHER.RATE_PER_S * dt);
+    const focus = p.stance === 'leanIn' ? BODY_MOVES.FOCUS_GATHER_MULT : 1;
+    p.charge = Math.min(1, p.charge + GATHER.RATE_PER_S * focus * dt);
     p.chargeKeptUntil = now + GATHER.HOLD_MS;
   } else if (now > p.chargeKeptUntil) {
     p.charge = Math.max(0, p.charge - GATHER.DECAY_PER_S * dt);
@@ -140,6 +163,10 @@ function updateResources(p, now, dt) {
 function resolveHit(combat, proj, target, dir) {
   const attacker = combat.players[proj.from];
   const at = { x: proj.x, y: proj.y };
+  if (proj.kind === 'bolt' && combat.clockMs < target.evadeUntil) {
+    target.stats.evaded += 1;
+    return [{ kind: 'evade', slot: target.slot, projectile: proj, at }];
+  }
   const fx = [];
   let damage = proj.damage;
   let blocked = 0;
@@ -156,6 +183,7 @@ function resolveHit(combat, proj, target, dir) {
     }
     target.stats.blocked += Math.round(blocked);
   }
+  if (target.stance === 'leanBack') damage = Math.round(damage * (1 - BODY_MOVES.BRACE_REDUCTION));
   target.hp = Math.max(0, target.hp - damage);
   attacker.stats.damageDealt += damage;
   if (damage > 0) attacker.stats.hits += 1;
