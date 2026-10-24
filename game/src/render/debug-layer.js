@@ -3,6 +3,7 @@
 
 import { Graphics } from 'pixi.js';
 
+import { HIT_RADIUS } from '../game/balance.js';
 import { HAND_BONES } from '../vision/landmarks.js';
 import { COLOR, PLAYER_THEME } from '../theme.js';
 
@@ -16,11 +17,16 @@ export class DebugLayer {
     this.g = new Graphics();
     stage.layers.debug.addChild(this.g);
     this.visible = false;
+    this.hitboxes = false;
   }
 
   setVisible(isVisible) {
     this.visible = isVisible;
     this.g.visible = isVisible;
+  }
+
+  setHitboxes(isVisible) {
+    this.hitboxes = isVisible;
   }
 
   #hand(landmarks, color, alpha) {
@@ -43,7 +49,31 @@ export class DebugLayer {
     }
   }
 
-  update({ view }) {
+  #hitbox(point, color, alpha = 0.9, radius = HIT_RADIUS) {
+    const p = this.stage.transform.viewToScreen(point.x, point.y);
+    const r = this.stage.transform.viewLength(radius);
+    this.g.circle(p.x, p.y, r).stroke({ width: 2, color, alpha });
+    this.g.circle(p.x, p.y, 2.5).fill({ color, alpha });
+  }
+
+  #hitboxes(combat) {
+    combat.players.forEach((player, slot) => {
+      const color = PLAYER_THEME[slot].element;
+      this.#hitbox(player.core, color);
+      if (player.isWarding && player.wardAt) this.#hitbox(player.wardAt, COLOR.verdantCore, 0.95);
+    });
+    combat.projectiles.forEach((projectile) => {
+      const color = projectile.kind === 'ultimate' ? COLOR.violetCore : PLAYER_THEME[projectile.from].core;
+      this.#hitbox(projectile, color, 1);
+      const target = combat.players[1 - projectile.from];
+      const goal = target.isWarding && target.wardAt ? target.wardAt : target.core;
+      const from = this.stage.transform.viewToScreen(projectile.x, projectile.y);
+      const to = this.stage.transform.viewToScreen(goal.x, goal.y);
+      this.g.moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({ width: 1, color, alpha: 0.35 });
+    });
+  }
+
+  update({ view, combat }) {
     this.g.clear();
     if (!this.visible) return;
     const t = this.stage.transform;
@@ -54,5 +84,6 @@ export class DebugLayer {
     view.rejectedBodies.forEach((body) => this.#body(body.kp, REJECTED, 0.5));
     view.slots.forEach((hands, slot) => hands.forEach((h) => this.#hand(h.landmarks, PLAYER_THEME[slot].element, 0.95)));
     view.rejected.forEach((h) => this.#hand(h.landmarks, REJECTED, 0.6));
+    if (this.hitboxes) this.#hitboxes(combat);
   }
 }

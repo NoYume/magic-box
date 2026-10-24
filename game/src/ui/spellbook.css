@@ -1,95 +1,295 @@
-/* Spellbook cards and the sign line art. */
+/* Quick-reference strip: printed codex in the lobby; floating tactical combat dock in duel. */
 .spellbook {
   position: absolute;
-  bottom: var(--gutter);
-  width: min(44vw, 640px);
-  padding: 12px 16px 14px;
-  background: var(--panel);
-  border: 1px solid var(--hairline);
-  box-shadow: var(--panel-frame);
+  bottom: 18px;
+  width: calc(50% - 1.5 * var(--gutter));
+  padding: 14px 18px;
+  background: var(--parchment);
+  color: var(--inkDeep);
   pointer-events: none;
-  transition: opacity var(--base) var(--easeOut), transform var(--base) var(--easeOut), width var(--base) var(--easeOut);
+  transition: opacity 220ms var(--easeOut), transform 280ms var(--easeOut);
+  --book-line: rgb(14 16 15 / 0.18);
+  border-radius: 4px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
 }
-.spellbook--p0 { left: var(--gutter); }
-.spellbook--p1 { right: var(--gutter); }
-.spellbook[data-mode='hidden'] { opacity: 0; transform: translateY(16px); }
-.spellbook[data-mode='compact'] { width: auto; padding: 10px 14px 8px; opacity: 0.94; }
+.spellbook--p0 { left: var(--gutter); --el: var(--p0); --el-core: var(--p0-core); }
+.spellbook--p1 { right: var(--gutter); --el: var(--p1); --el-core: var(--p1-core); }
 
-.spellbook__title { margin: 0 0 10px; font: 600 11px/1 var(--font-display); letter-spacing: 0.36em; text-transform: uppercase; color: var(--gold); }
-.spellbook--p1 .spellbook__title { text-align: right; }
-.spellbook[data-mode='compact'] .spellbook__title { display: none; }
-.spellbook__sub { margin: 12px 0 6px; padding-top: 10px; border-top: 1px solid var(--hairline); font: 600 10px/1 var(--font-display); letter-spacing: 0.36em; text-transform: uppercase; color: var(--goldDim); }
-.spellbook--p1 .spellbook__sub { text-align: right; }
-.spellbook[data-mode='compact'] { display: flex; align-items: stretch; gap: 12px; }
-.spellbook--p1[data-mode='compact'] { flex-direction: row-reverse; }
-.spellbook[data-mode='compact'] .spellbook__sub { display: none; }
-.spellbook[data-mode='compact'] .spellbook__list--body { padding-left: 12px; border-left: 1px solid var(--hairline); }
-.spellbook--p1[data-mode='compact'] .spellbook__list--body { padding: 0 12px 0 0; border-left: 0; border-right: 1px solid var(--hairline); }
+.spellbook[data-mode='hidden'] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(16px);
+}
 
-.spellbook__list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0; padding: 0; list-style: none; }
-.spellbook__list--body { grid-template-columns: repeat(3, 1fr); }
-.spellbook__list--body .spell-card { grid-template-columns: 44px 1fr; column-gap: 10px; justify-items: start; align-items: start; text-align: left; }
-.spellbook__list--body .sign-art { width: 44px; height: 44px; }
-.spellbook__list--body .spell-card { padding: 2px 4px; }
-.spellbook__list--body .how { margin-top: 3px; }
-.spellbook__list--body .note { font-size: 13px; }
-/* Each duel strip stays inside its half of the screen; cards shrink and their cues wrap. */
-.spellbook[data-mode='compact'] { max-width: calc(50vw - var(--gutter) * 1.5); }
-.spellbook[data-mode='compact'] .spellbook__list { flex: 4 1 auto; min-width: 0; grid-template-columns: repeat(4, minmax(0, auto)); gap: 4px; }
-.spellbook[data-mode='compact'] .spellbook__list--body { flex: 3 1 auto; grid-template-columns: repeat(3, minmax(0, auto)); }
+.spellbook__title, .spellbook__sub {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 12px;
+  font: 600 10px/1 var(--font-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.spellbook__title span:last-child, .spellbook__sub span:last-child {
+  color: #555850;
+  font-weight: 500;
+}
+.spellbook__sub {
+  margin: 14px 0 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--book-line);
+}
+
+.spellbook__list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.spellbook__list--body {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 
 .spell-card {
+  position: relative;
+  min-width: 0;
   display: grid;
-  justify-items: center;
-  align-content: start;
-  gap: 6px;
-  padding: 8px 4px 6px;
-  border: 1px solid transparent;
-  text-align: center;
-  transition: border-color var(--fast), background var(--fast), box-shadow var(--fast);
+  grid-template-columns: 48px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-left: 1px solid var(--book-line);
+  transition: background 160ms var(--easeOut), color 160ms var(--easeOut);
 }
-.spell-card .sign-art { width: 64px; height: 64px; }
-.spell-card__text b { display: block; font: 600 14px/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; }
-.spell-card .how { display: block; margin-top: 5px; font: 500 12px/1.25 var(--font-ui); color: var(--parchment); }
-.spell-card .note { display: block; margin-top: 3px; font: italic 500 14px/1.2 var(--font-story); color: var(--parchmentDim); }
+.spell-card:first-child { border-left: 0; padding-left: 0; }
+.spell-card:last-child { padding-right: 0; }
+.spellbook__list:not(.spellbook__list--body) .spell-card {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
 
-/* Duel strip: read from across a desk, so big icons with a name underneath. */
-.spellbook[data-mode='compact'] .spell-card { grid-template-columns: none; grid-auto-flow: row; justify-items: center; align-items: start; gap: 4px; min-width: 0; padding: 6px 4px 4px; text-align: center; }
-.spellbook[data-mode='compact'] .sign-art { width: 56px; height: 56px; }
-.spellbook[data-mode='compact'] .spellbook__list--body .sign-art { width: 50px; height: 50px; margin: 3px 0; }
-.spellbook[data-mode='compact'] .how, .spellbook[data-mode='compact'] .note { display: none; }
-.spellbook[data-mode='compact'] .spell-card__text b { font-size: 14px; letter-spacing: 0.14em; }
+.spell-card__icon-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.spell-card .sign-art {
+  width: 50px;
+  height: 50px;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.12));
+}
+
+.spell-card__text b {
+  display: block;
+  font: 700 21px/1 var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.spell-card .how {
+  display: block;
+  margin-top: 4px;
+  font: 500 11px/1.2 var(--font-story);
+}
+.spell-card .note {
+  display: block;
+  margin-top: 4px;
+  font: 400 10px/1.25 var(--font-story);
+  color: #555850;
+}
 .spell-card .cue { display: none; }
-.spellbook[data-mode='compact'] .cue { display: block; max-width: 92px; margin-top: 4px; font: 500 13px/1.2 var(--font-ui); color: var(--parchment); }
+
+.spellbook__list--body .sign-art { width: 42px; height: 42px; }
+.spellbook__list--body .spell-card__text b { font-size: 18px; }
+.spellbook__list--body .how { display: none; }
 
 .spell-card.is-active {
-  border-color: var(--gold);
-  background: color-mix(in srgb, var(--gold) 10%, transparent);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--gold) 30%, transparent);
+  background: var(--inkDeep);
+  color: var(--parchment);
+  border-radius: 4px;
 }
-.spell-card.is-active .art-line { stroke: var(--goldBright); }
-.spell-card.is-active .art-guard { stroke: var(--goldBright); }
+.spell-card.is-active .note { color: var(--parchmentDim); }
+.spell-card.is-active .art-line,
+.spell-card.is-active .art-guard,
+.spell-card.is-active .art-motion { stroke: var(--parchment); }
+.spell-card.is-active .art-palm { stroke: var(--parchment); fill: transparent; }
+.spell-card.is-active .art-edge { stroke: var(--inkDeep); }
 
-/* Line art (ui/hand-art.js): an ink edge under a parchment stroke reads like a drawn line. */
+/* ==========================================================================
+   COMBAT MODE: Floating Tactical Equipment Dock
+   ========================================================================== */
+.spellbook[data-mode='compact'] {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  bottom: 14px;
+  padding: 6px 14px;
+  background: linear-gradient(180deg, rgba(16, 20, 23, 0.82) 0%, rgba(9, 11, 13, 0.94) 100%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: var(--parchment);
+  border: 1px solid rgba(240, 238, 230, 0.14);
+  border-top: 2px solid var(--el);
+  border-radius: 8px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --book-line: var(--hairline);
+  z-index: 6;
+}
+
+.spellbook[data-mode='compact'] .spellbook__title,
+.spellbook[data-mode='compact'] .spellbook__sub {
+  display: none;
+}
+
+.spellbook[data-mode='compact'] .spellbook__list {
+  flex: 4;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.spellbook[data-mode='compact'] .spellbook__list--body {
+  flex: 3;
+  border-left: 1px solid rgba(240, 238, 230, 0.16);
+  padding-left: 10px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.spellbook[data-mode='compact'] .spell-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  transition: all 180ms var(--easeOut);
+}
+
+.spellbook[data-mode='compact'] .spell-card__icon-frame {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  place-items: center;
+  transition: all 180ms var(--easeOut);
+}
+
+.spellbook[data-mode='compact'] .sign-art {
+  width: 28px;
+  height: 28px;
+  transition: transform 180ms var(--easeOut);
+}
+
+.spellbook[data-mode='compact'] .spell-card__text {
+  margin-top: 4px;
+}
+
+.spellbook[data-mode='compact'] .spell-card__text b {
+  font: 700 13px/1 var(--font-display);
+  letter-spacing: 0.05em;
+  color: var(--parchment);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.spellbook[data-mode='compact'] .cue {
+  display: block;
+  margin-top: 2px;
+  font: 500 9px/1 var(--font-ui);
+  color: var(--parchmentDim);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.spellbook[data-mode='compact'] .how,
+.spellbook[data-mode='compact'] .note {
+  display: none;
+}
+
+/* Active Sign / Move Ignition */
+.spellbook[data-mode='compact'] .spell-card.is-active {
+  background: linear-gradient(180deg, var(--el) 0%, rgba(14, 16, 15, 0.95) 160%);
+  color: var(--inkDeep);
+  box-shadow: 0 0 16px var(--el), inset 0 0 12px rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+.spellbook[data-mode='compact'] .spell-card.is-active .spell-card__icon-frame {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.spellbook[data-mode='compact'] .spell-card.is-active .sign-art {
+  transform: scale(1.1);
+}
+
+.spellbook[data-mode='compact'] .spell-card.is-active .spell-card__text b {
+  color: var(--inkDeep);
+  text-shadow: none;
+}
+
+.spellbook[data-mode='compact'] .spell-card.is-active .cue {
+  color: var(--inkDeep);
+  font-weight: 600;
+}
+
+.spellbook[data-mode='compact'] .art-line,
+.spellbook[data-mode='compact'] .art-motion,
+.spellbook[data-mode='compact'] .art-guard {
+  stroke: var(--parchment);
+}
+.spellbook[data-mode='compact'] .art-palm {
+  stroke: var(--parchment);
+  fill: transparent;
+}
+.spellbook[data-mode='compact'] .is-active .art-line,
+.spellbook[data-mode='compact'] .is-active .art-motion,
+.spellbook[data-mode='compact'] .is-active .art-guard,
+.spellbook[data-mode='compact'] .is-active .art-palm {
+  stroke: var(--inkDeep);
+}
+
+/* Vector Art primitives */
 .sign-art { overflow: visible; }
-.art-palm { fill: color-mix(in srgb, var(--parchment) 9%, transparent); stroke: var(--parchment); stroke-width: 1.4; stroke-linejoin: round; }
-.art-edge { fill: none; stroke: var(--ink); stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
-.art-line { fill: none; stroke: var(--parchment); stroke-width: 4.4; stroke-linecap: round; stroke-linejoin: round; transition: stroke var(--fast); }
-.art-thrust { fill: none; stroke: var(--gold); stroke-width: 1.6; opacity: 0; animation: thrust 1.6s var(--easeOut) infinite; animation-delay: calc(var(--i) * 0.18s); }
-@keyframes thrust { 0% { opacity: 0; } 30% { opacity: 0.9; } 100% { opacity: 0; } }
-.art-ghost { fill: none; stroke: var(--parchmentDim); stroke-width: 2; stroke-dasharray: 3 4; opacity: 0.6; }
+.art-palm { fill: rgb(14 16 15 / 0.05); stroke: var(--inkDeep); stroke-width: 1.4; stroke-linejoin: round; }
+.art-edge { fill: none; stroke: var(--parchment); stroke-width: 8; stroke-linecap: round; stroke-linejoin: round; }
+.art-line { fill: none; stroke: var(--inkDeep); stroke-width: 4.4; stroke-linecap: round; stroke-linejoin: round; }
+.art-thrust { fill: none; stroke: var(--gold); stroke-width: 1.6; opacity: 0; animation: thrust 1.8s ease-out infinite; animation-delay: calc(var(--i) * 0.18s); }
+@keyframes thrust { 0%, 100% { opacity: 0; } 30% { opacity: 0.9; } }
+.art-ghost { fill: none; stroke: #62665c; stroke-width: 2; stroke-dasharray: 3 4; opacity: 0.6; }
 .body-art .art-line { stroke-width: 3.6; }
-.art-guard { fill: none; stroke: var(--gold); stroke-width: 4; stroke-linecap: round; }
-.art-motion { fill: none; stroke: var(--gold); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.art-guard { fill: none; stroke: var(--inkDeep); stroke-width: 4; stroke-linecap: round; }
+.art-motion { fill: none; stroke: var(--inkDeep); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.join .art-line { stroke: var(--parchment); }
+.join .art-palm { stroke: var(--parchment); fill: transparent; }
+.join .art-edge, .spellbook[data-mode='compact'] .art-edge { stroke: var(--inkDeep); }
 
-/* Narrow screens: smaller icons, then the name drops (the cue stays) so both books fit beside the seam. */
-@media (max-width: 1400px) {
-  .spellbook[data-mode='compact'] .sign-art { width: 46px; height: 46px; }
-  .spellbook[data-mode='compact'] .spellbook__list--body .sign-art { width: 40px; height: 40px; }
-  .spellbook[data-mode='compact'] .spell-card__text b { font-size: 12px; letter-spacing: 0.08em; }
-  .spellbook[data-mode='compact'] .cue { max-width: 72px; font-size: 11px; }
-}
 @media (max-width: 1100px) {
-  .spellbook[data-mode='compact'] .spell-card__text b { display: none; }
-  .spellbook[data-mode='compact'] .spell-card { min-width: 0; padding: 4px; }
+  .spellbook { padding: 10px 14px; }
+  .spell-card { padding-inline: 6px; }
+  .spellbook[data-mode='compact'] { gap: 6px; padding: 5px 8px; }
+  .spellbook[data-mode='compact'] .spell-card__icon-frame { width: 32px; height: 32px; }
+  .spellbook[data-mode='compact'] .sign-art { width: 24px; height: 24px; }
+  .spellbook[data-mode='compact'] .spell-card__text b { font-size: 12px; }
+  .spellbook[data-mode='compact'] .cue { font-size: 8px; }
+}
+
+@media (max-width: 720px) {
+  .spellbook { bottom: 10px; padding: 8px; }
+  .spellbook[data-mode='compact'] { display: block; }
+  .spellbook[data-mode='compact'] .spellbook__list { grid-template-columns: repeat(4, 1fr); }
+  .spellbook[data-mode='compact'] .spellbook__list--body {
+    margin-top: 6px;
+    padding: 6px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--hairline);
+    grid-template-columns: repeat(3, 1fr);
+  }
 }

@@ -59,7 +59,7 @@ export class DebugPanel {
       `thrust  >= ${THRUST.MIN_SPEED} m/s and >= ${THRUST.MIN_TRAVEL} m in ${THRUST.WINDOW_MS} ms   bolt cooldown ${BOLT.COOLDOWN_MS} ms`,
       `sign min score ${SIGN.MIN_SCORE}  facing >= ${SIGN.FACING_MIN}  play depth ${DEPTH.PLAY_NEAR_M}-${DEPTH.PLAY_FAR_M} m`,
       `body  lean in <= -${BODY.LEAN_IN_FRAC * 100}% z  lean back >= ${BODY.LEAN_BACK_FRAC * 100}% z  hold ${BODY.STANCE_HOLD_MS} ms  dodge >= ${BODY.DODGE_SHIFT} sh in ${BODY.DODGE_WINDOW_MS} ms`,
-      'keys: D debug   M mute   R reset (dev)',
+      'keys: D/H debug + hitboxes   M mute   R reset (dev)',
     ].filter((line) => line !== null);
     this.text.textContent = lines.join('\n');
     this.#drawDepth(source.getDepthMap());

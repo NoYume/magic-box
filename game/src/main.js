@@ -4,7 +4,8 @@
 //   ?src=zed&ws=ws://<jetson>:8765   ZED X box (frames + depth from jetson/tracker.py)
 //   ?src=webcam                       laptop webcam, depth estimated from palm size (default)
 //   ?src=demo                         two scripted players, no camera needed
-// Keys: D debug overlay, M mute, R reset to the lobby (dev shortcut).
+// Keys: D debug overlay, H hitboxes, M mute, R reset to the lobby (dev shortcut).
+// URL flag: ?debug=1 starts the debug overlay and hitboxes.
 
 import { Sfx } from './audio/sfx.js';
 import { Match } from './game/match.js';
@@ -21,7 +22,7 @@ import { Hud } from './ui/hud.js';
 import { Screens } from './ui/screens.js';
 import { Spellbook } from './ui/spellbook.js';
 
-const FONT_FACES = ['600 16px Cinzel', '700 16px Cinzel', 'italic 500 16px "Cormorant Garamond"', '500 16px Inter'];
+const FONT_FACES = ['800 16px "Barlow Condensed"', '600 16px "Barlow Condensed"', '500 16px Barlow', '500 16px "IBM Plex Mono"'];
 const FONT_TIMEOUT_MS = 3000;
 const MAX_DT_MS = 50;
 const FPS_SMOOTHING = 0.05;
@@ -78,13 +79,23 @@ function spellbookMode(phase) {
 }
 
 function bindKeys({ debugLayer, debugPanel, sfx }) {
-  window.addEventListener('keydown', (e) => {
-    const key = e.key.toLowerCase();
-    if (key === 'd') {
-      const isOn = !debugLayer.visible;
-      debugLayer.setVisible(isOn);
-      debugPanel.setVisible(isOn);
+  const setDebug = (isOn) => {
+    debugLayer.setVisible(isOn);
+    debugLayer.setHitboxes(isOn);
+    debugPanel.setVisible(isOn);
+    const button = $('debug-toggle');
+    if (button) {
+      button.textContent = isOn ? 'Debug on [D]' : 'Debug [D]';
+      button.setAttribute('aria-pressed', String(isOn));
     }
+  };
+  setDebug(params.get('debug') === '1' || params.get('debug') === 'true');
+  $('debug-toggle')?.addEventListener('click', () => setDebug(!debugLayer.visible));
+
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+    const key = e.key.toLowerCase();
+    if (key === 'd' || key === 'h') setDebug(!debugLayer.visible);
     if (key === 'm') sfx.toggleMute();
     if (key === 'r') match = new Match({ mirror: match.roster.mirror });
   });
@@ -98,6 +109,7 @@ async function start() {
   const debugPanel = new DebugPanel($('debug'));
   await loadFonts();
   const source = await createSource(params.get('src') ?? 'webcam', (msg) => screens.setStatus(msg));
+  $('source-label').textContent = { demo: 'Demo / scripted', webcam: 'Live / webcam', zed: 'Live / ZED' }[source.kind] ?? source.kind;
   const stage = await createStage(source.canvas, { mirror: source.mirror });
   const effects = new Effects(stage);
   const debugLayer = new DebugLayer(stage);

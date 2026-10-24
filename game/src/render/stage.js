@@ -8,8 +8,8 @@ import { COLOR } from '../theme.js';
 import { createViewTransform } from '../vision/transform.js';
 import { createTextures } from './textures.js';
 
-const FEED_TINT = 0xcfc8ea; // cool indigo cast so magic reads warmer than the room
-const FEED_SATURATION = -0.25;
+const FEED_TINT = 0xe5e8dd; // neutral, slightly desaturated camera under the cabinet graphics
+const FEED_SATURATION = -0.15;
 const SHAKE_FREQUENCY = 38; // Hz of the damped shake oscillation
 const SHAKE_DECAY = 9;
 const FLASH_DECAY = 6;

@@ -1,37 +1,37 @@
 // Design tokens: the one palette and type scale for both the Pixi layer and the DOM UI.
-// "Arcane storybook": ink-indigo panels, gold leaf, parchment text, element-coded magic.
+// Cabinet / 01: charcoal, warm paper and signal orange. Shared by DOM and Pixi.
 
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 
 export const COLOR = {
-  ink: 0x0d0b1f, // panel ground
-  inkDeep: 0x07061a,
-  inkRaised: 0x1a1640,
-  gold: 0xd9b46a, // gold leaf: rules, frames, emphasis
-  goldBright: 0xf4dca0,
-  goldDim: 0x8a6f3c,
-  parchment: 0xf3e7cc, // primary text
-  parchmentDim: 0xb9ab8e,
-  ember: 0xff8a3d, // player I's element
-  emberCore: 0xffe2b8,
-  frost: 0x6fe3ff, // player II's element
-  frostCore: 0xe6fbff,
-  verdant: 0x7dee9a, // wards and mana
+  ink: 0x181917, // panel ground
+  inkDeep: 0x0e100f,
+  inkRaised: 0x292c27,
+  gold: 0xff6434, // signal / call to action (legacy token name)
+  goldBright: 0xff946f,
+  goldDim: 0x9b6652,
+  parchment: 0xf0eee6, // warm paper
+  parchmentDim: 0xa6aaa0,
+  ember: 0xff6238, // player 01 - punchy solar flame
+  emberCore: 0xffeedd,
+  frost: 0x00d9d2, // player 02 - vivid arctic cyan
+  frostCore: 0xe0ffff,
+  verdant: 0x10e885, // wards and mana - luminous emerald
   verdantCore: 0xe3ffe9,
-  violet: 0xb07cff, // ultimate
-  violetCore: 0xf1e6ff,
-  danger: 0xff5a5a,
+  violet: 0xb57cff, // ultimate - radiant arcane violet
+  violetCore: 0xf3e8ff,
+  danger: 0xff3b3b,
 };
 
 export const PLAYER_THEME = [
-  { name: 'Player I', house: 'House of Ember', numeral: 'I', element: COLOR.ember, core: COLOR.emberCore },
-  { name: 'Player II', house: 'House of Frost', numeral: 'II', element: COLOR.frost, core: COLOR.frostCore },
+  { name: 'Player 01', house: 'Ember', numeral: '01', element: COLOR.ember, core: COLOR.emberCore },
+  { name: 'Player 02', house: 'Frost', numeral: '02', element: COLOR.frost, core: COLOR.frostCore },
 ];
 
 export const FONT = {
-  display: "'Cinzel', 'Cormorant Garamond', serif",
-  story: "'Cormorant Garamond', 'Cinzel', serif",
-  ui: "'Inter', system-ui, sans-serif",
+  display: "'Barlow Condensed', Impact, sans-serif",
+  story: "'Barlow', sans-serif",
+  ui: "'IBM Plex Mono', monospace",
 };
 
 export const MOTION = {
@@ -47,7 +47,10 @@ export function applyThemeToDocument(root = document.documentElement) {
   for (const [name, value] of Object.entries(COLOR)) root.style.setProperty(`--${name}`, hex(value));
   for (const [name, value] of Object.entries(FONT)) root.style.setProperty(`--font-${name}`, value);
   for (const [name, value] of Object.entries(MOTION)) root.style.setProperty(`--${name}`, value);
-  PLAYER_THEME.forEach((p, i) => root.style.setProperty(`--p${i}`, hex(p.element)));
+  PLAYER_THEME.forEach((p, i) => {
+    root.style.setProperty(`--p${i}`, hex(p.element));
+    root.style.setProperty(`--p${i}-core`, hex(p.core));
+  });
 }
 
 export const cssColor = hex;

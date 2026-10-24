@@ -1,7 +1,5 @@
-// Per-player spellbook card: the four hand signs and three body moves as line illustrations,
-// learnable in ten seconds. Expanded on the attract screen, compact during the duel with the
-// active sign and stance highlighted. The duel strip keeps a short cue under every icon, since
-// first-time players (judges) still need to read what each one asks for.
+// Per-player quick reference: a printed gesture guide in the lobby and a dark equipment rail
+// during combat. Both retain visual hand/body cues and highlight active signs and stances.
 
 import { PHASE as CAST } from '../game/caster.js';
 import { bodyArt } from './body-art.js';
@@ -22,7 +20,19 @@ export const BODY_BOOK = [
 ];
 const STANCE_MOVE = { leanIn: 'focus', leanBack: 'brace' };
 
-const card = (key, art, { name, cue, how, note }) => `<li class="spell-card" data-sign="${key}">${art}<div class="spell-card__text"><b>${name}</b><span class="cue">${cue}</span><span class="how">${how}</span><span class="note">${note}</span></div></li>`;
+const card = (key, art, { name, cue, how, note }) => `
+  <li class="spell-card" data-sign="${key}">
+    <div class="spell-card__icon-frame">
+      ${art}
+      <span class="spell-card__ring" aria-hidden="true"></span>
+    </div>
+    <div class="spell-card__text">
+      <b>${name}</b>
+      <span class="cue">${cue}</span>
+      <span class="how">${how}</span>
+      <span class="note">${note}</span>
+    </div>
+  </li>`;
 
 const ACTIVE_PHASES = new Set([CAST.DETECTED, CAST.WARDING, CAST.CHARGING, CAST.READY, CAST.CAST]);
 
@@ -32,9 +42,9 @@ export class Spellbook {
     this.slot = slot;
     root.className = `spellbook spellbook--p${slot}`;
     root.innerHTML = `
-      <h3 class="spellbook__title">Spellbook</h3>
+      <h3 class="spellbook__title"><span>01 — The hand signs</span><span>Cast</span></h3>
       <ol class="spellbook__list">${SPELLBOOK.map((s) => card(s.sign, signArt(s.sign), s)).join('')}</ol>
-      <h4 class="spellbook__sub">Body</h4>
+      <h4 class="spellbook__sub"><span>02 — Move your body</span><span>Defend + amplify</span></h4>
       <ol class="spellbook__list spellbook__list--body">${BODY_BOOK.map((m) => card(m.move, bodyArt(m.move), m)).join('')}</ol>`;
     this.cards = new Map([...root.querySelectorAll('.spell-card')].map((el) => [el.dataset.sign, el]));
     this.active = null;

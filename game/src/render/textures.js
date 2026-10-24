@@ -52,9 +52,9 @@ function trail(ctx, w, h) {
 
 function vignette(ctx, w, h) {
   const g = ctx.createRadialGradient(w / 2, h / 2, w * 0.25, w / 2, h / 2, w * 0.72);
-  g.addColorStop(0, 'rgba(7,6,26,0)');
-  g.addColorStop(0.6, 'rgba(7,6,26,0.35)');
-  g.addColorStop(1, 'rgba(7,6,26,0.88)');
+  g.addColorStop(0, 'rgba(14,16,15,0)');
+  g.addColorStop(0.6, 'rgba(14,16,15,0.25)');
+  g.addColorStop(1, 'rgba(14,16,15,0.78)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, w, h);
 }
