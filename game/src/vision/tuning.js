@@ -61,3 +61,23 @@ export const THRUST = {
   MIN_TRAVEL: 0.07, // [ZED] meters toward the camera within the window
   FULL_SPEED: 1.6, // m/s at which thrust power saturates
 };
+
+// Body posture (ZED body tracking, or MediaPipe Pose on the webcam). Offsets are measured from each
+// player's own neutral posture, captured while they hold the joining palm.
+export const BODY = {
+  PLAY_NEAR_M: 0.3,
+  PLAY_FAR_M: 1.6, // [ZED] torsos beyond this are bystanders
+  EDGE_MARGIN: 0.02, // both shoulders must be this far inside the frame
+  SMOOTHING: 0.35, // EMA factor for the torso (per update)
+  LEAN_IN_M: 0.12, // [ZED] torso this much closer than neutral = lean in
+  LEAN_BACK_M: 0.1, // [ZED] torso this much farther than neutral = lean back
+  LEAN_HYSTERESIS_M: 0.04, // must come back this far inside the threshold to release
+  STANCE_HOLD_MS: 200, // a lean must be held this long to count
+  DRIFT_PER_UPDATE: 0.01, // neutral slowly follows the player while upright
+  DODGE_SHIFT: 0.5, // sideways shift (in shoulder widths) that counts as a dodge
+  DODGE_WINDOW_MS: 260, // ...and it must happen within this time (slow sway never dodges)
+  DODGE_REARM: 0.25, // return within this many shoulder widths before the next dodge
+  WRIST_MATCH_RADIUS: 0.14, // normalized distance from a hand to a body wrist to belong to it
+  SHOULDER_M: 0.38, // webcam: shoulder width for estimating torso depth
+  WEBCAM_FOCAL: 0.9,
+};

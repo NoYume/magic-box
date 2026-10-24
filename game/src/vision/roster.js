@@ -1,6 +1,7 @@
 // Turns raw hand detections into stable per-player hand tracks. Pure (no DOM).
 //
-//  - Player slot = which half of the shown (mirrored) frame the palm is in, split at the center seam.
+//  - Player slot = the body whose wrist the hand is attached to (when body tracking is available),
+//    else which half of the shown (mirrored) frame the palm is in, split at the center seam.
 //  - Detections are dropped if low-confidence, partially out of frame, or outside the play depth
 //    range (bystanders behind the players).
 //  - Each slot keeps at most two tracks (the nearest hands), matched frame to frame by position,
@@ -38,11 +39,12 @@ export class HandRoster {
   }
 
   // obs: { landmarks, world, handedness, handScore, frameW, frameH, depth (m) | null }
-  update(observations, tMs) {
+  // bodies (optional): a BodyRoster that already saw this frame's skeletons.
+  update(observations, tMs, bodies = null) {
     const rejected = [];
     const candidates = [];
     for (const obs of observations) {
-      const hand = this.#measure(obs);
+      const hand = this.#measure(obs, bodies);
       const reason = this.#rejectReason(obs, hand);
       if (reason) rejected.push({ ...hand, reason });
       else candidates.push(hand);
@@ -65,16 +67,17 @@ export class HandRoster {
     this.triangle.forEach((s) => s.reset());
   }
 
-  #measure(obs) {
+  #measure(obs, bodies) {
     const { landmarks, frameW, frameH } = obs;
     const image3d = landmarks.map((p) => vec(p.x * frameW, p.y * frameH, p.z * frameW));
     const cam = palmCenter(landmarks);
     const view = { x: this.mirror ? 1 - cam.u : cam.u, y: cam.v };
-    const slotGuess = view.x < 0.5 ? 0 : 1;
+    const bodySlot = bodies?.slotForHand(landmarks[WRIST]) ?? null;
+    const slotGuess = bodySlot ?? (view.x < 0.5 ? 0 : 1);
     const rawDepth = obs.depth ?? depthFromPalmSize(image3d, frameW);
     const depth = obs.depth ?? (rawDepth === null ? null : rawDepth * this.depthScale[slotGuess]);
     const palmSpan = dist(image3d[WRIST], image3d[MIDDLE[0]]) / frameH; // fraction of frame height
-    return { ...obs, image3d, cam, view, slotGuess, depth, rawDepth, palmSpan };
+    return { ...obs, image3d, cam, view, slotGuess, bodySlot, depth, rawDepth, palmSpan };
   }
 
   #rejectReason(obs, hand) {
@@ -85,6 +88,7 @@ export class HandRoster {
   }
 
   #slotFor(hand, track) {
+    if (hand.bodySlot !== null) return hand.bodySlot; // attached to a tracked body: that body's player
     if (!track) return hand.slotGuess;
     const past = track.slot === 0 ? hand.view.x - 0.5 : 0.5 - hand.view.x;
     return past > HANDS.SEAM_HYSTERESIS ? 1 - track.slot : track.slot;
