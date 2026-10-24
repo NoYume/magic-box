@@ -1,8 +1,9 @@
 """Fake ZED tracker for front-end dev without the Jetson: same wire format as tracker.py.
 
-Streams a synthetic camera frame (two silhouettes at a desk) and a matching depth map in which
-player 1's hand repeatedly thrusts toward the camera. MediaPipe will not find hands in these
-drawn frames; use it to check the transport, depth sampling and alignment (debug view, key D).
+Streams two desk-scale body skeletons (one leans in and out, one dodges side to side), a matching
+synthetic camera frame, and a depth map in which player 1's hand repeatedly thrusts toward the
+camera. MediaPipe will not find hands in these drawn frames; use it to check the transport,
+body slots / posture, depth sampling and alignment (debug view, key D).
 For scripted gameplay without a camera use the browser demo source: ?src=demo.
 
     py fake_tracker.py            # then open http://localhost:5173/?src=zed&ws=ws://localhost:8765
@@ -26,10 +27,12 @@ MSG_FRAME = 0x01
 MSG_DEPTH = 0x02
 DEPTH_HEADER = struct.Struct("<BBHH")
 WALL_MM = 0  # the back wall is beyond max range, so it reads as unknown
-TORSO_MM = 900
 HAND_REST_MM = 650
 THRUST_MM = 250
 PLAYERS = (0.3, 0.7)  # torso centers, normalized x
+BODY_Z = 0.9
+SHOULDER_HALF = 0.09  # normalized half shoulder width at BODY_Z
+NECK_Y = 0.42
 HAND = (0.36, 0.42, 0.045, 0.07)  # player 1's hand: cx, cy, rx, ry (normalized)
 
 
@@ -42,10 +45,41 @@ def thrust_mm(t):
     return THRUST_MM * max(0.0, math.sin(t * 2.0)) ** 3
 
 
+def player_pose(index, t):
+    """(center x, torso z): player 0 leans in and back, player 1 dodges sideways every few seconds."""
+    cx = PLAYERS[index]
+    if index == 0:
+        return cx, BODY_Z - 0.16 * math.sin(t * 0.7)
+    dodge = 0.06 if (t % 4.0) < 0.8 else 0.0
+    return cx + dodge, BODY_Z
+
+
+def fake_bodies(t):
+    point = lambda x, y, z: {"x": round(x, 4), "y": round(y, 4), "z": round(z, 3)}
+    bodies = []
+    for index in range(len(PLAYERS)):
+        cx, z = player_pose(index, t)
+        half = SHOULDER_HALF * BODY_Z / z
+        bodies.append({
+            "id": index + 1,
+            "kp": {
+                "head": point(cx, NECK_Y - 0.17, z),
+                "neck": point(cx, NECK_Y, z),
+                "l_shoulder": point(cx + half, NECK_Y + 0.03, z),
+                "r_shoulder": point(cx - half, NECK_Y + 0.03, z),
+                "l_wrist": None,
+                "r_wrist": point(HAND[0], HAND[1], (HAND_REST_MM - thrust_mm(t)) / 1000) if index == 0 else None,
+                "pelvis": None,
+            },
+        })
+    return json.dumps({"type": "bodies", "t": int(time.time() * 1000), "bodies": bodies})
+
+
 def fake_depth(t):
     depth = np.full((DEPTH_H, DEPTH_W), WALL_MM, np.uint16)
-    for cx in PLAYERS:
-        depth[ellipse_mask(DEPTH_W, DEPTH_H, cx, 0.78, 0.13, 0.36)] = TORSO_MM
+    for index in range(len(PLAYERS)):
+        cx, z = player_pose(index, t)
+        depth[ellipse_mask(DEPTH_W, DEPTH_H, cx, 0.78, 0.13, 0.36)] = int(z * 1000)
     depth[ellipse_mask(DEPTH_W, DEPTH_H, *HAND)] = HAND_REST_MM - thrust_mm(t)
     return DEPTH_HEADER.pack(MSG_DEPTH, 0, DEPTH_W, DEPTH_H) + depth.astype("<u2").tobytes()
 
@@ -53,9 +87,11 @@ def fake_depth(t):
 def fake_frame(t):
     ramp = np.linspace(70, 30, FRAME_H, dtype=np.float32)[:, None, None]
     frame = np.broadcast_to(ramp * np.array([1.0, 0.8, 0.7]), (FRAME_H, FRAME_W, 3)).astype(np.uint8).copy()
-    for cx in PLAYERS:
-        cv2.ellipse(frame, (int(cx * FRAME_W), int(0.78 * FRAME_H)), (int(0.13 * FRAME_W), int(0.36 * FRAME_H)), 0, 0, 360, (95, 80, 70), -1)
-        cv2.circle(frame, (int(cx * FRAME_W), int(0.3 * FRAME_H)), int(0.07 * FRAME_W), (120, 105, 95), -1)
+    for index in range(len(PLAYERS)):
+        cx, z = player_pose(index, t)
+        grow = BODY_Z / z
+        cv2.ellipse(frame, (int(cx * FRAME_W), int(0.78 * FRAME_H)), (int(0.13 * FRAME_W * grow), int(0.36 * FRAME_H)), 0, 0, 360, (95, 80, 70), -1)
+        cv2.circle(frame, (int(cx * FRAME_W), int((NECK_Y - 0.17) * FRAME_H)), int(0.06 * FRAME_W * grow), (120, 105, 95), -1)
     scale = 1 + thrust_mm(t) / THRUST_MM * 0.4  # the hand looks bigger as it nears the camera
     cx, cy, rx, ry = HAND
     cv2.ellipse(frame, (int(cx * FRAME_W), int(cy * FRAME_H)), (int(rx * FRAME_W * scale), int(ry * FRAME_H * scale)), 0, 0, 360, (150, 170, 200), -1)
@@ -82,6 +118,7 @@ async def main():
             t = time.time() - start
             websockets.broadcast(clients, fake_depth(t))
             websockets.broadcast(clients, fake_frame(t))
+            websockets.broadcast(clients, fake_bodies(t))
             await asyncio.sleep(1 / FPS)
 
 

@@ -1,8 +1,10 @@
 # Tracker → Game protocol
 
 The tracker (`jetson/tracker.py`, or `jetson/fake_tracker.py` for development) runs a WebSocket
-server, default `ws://<jetson>:8765`. It streams what the camera sees; hand tracking and sign
-recognition run in the browser on those frames, and the depth map gives each hand a distance.
+server, default `ws://<jetson>:8765`. The ZED does body tracking (posture moves, stable player
+slots) and depth; finger-level hand signs run in the browser (MediaPipe) on the streamed frames,
+and the depth map gives each hand a distance. Per camera frame the tracker sends a depth map, the
+JPEG frame and a `bodies` message, in that order.
 
 ## Binary messages
 Every binary message starts with a 1-byte type.
@@ -31,7 +33,28 @@ Sent once when a client connects.
 ```
 Camera loop rate, every 5 s.
 
+```json
+{ "type": "bodies", "t": 1729790000000, "bodies": [
+  { "id": 7, "kp": {
+    "head": { "x": 0.30, "y": 0.25, "z": 0.88 }, "neck": { "x": 0.30, "y": 0.42, "z": 0.88 },
+    "l_shoulder": { "x": 0.39, "y": 0.45, "z": 0.88 }, "r_shoulder": { "x": 0.21, "y": 0.45, "z": 0.88 },
+    "l_wrist": { "x": 0.38, "y": 0.70, "z": 0.70 }, "r_wrist": null, "pelvis": null } } ] }
+```
+ZED `BODY_34` skeletons, one per tracked person (tracking state `OK` only, within `--max-range`).
+- `id` is the ZED tracking id, stable while the person stays tracked.
+- `x`, `y` are normalized to the camera image (0..1, **not mirrored**, same space as the frame).
+- `z` is the keypoint's distance from the camera in meters.
+- A keypoint the ZED could not place is `null` (at a desk the pelvis usually is).
+- `l_`/`r_` are the person's own left/right, so a player facing the camera has `l_shoulder` on the
+  image's right.
+
+The game seats the nearest valid torso (both shoulders in frame, torso 0.3-1.6 m) in each half of
+the mirrored view, and attaches each MediaPipe hand to the body whose wrist is closest.
+
 ## Webcam fallback
 `?src=webcam` uses the laptop camera with no depth stream. Hand depth is estimated from the
 apparent palm size (wrist → middle knuckle), scaled by a per-player factor captured while the
-player holds an open palm during calibration.
+player holds an open palm during calibration. Bodies come from MediaPipe Pose in the browser and
+are converted to the same `bodies` schema; torso `z` is estimated from shoulder width. Posture
+moves are measured relative to each player's calibrated neutral, so the absolute error does not
+matter.
