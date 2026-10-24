@@ -1,34 +1,37 @@
 # Tracker → Game protocol
 
-The tracker (`jetson/tracker.py`) runs a WebSocket server, default `ws://<jetson>:8765`.
+The tracker (`jetson/tracker.py`, or `jetson/fake_tracker.py` for development) runs a WebSocket
+server, default `ws://<jetson>:8765`. It streams what the camera sees; hand tracking and sign
+recognition run in the browser on those frames, and the depth map gives each hand a distance.
 
 ## Binary messages
-Each binary message is one JPEG camera frame (left ZED view, downscaled, **not mirrored**).
+Every binary message starts with a 1-byte type.
+
+| Type | Layout | Meaning |
+|---|---|---|
+| `0x01` | `type` + JPEG bytes | Left ZED view, downscaled to 960 px wide, camera aspect kept (960×600 on a ZED X in SVGA), **not mirrored** |
+| `0x02` | `type`, `reserved` (u8, 0), `width` (u16 LE), `height` (u16 LE), then `width*height` × u16 LE | Depth map in **millimeters**, row-major, aligned to the left view. `0` = unknown (occluded, NaN, too close, or beyond `--max-range`) |
+
+- The depth map is small (160 px wide, same aspect as the frame: 160×100) so it costs ~32 KB per frame.
+- Each depth map is sent just before the frame it belongs to.
+- Beyond `--max-range` (default 1.6 m) the ZED reports `+inf`, sent as `0`, so people standing
+  behind the players never get a depth and are ignored.
+
+The browser samples depth at hand landmarks: for each palm landmark (wrist and the four knuckles)
+it takes the median of the valid pixels in a 3×3 patch, then the median across those landmarks.
 
 ## Text messages (JSON)
 ```json
-{
-  "type": "bodies",
-  "t": 1729790000123,
-  "bodies": [
-    {
-      "id": 3,
-      "kp": {
-        "head":       { "x": 0.51, "y": 0.18, "z": 2.10 },
-        "neck":       { "x": 0.50, "y": 0.27, "z": 2.12 },
-        "l_shoulder": { "x": 0.45, "y": 0.29, "z": 2.13 },
-        "r_shoulder": { "x": 0.56, "y": 0.29, "z": 2.13 },
-        "l_wrist":    { "x": 0.40, "y": 0.45, "z": 1.80 },
-        "r_wrist":    { "x": 0.61, "y": 0.47, "z": 2.05 },
-        "pelvis":     { "x": 0.50, "y": 0.55, "z": 2.15 }
-      }
-    }
-  ]
-}
+{ "type": "hello", "frame": [960, 600], "depth": [160, 100] }
 ```
-- `x`, `y`: normalized image coordinates (0–1, origin top-left, un-mirrored).
-- `z`: distance from the camera in **meters** (smaller = closer).
-- A keypoint the tracker could not see is `null`.
-- `id`: tracker-assigned id, stable while the person stays tracked.
+Sent once when a client connects.
 
-The webcam fallback (`game/src/sources.js`) produces the same shape. Its `z` is *estimated* from shoulder width, so it is rougher.
+```json
+{ "type": "stats", "fps": 29.8 }
+```
+Camera loop rate, every 5 s.
+
+## Webcam fallback
+`?src=webcam` uses the laptop camera with no depth stream. Hand depth is estimated from the
+apparent palm size (wrist → middle knuckle), scaled by a per-player factor captured while the
+player holds an open palm during calibration.

@@ -1,36 +1,34 @@
-"""ZED X body tracker: streams skeletons (JSON) and camera frames (JPEG) over WebSocket.
+"""ZED X camera server: streams camera frames (JPEG) and a small depth map over WebSocket.
 
+Hand tracking and sign recognition run in the browser (MediaPipe) on these frames; the depth
+map gives each hand a metric distance so a thrust toward the camera can be measured.
 See docs/protocol.md for the message format. Run on the Jetson:
     python3 tracker.py                      # live camera
     python3 tracker.py --record demo.svo2   # live + record for laptop devs
-    python3 tracker.py --svo demo.svo2      # replay a recording (works on any machine with the ZED SDK)
+    python3 tracker.py --svo demo.svo2      # replay a recording (any machine with the ZED SDK)
 """
 
 import argparse
 import asyncio
 import json
-import math
+import struct
 import threading
 import time
 
 import cv2
+import numpy as np
 import pyzed.sl as sl
 import websockets
 
-# Indices into the BODY_34 keypoint array.
-KEYPOINTS = {
-    "pelvis": 0,
-    "neck": 3,
-    "l_shoulder": 5,
-    "l_wrist": 7,
-    "r_shoulder": 12,
-    "r_wrist": 14,
-    "head": 26,
-}
-FRAME_WIDTH = 960
-FRAME_HEIGHT = 540
+FRAME_WIDTH = 960  # JPEG width; height follows the camera aspect ratio
+DEPTH_WIDTH = 160  # depth map width; height follows the camera aspect ratio
 JPEG_QUALITY = 70
-DETECTION_CONFIDENCE = 40
+MSG_FRAME = 0x01
+MSG_DEPTH = 0x02
+DEPTH_HEADER = struct.Struct("<BBHH")  # type, reserved, width, height
+MM_PER_M = 1000.0
+UINT16_MAX = 65535
+STATS_PERIOD_S = 5
 
 
 def parse_args():
@@ -38,9 +36,17 @@ def parse_args():
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--svo", help="replay an .svo/.svo2 file instead of the live camera")
     parser.add_argument("--record", help="record the live session to this .svo2 path")
-    parser.add_argument("--max-range", type=float, default=3.5, help="ignore people farther than this (meters)")
+    parser.add_argument("--max-range", type=float, default=1.6, help="depth beyond this (meters) is dropped: ignores bystanders")
     parser.add_argument("--depth", default="PERFORMANCE", help="ZED DEPTH_MODE (PERFORMANCE, NEURAL, ...)")
     return parser.parse_args()
+
+
+def grab_succeeded(status):
+    """SDK 5 reports warnings as codes below SUCCESS; SDK 4 enums may not support ordering."""
+    try:
+        return status <= sl.ERROR_CODE.SUCCESS
+    except TypeError:
+        return status == sl.ERROR_CODE.SUCCESS
 
 
 def open_camera(args):
@@ -50,7 +56,7 @@ def open_camera(args):
     init.camera_fps = 30
     init.depth_mode = getattr(sl.DEPTH_MODE, args.depth)
     init.coordinate_units = sl.UNIT.METER
-    init.coordinate_system = sl.COORDINATE_SYSTEM.IMAGE  # x right, y down, z forward
+    init.depth_maximum_distance = args.max_range  # farther pixels come back as +inf -> 0 on the wire
     if args.svo:
         init.set_from_svo_file(args.svo)
         init.svo_real_time_mode = True
@@ -63,39 +69,24 @@ def open_camera(args):
         status = zed.enable_recording(sl.RecordingParameters(args.record, sl.SVO_COMPRESSION_MODE.H264))
         if status != sl.ERROR_CODE.SUCCESS:
             raise RuntimeError(f"ZED recording to {args.record} failed: {status}")
-
-    tracking = sl.PositionalTrackingParameters()
-    tracking.set_as_static = True  # the box doesn't move
-    zed.enable_positional_tracking(tracking)
-
-    body_params = sl.BodyTrackingParameters()
-    body_params.enable_tracking = True
-    body_params.enable_body_fitting = True
-    body_params.detection_model = sl.BODY_TRACKING_MODEL.HUMAN_BODY_FAST
-    body_params.body_format = sl.BODY_FORMAT.BODY_34
-    body_params.max_range = args.max_range
-    status = zed.enable_body_tracking(body_params)
-    if status != sl.ERROR_CODE.SUCCESS:
-        raise RuntimeError(f"ZED body tracking failed: {status}")
     return zed
 
 
-def to_point(kp2d, kp3d, width, height):
-    x, y = float(kp2d[0]), float(kp2d[1])
-    z = float(kp3d[2])
-    if any(math.isnan(v) for v in (x, y, z)) or x < 0 or y < 0:
-        return None
-    return {"x": x / width, "y": y / height, "z": z}
+def scaled_size(camera_res, width):
+    return width, round(width * camera_res.height / camera_res.width)
 
 
-def serialize_bodies(bodies, width, height):
-    out = []
-    for body in bodies.body_list:
-        if body.tracking_state != sl.OBJECT_TRACKING_STATE.OK:
-            continue
-        kp = {name: to_point(body.keypoint_2d[i], body.keypoint[i], width, height) for name, i in KEYPOINTS.items()}
-        out.append({"id": int(body.id), "kp": kp})
-    return json.dumps({"type": "bodies", "t": int(time.time() * 1000), "bodies": out})
+def encode_depth(depth_m):
+    """float32 meters (NaN/inf = unknown) -> typed binary message of uint16 millimeters (0 = unknown)."""
+    valid = np.isfinite(depth_m) & (depth_m > 0)
+    mm = np.where(valid, np.clip(depth_m * MM_PER_M, 1, UINT16_MAX), 0).astype("<u2")
+    height, width = mm.shape
+    return DEPTH_HEADER.pack(MSG_DEPTH, 0, width, height) + mm.tobytes()
+
+
+def encode_frame(bgra):
+    ok, jpeg = cv2.imencode(".jpg", cv2.cvtColor(bgra, cv2.COLOR_BGRA2BGR), [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+    return bytes([MSG_FRAME]) + jpeg.tobytes() if ok else None
 
 
 class CaptureThread(threading.Thread):
@@ -107,31 +98,37 @@ class CaptureThread(threading.Thread):
         self.latest = None
         self.seq = 0
         self.fps = 0.0
+        camera_res = zed.get_camera_information().camera_configuration.resolution
+        self.frame_res = sl.Resolution(*scaled_size(camera_res, FRAME_WIDTH))
+        self.depth_res = sl.Resolution(*scaled_size(camera_res, DEPTH_WIDTH))
+
+    def hello(self):
+        return json.dumps({
+            "type": "hello",
+            "frame": [self.frame_res.width, self.frame_res.height],
+            "depth": [self.depth_res.width, self.depth_res.height],
+        })
 
     def run(self):
-        resolution = self.zed.get_camera_information().camera_configuration.resolution
-        runtime = sl.BodyTrackingRuntimeParameters()
-        runtime.detection_confidence_threshold = DETECTION_CONFIDENCE
-        bodies = sl.Bodies()
+        runtime = sl.RuntimeParameters()
         image = sl.Mat()
-        small = sl.Resolution(FRAME_WIDTH, FRAME_HEIGHT)
+        depth = sl.Mat()
         last = time.perf_counter()
         while True:
-            status = self.zed.grab()
+            status = self.zed.grab(runtime)
             if status == sl.ERROR_CODE.END_OF_SVOFILE_REACHED:
                 self.zed.set_svo_position(0)
                 continue
-            if status != sl.ERROR_CODE.SUCCESS:
+            if not grab_succeeded(status):
                 print(f"[tracker] grab failed: {status}")
                 time.sleep(0.05)
                 continue
-            self.zed.retrieve_bodies(bodies, runtime)
-            self.zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, small)
-            frame = cv2.cvtColor(image.get_data(), cv2.COLOR_BGRA2BGR)
-            ok, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
-            if not ok:
+            self.zed.retrieve_image(image, sl.VIEW.LEFT, sl.MEM.CPU, self.frame_res)
+            self.zed.retrieve_measure(depth, sl.MEASURE.DEPTH, sl.MEM.CPU, self.depth_res)
+            frame = encode_frame(image.get_data())
+            if frame is None:
                 continue
-            self.latest = (serialize_bodies(bodies, resolution.width, resolution.height), jpeg.tobytes())
+            self.latest = (frame, encode_depth(depth.get_data()))
             self.seq += 1
             now = time.perf_counter()
             self.fps = 0.9 * self.fps + 0.1 / max(now - last, 1e-6)
@@ -144,6 +141,7 @@ async def serve(capture, port):
     async def handler(ws):
         clients.add(ws)
         print(f"[tracker] client connected ({len(clients)})")
+        await ws.send(capture.hello())
         try:
             await ws.wait_closed()
         finally:
@@ -156,11 +154,12 @@ async def serve(capture, port):
         while True:
             if capture.seq != sent_seq and capture.latest:
                 sent_seq = capture.seq
-                text, jpeg = capture.latest
-                websockets.broadcast(clients, jpeg)
-                websockets.broadcast(clients, text)
-            if time.time() - last_log > 5:
+                frame, depth = capture.latest
+                websockets.broadcast(clients, depth)  # depth first so it is ready when the frame is processed
+                websockets.broadcast(clients, frame)
+            if time.time() - last_log > STATS_PERIOD_S:
                 print(f"[tracker] {capture.fps:.1f} fps, {len(clients)} client(s)")
+                websockets.broadcast(clients, json.dumps({"type": "stats", "fps": round(capture.fps, 1)}))
                 last_log = time.time()
             await asyncio.sleep(0.005)
 
