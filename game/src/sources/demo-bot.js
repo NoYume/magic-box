@@ -141,7 +141,9 @@ export function specToObservations(spec, frameW, frameH) {
 // The skeleton's wrists sit on the hands, as the ZED's would.
 export function botToInputs(slot, { hands, body }, frameW, frameH) {
   const observations = hands.flatMap((spec) => specToObservations(spec, frameW, frameH));
-  const [a, b] = observations.map((o) => ({ ...o.landmarks[0], z: o.depth }));
-  const skeleton = makeBody({ id: slot + 1, cx: 1 - body.x, z: body.z, frameW, frameH, focal: FOCAL, wrists: { l: a ?? null, r: b ?? null } });
+  // The person's left wrist is the one on the camera's right (larger camera x).
+  const wrists = observations.map((o) => ({ ...o.landmarks[0], z: o.depth })).sort((a, b) => b.x - a.x);
+  const pair = wrists.length === 1 && wrists[0].x < 1 - body.x ? [null, wrists[0]] : wrists;
+  const skeleton = makeBody({ id: slot + 1, cx: 1 - body.x, z: body.z, frameW, frameH, focal: FOCAL, wrists: { l: pair[0] ?? null, r: pair[1] ?? null } });
   return { observations, body: skeleton };
 }
