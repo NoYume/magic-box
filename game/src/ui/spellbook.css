@@ -33,8 +33,10 @@
 .spellbook__list--body .spell-card { padding: 2px 4px; }
 .spellbook__list--body .how { margin-top: 3px; }
 .spellbook__list--body .note { font-size: 13px; }
-.spellbook[data-mode='compact'] .spellbook__list { grid-template-columns: repeat(4, auto); gap: 4px; }
-.spellbook[data-mode='compact'] .spellbook__list--body { grid-template-columns: repeat(3, auto); }
+/* Each duel strip stays inside its half of the screen; cards shrink and their cues wrap. */
+.spellbook[data-mode='compact'] { max-width: calc(50vw - var(--gutter) * 1.5); }
+.spellbook[data-mode='compact'] .spellbook__list { flex: 4 1 auto; min-width: 0; grid-template-columns: repeat(4, minmax(0, auto)); gap: 4px; }
+.spellbook[data-mode='compact'] .spellbook__list--body { flex: 3 1 auto; grid-template-columns: repeat(3, minmax(0, auto)); }
 
 .spell-card {
   display: grid;
@@ -52,11 +54,13 @@
 .spell-card .note { display: block; margin-top: 3px; font: italic 500 14px/1.2 var(--font-story); color: var(--parchmentDim); }
 
 /* Duel strip: read from across a desk, so big icons with a name underneath. */
-.spellbook[data-mode='compact'] .spell-card { grid-template-columns: none; grid-auto-flow: row; justify-items: center; align-items: start; gap: 4px; min-width: 76px; padding: 6px 6px 4px; text-align: center; }
+.spellbook[data-mode='compact'] .spell-card { grid-template-columns: none; grid-auto-flow: row; justify-items: center; align-items: start; gap: 4px; min-width: 0; padding: 6px 4px 4px; text-align: center; }
 .spellbook[data-mode='compact'] .sign-art { width: 56px; height: 56px; }
 .spellbook[data-mode='compact'] .spellbook__list--body .sign-art { width: 50px; height: 50px; margin: 3px 0; }
 .spellbook[data-mode='compact'] .how, .spellbook[data-mode='compact'] .note { display: none; }
 .spellbook[data-mode='compact'] .spell-card__text b { font-size: 14px; letter-spacing: 0.14em; }
+.spell-card .cue { display: none; }
+.spellbook[data-mode='compact'] .cue { display: block; max-width: 92px; margin-top: 4px; font: 500 13px/1.2 var(--font-ui); color: var(--parchment); }
 
 .spell-card.is-active {
   border-color: var(--gold);
@@ -78,14 +82,14 @@
 .art-guard { fill: none; stroke: var(--gold); stroke-width: 4; stroke-linecap: round; }
 .art-motion { fill: none; stroke: var(--gold); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
-/* Narrow screens: the duel strip keeps only the icons so both books fit beside the seam. */
+/* Narrow screens: smaller icons, then the name drops (the cue stays) so both books fit beside the seam. */
 @media (max-width: 1400px) {
-  .spellbook[data-mode='compact'] .spell-card { min-width: 60px; }
   .spellbook[data-mode='compact'] .sign-art { width: 46px; height: 46px; }
   .spellbook[data-mode='compact'] .spellbook__list--body .sign-art { width: 40px; height: 40px; }
   .spellbook[data-mode='compact'] .spell-card__text b { font-size: 12px; letter-spacing: 0.08em; }
+  .spellbook[data-mode='compact'] .cue { max-width: 72px; font-size: 11px; }
 }
 @media (max-width: 1100px) {
-  .spellbook[data-mode='compact'] .spell-card__text { display: none; }
+  .spellbook[data-mode='compact'] .spell-card__text b { display: none; }
   .spellbook[data-mode='compact'] .spell-card { min-width: 0; padding: 4px; }
 }

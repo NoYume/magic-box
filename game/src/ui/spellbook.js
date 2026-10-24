@@ -1,27 +1,28 @@
 // Per-player spellbook card: the four hand signs and three body moves as line illustrations,
 // learnable in ten seconds. Expanded on the attract screen, compact during the duel with the
-// active sign and stance highlighted.
+// active sign and stance highlighted. The duel strip keeps a short cue under every icon, since
+// first-time players (judges) still need to read what each one asks for.
 
 import { PHASE as CAST } from '../game/caster.js';
 import { bodyArt } from './body-art.js';
 import { signArt } from './hand-art.js';
 
 export const SPELLBOOK = [
-  { sign: 'ward', name: 'Ward', how: 'Open palm to the screen', note: 'Blocks while held. Costs mana.' },
-  { sign: 'gather', name: 'Gather', how: 'Make a fist and hold', note: 'Charges your next spell.' },
-  { sign: 'aim', name: 'Bolt', how: 'Two fingers, then thrust', note: 'Push toward the screen to fire.' },
-  { sign: 'ultimate', name: 'Ultimate', how: 'Diamond with both hands', note: 'Full charge, hold one second.' },
+  { sign: 'ward', name: 'Ward', cue: 'Open palm', how: 'Open palm to the screen', note: 'Blocks while held. Costs mana.' },
+  { sign: 'gather', name: 'Gather', cue: 'Hold a fist', how: 'Make a fist and hold', note: 'Charges your next spell.' },
+  { sign: 'aim', name: 'Bolt', cue: 'Two fingers + push', how: 'Two fingers up, then push', note: 'Punch it toward the screen to fire.' },
+  { sign: 'ultimate', name: 'Ultimate', cue: 'Diamond + hold', how: 'Diamond with both hands', note: 'Full charge, hold one second.' },
 ];
 
 // Body moves change how spells land; they never cast on their own.
 export const BODY_BOOK = [
-  { move: 'focus', name: 'Focus', how: 'Lean in toward the screen', note: 'Gather charges twice as fast.' },
-  { move: 'brace', name: 'Brace', how: 'Lean back and hold', note: 'Take less damage from hits.' },
-  { move: 'dodge', name: 'Dodge', how: 'Sway sideways, quickly', note: 'Bolts miss. Ultimates do not.' },
+  { move: 'focus', name: 'Focus', cue: 'Lean in', how: 'Lean in toward the screen', note: 'Gather charges twice as fast.' },
+  { move: 'brace', name: 'Brace', cue: 'Lean back', how: 'Lean back and hold', note: 'Take less damage from hits.' },
+  { move: 'dodge', name: 'Dodge', cue: 'Quick side step', how: 'Sway sideways, quickly', note: 'Bolts miss. Ultimates do not.' },
 ];
 const STANCE_MOVE = { leanIn: 'focus', leanBack: 'brace' };
 
-const card = (key, art, { name, how, note }) => `<li class="spell-card" data-sign="${key}">${art}<div class="spell-card__text"><b>${name}</b><span class="how">${how}</span><span class="note">${note}</span></div></li>`;
+const card = (key, art, { name, cue, how, note }) => `<li class="spell-card" data-sign="${key}">${art}<div class="spell-card__text"><b>${name}</b><span class="cue">${cue}</span><span class="how">${how}</span><span class="note">${note}</span></div></li>`;
 
 const ACTIVE_PHASES = new Set([CAST.DETECTED, CAST.WARDING, CAST.CHARGING, CAST.READY, CAST.CAST]);
 
