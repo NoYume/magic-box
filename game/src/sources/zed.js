@@ -1,5 +1,6 @@
-// ZED X source: JPEG frames + depth maps over WebSocket from jetson/tracker.py (docs/protocol.md).
-// Hands are found by MediaPipe on the decoded frames; each hand's depth is sampled from the map.
+// ZED X source: JPEG frames, depth maps and body skeletons over WebSocket from jetson/tracker.py
+// (docs/protocol.md). The ZED tracks bodies; MediaPipe finds hands (fingers) on the decoded frames
+// and each hand's depth is sampled from the map.
 
 import { ProtocolError, handDepthFromMap, parseBinaryMessage } from '../vision/depth.js';
 import { createHandDetector } from '../vision/hands.js';
@@ -13,6 +14,7 @@ export async function createZedSource(url, onStatus) {
   const ctx = canvas.getContext('2d');
   const stats = { kind: 'zed', frames: 0, depthMaps: 0, trackerFps: 0, depthSize: null, connected: false };
   let depthMap = null;
+  let pendingBodies = null;
   let frameSeq = 0;
   let detectedSeq = 0;
   let isDecoding = false;
@@ -38,6 +40,7 @@ export async function createZedSource(url, onStatus) {
     if (typeof msg.data === 'string') {
       const packet = JSON.parse(msg.data);
       if (packet.type === 'stats') stats.trackerFps = packet.fps;
+      if (packet.type === 'bodies') pendingBodies = packet.bodies;
       return;
     }
     try {
@@ -74,13 +77,21 @@ export async function createZedSource(url, onStatus) {
   stats.hands = detector.stats;
   connect();
 
-  function poll(tMs) {
-    if (frameSeq === detectedSeq) return null;
+  function detectHands(tMs) {
+    if (frameSeq === detectedSeq) return undefined;
     const observations = detector.detect(canvas, canvas.width, canvas.height, tMs);
-    if (!observations) return null;
+    if (!observations) return undefined;
     detectedSeq = frameSeq;
     for (const obs of observations) obs.depth = depthMap ? handDepthFromMap(depthMap, obs.landmarks) : null;
     return observations;
+  }
+
+  // Returns { observations?, bodies? } or null when there is nothing new.
+  function poll(tMs) {
+    const bodies = pendingBodies ?? undefined;
+    pendingBodies = null;
+    const observations = detectHands(tMs);
+    return observations || bodies ? { observations, bodies } : null;
   }
 
   return { kind: 'zed', canvas, mirror: true, poll, stats, getDepthMap: () => depthMap };

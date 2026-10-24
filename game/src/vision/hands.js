@@ -1,14 +1,11 @@
 // MediaPipe Tasks Vision HandLandmarker in the browser: 21 landmarks + handedness per hand.
 // Runs on whatever the source paints (ZED frames or the webcam), throttled independently of render.
 
+import { loadVision } from './mediapipe.js';
 import { HANDS } from './tuning.js';
 
-const MEDIAPIPE_VERSION = '0.10.14';
-const MEDIAPIPE_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}`;
 const HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const FPS_SMOOTHING = 0.1;
-
-export class HandModelError extends Error {}
 
 async function createLandmarker(fileset, HandLandmarker, delegate) {
   return HandLandmarker.createFromOptions(fileset, {
@@ -23,14 +20,8 @@ async function createLandmarker(fileset, HandLandmarker, delegate) {
 
 // Returns { detect(image, frameW, frameH, tMs) -> observations | null, stats }.
 export async function createHandDetector() {
-  let vision;
-  try {
-    vision = await import(`${MEDIAPIPE_BASE}/vision_bundle.mjs`);
-  } catch (err) {
-    throw new HandModelError('Could not load MediaPipe from the CDN (offline?)', { cause: err });
-  }
-  const { FilesetResolver, HandLandmarker } = vision;
-  const fileset = await FilesetResolver.forVisionTasks(`${MEDIAPIPE_BASE}/wasm`);
+  const { vision, fileset } = await loadVision();
+  const { HandLandmarker } = vision;
   let delegate = 'GPU';
   let landmarker;
   try {
