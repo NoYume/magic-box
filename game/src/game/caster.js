@@ -1,12 +1,13 @@
 // Cast state machine for one player: turns smoothed hand signs + hand depth into deliberate
 // actions. Nothing fires from casual movement: every cast needs a recognized sign held for its
-// confirm window, then an explicit trigger (a thrust toward the camera, or the ultimate hold).
+// confirm window, then an explicit trigger (a thrust toward the camera, a sideways jab toward the
+// opponent, or the ultimate hold).
 //
 // Per-hand phases (for the on-hand indicator):
 //   idle -> detected (confirm fill) -> warding | charging | ready -> cast -> cooldown
 
 import { SIGNS } from '../vision/signs.js';
-import { THRUST } from '../vision/tuning.js';
+import { JAB, THRUST } from '../vision/tuning.js';
 import { BOLT, CONFIRM_MS } from './balance.js';
 import { boltCooldown, canRaiseWard, isUltimateReady, ultimateCooldown } from './rules.js';
 
@@ -39,6 +40,22 @@ export function measureThrust(history, tMs, sinceMs = -Infinity) {
 }
 
 export const isThrust = ({ speed, travel }) => speed >= THRUST.MIN_SPEED && travel >= THRUST.MIN_TRAVEL;
+
+// Speed (view widths/s) and travel (widths) toward the opponent over the thrust window.
+// toward: +1 when the opponent is to the right in view space (slot 0), -1 otherwise.
+export function measureJab(history, tMs, toward, sinceMs = -Infinity) {
+  const samples = history.filter((s) => s.x !== undefined && tMs - s.t <= THRUST.WINDOW_MS && s.t >= sinceMs);
+  if (samples.length < 2) return NO_THRUST;
+  const first = samples[0];
+  const last = samples[samples.length - 1];
+  const dt = (last.t - first.t) / 1000;
+  const travel = (last.x - first.x) * toward;
+  return { speed: dt > 0 ? travel / dt : 0, travel };
+}
+
+export const isJab = ({ speed, travel }) => speed >= JAB.MIN_SPEED && travel >= JAB.MIN_TRAVEL;
+
+const power = (speed, min, full) => Math.max(0, Math.min(1, (speed - min) / (full - min)));
 
 export class PlayerCaster {
   constructor() {
@@ -81,12 +98,17 @@ export class PlayerCaster {
       s.armedUntil = tMs + BOLT.ARM_GRACE_MS;
     }
     // No metric depth this frame (stereo dropout): the hand cannot trigger anything.
-    const thrust = hand.depth === null ? NO_THRUST : measureThrust(hand.depthHistory ?? [], tMs, s.armedAt ?? -Infinity);
-    // Re-cocking looks at the whole window, so one long push cannot fire twice.
-    if (!s.recocked && hand.depth !== null && measureThrust(hand.depthHistory ?? [], tMs).speed < THRUST.MIN_SPEED * RECOCK_SPEED_RATIO) s.recocked = true;
+    const history = hand.depthHistory ?? [];
+    const toward = hand.slot === 1 ? -1 : 1;
+    const thrust = hand.depth === null ? NO_THRUST : measureThrust(history, tMs, s.armedAt ?? -Infinity);
+    const jab = measureJab(history, tMs, toward, s.armedAt ?? -Infinity);
+    // Re-cocking looks at the whole window, so one long push or jab cannot fire twice.
+    const pushSpeed = hand.depth === null ? 0 : measureThrust(history, tMs).speed;
+    const isStill = pushSpeed < THRUST.MIN_SPEED * RECOCK_SPEED_RATIO && measureJab(history, tMs, toward).speed < JAB.MIN_SPEED * RECOCK_SPEED_RATIO;
+    if (!s.recocked && isStill) s.recocked = true;
 
     if (tMs < s.flashUntil) return { phase: PHASE.CAST, sign: SIGNS.AIM, progress: 1 };
-    if (tMs < s.armedUntil) return this.#aim(hand, s, { tMs, thrust, player, now, out });
+    if (tMs < s.armedUntil) return this.#aim(hand, s, { tMs, thrust, jab, player, now, out });
     if (s.sign === SIGNS.NONE) return { phase: PHASE.IDLE, sign: SIGNS.NONE, progress: 0 };
     if (!isConfirmed) return { phase: PHASE.DETECTED, sign: s.sign, progress: held / confirm };
     if (s.sign === SIGNS.WARD) return this.#ward(hand, player, now, out);
@@ -106,12 +128,13 @@ export class PlayerCaster {
     return { phase: PHASE.WARDING, sign: SIGNS.WARD, progress: 1 };
   }
 
-  #aim(hand, s, { tMs, thrust, player, now, out }) {
+  #aim(hand, s, { tMs, thrust, jab, player, now, out }) {
     const cooldown = boltCooldown(player, now);
     if (cooldown > 0) return { phase: PHASE.COOLDOWN, sign: SIGNS.AIM, progress: 1 - cooldown };
-    if (s.recocked && isThrust(thrust)) {
-      const power = Math.min(1, (thrust.speed - THRUST.MIN_SPEED) / (THRUST.FULL_SPEED - THRUST.MIN_SPEED));
-      out.casts.push({ type: 'bolt', thrust: Math.max(0, power), origin: hand.view, handId: hand.id });
+    const isPush = isThrust(thrust);
+    if (s.recocked && (isPush || isJab(jab))) {
+      const strength = isPush ? power(thrust.speed, THRUST.MIN_SPEED, THRUST.FULL_SPEED) : power(jab.speed, JAB.MIN_SPEED, JAB.FULL_SPEED);
+      out.casts.push({ type: 'bolt', thrust: strength, origin: hand.view, handId: hand.id });
       Object.assign(s, { recocked: false, flashUntil: tMs + CAST_FLASH_MS, armedUntil: -Infinity });
       return { phase: PHASE.CAST, sign: SIGNS.AIM, progress: 1 };
     }

@@ -10,7 +10,7 @@ import { signArt } from './hand-art.js';
 export const SPELLBOOK = [
   { sign: 'ward', name: 'Ward', cue: 'Open palm', how: 'Open palm to the screen', note: 'Blocks while held. Costs mana.' },
   { sign: 'gather', name: 'Gather', cue: 'Hold a fist', how: 'Make a fist and hold', note: 'Charges your next spell.' },
-  { sign: 'aim', name: 'Bolt', cue: 'Two fingers + push', how: 'Two fingers up, then push', note: 'Punch it toward the screen to fire.' },
+  { sign: 'aim', name: 'Bolt', cue: 'Two fingers, shoot', how: 'Two fingers, then jab', note: 'Jab at your rival or the screen.' },
   { sign: 'ultimate', name: 'Ultimate', cue: 'Diamond + hold', how: 'Diamond with both hands', note: 'Full charge, hold one second.' },
 ];
 

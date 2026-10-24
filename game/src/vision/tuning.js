@@ -61,6 +61,14 @@ export const THRUST = {
   FULL_SPEED: 1.6, // m/s at which thrust power saturates
 };
 
+// Sideways jab toward the opponent (the "finger gun" most players reach for). View widths, over
+// THRUST.WINDOW_MS. Needs no depth, so it works the same on the webcam and the ZED.
+export const JAB = {
+  MIN_SPEED: 0.5, // view widths/s toward the opponent's side
+  MIN_TRAVEL: 0.06, // view widths toward the opponent within the window (~9 cm at the desk)
+  FULL_SPEED: 1.6, // widths/s at which jab power saturates
+};
+
 // Body posture (ZED body tracking, or MediaPipe Pose on the webcam). Offsets are measured from each
 // player's own neutral posture, captured while they hold the joining palm.
 export const BODY = {

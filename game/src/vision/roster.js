@@ -158,7 +158,7 @@ export class HandRoster {
     track.scores = frame.scores;
     track.sign = track.smoother.push(frame.sign);
     track.agreement = track.smoother.agreement;
-    track.depthHistory.push({ t: tMs, z: hand.depth });
+    track.depthHistory.push({ t: tMs, z: hand.depth, x: hand.view.x }); // x feeds the sideways jab
     while (track.depthHistory.length && tMs - track.depthHistory[0].t > DEPTH_HISTORY_MS) track.depthHistory.shift();
   }
 

@@ -22,7 +22,7 @@ const LABEL = {
 };
 
 function labelFor(state) {
-  if (state.phase === PHASE.READY) return 'Thrust';
+  if (state.phase === PHASE.READY) return 'Shoot';
   if (state.phase === PHASE.BLOCKED) return state.sign === SIGNS.ULTIMATE ? 'Gather first' : 'No mana';
   return LABEL[state.sign] ?? '';
 }

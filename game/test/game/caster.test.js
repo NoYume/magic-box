@@ -95,3 +95,19 @@ test('should_only_count_thrust_travel_after_aim_is_armed', () => {
   const { casts } = play([...hold('sword', 4, 0.9), ...approach, ...hold('sword', 12, 0.54)]);
   assert.equal(casts.length, 0);
 });
+
+// A sideways jab: player 0 sits on the left of the mirrored view, so toward the opponent is
+// decreasing camera x. Depth stays put, like a finger gun swung at the other player.
+const jab = (pose, count, from = 0.7, travel = 0.1) =>
+  Array.from({ length: count }, (_, i) => ({ pose, cx: from - (travel * (i + 1)) / count }));
+
+test('should_cast_bolt_on_sideways_jab_toward_opponent', () => {
+  const { casts } = play([...hold('sword', 15), ...jab('sword', 4), ...hold('sword', 5).map((f) => ({ ...f, cx: 0.6 }))]);
+  assert.equal(casts.length, 1);
+});
+
+test('should_not_cast_on_slow_slide_or_jab_away_from_opponent', () => {
+  const slow = play([...hold('sword', 15), ...jab('sword', 30, 0.7, 0.1)]);
+  const away = play([...hold('sword', 15), ...jab('sword', 4, 0.7, -0.1)]);
+  assert.equal(slow.casts.length + away.casts.length, 0);
+});
