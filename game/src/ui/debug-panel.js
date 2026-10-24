@@ -58,7 +58,7 @@ export class DebugPanel {
       `confirm ms  ward ${CONFIRM_MS.ward}  gather ${CONFIRM_MS.gather}  aim ${CONFIRM_MS.aim}  ultimate ${CONFIRM_MS.ultimate}`,
       `thrust  >= ${THRUST.MIN_SPEED} m/s and >= ${THRUST.MIN_TRAVEL} m in ${THRUST.WINDOW_MS} ms   bolt cooldown ${BOLT.COOLDOWN_MS} ms`,
       `sign min score ${SIGN.MIN_SCORE}  facing >= ${SIGN.FACING_MIN}  sword gap <= ${SIGN.SWORD_GAP_MAX}  play depth ${DEPTH.PLAY_NEAR_M}-${DEPTH.PLAY_FAR_M} m`,
-      `body  lean in <= -${BODY.LEAN_IN_M} m  lean back >= ${BODY.LEAN_BACK_M} m  hold ${BODY.STANCE_HOLD_MS} ms  dodge >= ${BODY.DODGE_SHIFT} sh in ${BODY.DODGE_WINDOW_MS} ms`,
+      `body  lean in <= -${BODY.LEAN_IN_FRAC * 100}% z  lean back >= ${BODY.LEAN_BACK_FRAC * 100}% z  hold ${BODY.STANCE_HOLD_MS} ms  dodge >= ${BODY.DODGE_SHIFT} sh in ${BODY.DODGE_WINDOW_MS} ms`,
       'keys: D debug   M mute   R reset (dev)',
     ].filter((line) => line !== null);
     this.text.textContent = lines.join('\n');

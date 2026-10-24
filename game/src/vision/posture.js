@@ -33,6 +33,7 @@ export class PostureDetector {
     this.pending = { stance: STANCE.NEUTRAL, since: 0 };
     this.history = [];
     this.isDodgeArmed = true;
+    this.lastMs = null;
   }
 
   // Locks the current smoothed posture as this player's neutral.
@@ -44,27 +45,32 @@ export class PostureDetector {
   update(kp, tMs) {
     const raw = torsoOf(kp);
     if (!raw) return { stance: this.stance, leanOffset: 0, lateral: 0, dodge: 0, isTracked: false };
-    this.torso = this.torso ? blend(this.torso, raw, BODY.SMOOTHING) : { ...raw };
+    const dtMs = this.lastMs === null ? 0 : Math.max(0, tMs - this.lastMs);
+    this.lastMs = tMs;
+    this.torso = this.torso ? blend(this.torso, raw, emaFactor(dtMs, BODY.SMOOTHING_TAU_MS)) : { ...raw };
     this.neutral ??= { ...this.torso };
     const leanOffset = this.torso.z - this.neutral.z; // negative = closer
-    const lateral = (this.torso.x - this.neutral.x) / this.torso.width;
+    // Dodge reads the raw shoulders: smoothing would eat the quick shift it looks for.
+    const lateral = (raw.x - this.neutral.x) / raw.width;
     this.#updateStance(leanOffset, tMs);
     const dodge = this.#updateDodge(lateral, tMs);
     if (this.stance === STANCE.NEUTRAL && !dodge && Math.abs(lateral) < BODY.DODGE_REARM) {
-      this.neutral = blend(this.neutral, this.torso, BODY.DRIFT_PER_UPDATE);
+      this.neutral = blend(this.neutral, this.torso, emaFactor(dtMs, BODY.DRIFT_TAU_MS));
     }
     return { stance: this.stance, leanOffset, lateral, dodge, isTracked: true };
   }
 
   #updateStance(offset, tMs) {
     let wanted = this.stance;
-    const releaseIn = -(BODY.LEAN_IN_M - BODY.LEAN_HYSTERESIS_M);
-    const releaseBack = BODY.LEAN_BACK_M - BODY.LEAN_HYSTERESIS_M;
-    if (this.stance === STANCE.LEAN_IN && offset > releaseIn) wanted = STANCE.NEUTRAL;
-    if (this.stance === STANCE.LEAN_BACK && offset < releaseBack) wanted = STANCE.NEUTRAL;
+    // Thresholds scale with the player's distance, so a lean feels the same near or far.
+    const leanIn = BODY.LEAN_IN_FRAC * this.neutral.z;
+    const leanBack = BODY.LEAN_BACK_FRAC * this.neutral.z;
+    const hysteresis = BODY.LEAN_HYSTERESIS_FRAC * this.neutral.z;
+    if (this.stance === STANCE.LEAN_IN && offset > -(leanIn - hysteresis)) wanted = STANCE.NEUTRAL;
+    if (this.stance === STANCE.LEAN_BACK && offset < leanBack - hysteresis) wanted = STANCE.NEUTRAL;
     if (wanted === STANCE.NEUTRAL || this.stance === STANCE.NEUTRAL) {
-      if (offset < -BODY.LEAN_IN_M) wanted = STANCE.LEAN_IN;
-      else if (offset > BODY.LEAN_BACK_M) wanted = STANCE.LEAN_BACK;
+      if (offset < -leanIn) wanted = STANCE.LEAN_IN;
+      else if (offset > leanBack) wanted = STANCE.LEAN_BACK;
     }
     if (wanted !== this.pending.stance) this.pending = { stance: wanted, since: tMs };
     if (wanted !== this.stance && tMs - this.pending.since >= BODY.STANCE_HOLD_MS) this.stance = wanted;
@@ -84,6 +90,11 @@ export class PostureDetector {
     }
     return 0;
   }
+}
+
+// Per-update EMA factor for a time constant, so the response doesn't depend on frame rate.
+function emaFactor(dtMs, tauMs) {
+  return 1 - Math.exp(-dtMs / tauMs);
 }
 
 function blend(a, b, t) {

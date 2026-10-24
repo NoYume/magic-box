@@ -112,7 +112,7 @@ export class DemoBot {
       let roll = this.random();
       const choice = DEFENSE.find(([, p]) => (roll -= p) < 0)?.[0] ?? null;
       if (choice === 'ward') this.defense = { kind: 'ward', from: tMs, until: tMs + 1100 };
-      if (choice === 'dodge' && proj.kind === 'bolt') this.defense = { kind: 'dodge', from: tMs + 150, until: tMs + 900 };
+      if (choice === 'dodge' && proj.kind === 'bolt') this.defense = { kind: 'dodge', from: tMs + 300, until: tMs + 1000 };
       if (choice === 'brace') this.defense = { kind: 'brace', from: tMs, until: tMs + 1300 };
     }
   }
