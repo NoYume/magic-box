@@ -26,22 +26,22 @@ button:focus-visible { outline: 2px solid var(--parchment); outline-offset: 4px;
 /* The scoreboard reads like a fight broadcast, not a dashboard. */
 .hud { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 200ms; }
 .hud.is-shown { opacity: 1; }
-.plate { position: absolute; top: 64px; width: calc(40% - var(--gutter)); padding: 12px 16px; background: var(--panel); border-top: 3px solid var(--el); transform: translateY(-10px); transition: transform 300ms var(--easeOut); }
+.plate { position: absolute; top: 64px; width: min(340px, calc(40% - var(--gutter))); padding: 8px 10px; background: rgb(18 21 18 / 0.78); border-top: 2px solid var(--el); transform: translateY(-10px); transition: transform 300ms var(--easeOut); }
 .hud.is-shown .plate { transform: none; }
 .plate--p0 { left: var(--gutter); --el: var(--p0); }
 .plate--p1 { right: var(--gutter); --el: var(--p1); }
 .plate__head { display: flex; align-items: center; gap: 12px; }
 .plate--p1 .plate__head { flex-direction: row-reverse; text-align: right; }
-.plate__numeral { flex: none; font: 700 42px/0.9 var(--font-display); color: var(--el); letter-spacing: -0.04em; }
+.plate__numeral { flex: none; font: 700 28px/0.9 var(--font-display); color: var(--el); letter-spacing: -0.04em; }
 .plate__names { flex: 1; min-width: 0; }
 .plate__names h2 { margin: 0; font: 600 19px/1 var(--font-display); text-transform: uppercase; }
 .plate__names p { margin: 3px 0 0; font: 500 9px/1 var(--font-ui); text-transform: uppercase; color: var(--parchmentDim); letter-spacing: 0.12em; }
 .plate__pips { display: flex; gap: 5px; }
 .pip { width: 18px; height: 5px; background: rgb(240 238 230 / 0.16); }
 .pip.is-won { background: var(--el); }
-.plate__crystals { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; margin: 12px 0 5px; }
+.plate__crystals { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; margin: 7px 0 4px; }
 .plate--p1 .plate__crystals { direction: rtl; }
-.crystal { position: relative; height: 17px; background: rgb(240 238 230 / 0.12); }
+.crystal { position: relative; height: 8px; background: rgb(240 238 230 / 0.12); }
 .crystal > i { position: absolute; inset: 0; background: var(--el); transform-origin: left; transform: scaleX(var(--fill, 1)); transition: transform 220ms var(--easeOut); }
 .plate--p1 .crystal > i { transform-origin: right; }
 .plate.is-low .crystal > i { animation: low-hp 700ms ease-in-out infinite alternate; }
@@ -61,9 +61,23 @@ button:focus-visible { outline: 2px solid var(--parchment); outline-offset: 4px;
 .spell--body .body-art { width: 24px; height: 24px; }
 .spell--body .art-line, .spell--body .art-guard, .spell--body .art-motion { stroke: currentColor; stroke-width: 6; }
 .spell--body .art-ghost, .spell--body .art-thrust { display: none; }
-.medallion { position: absolute; top: 64px; left: 50%; width: 15%; min-width: 84px; padding: 10px 0; display: grid; justify-items: center; background: var(--panel); transform: translateX(-50%); }
+.medallion { position: absolute; top: 64px; left: 50%; width: 80px; padding: 6px 0; display: grid; justify-items: center; background: var(--panel); transform: translateX(-50%); }
 .medallion__round { font: 500 9px/1 var(--font-ui); letter-spacing: 0.08em; color: var(--parchmentDim); text-transform: uppercase; }
-.medallion__time { margin-top: 5px; font: 600 clamp(32px, 3.5vw, 54px)/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.medallion__time { margin-top: 5px; font: 600 32px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+
+.plate__headline { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.plate__hp-readout { font: 500 12px/1 var(--font-ui); }
+.plate__hp-denom { opacity: 0.5; font-size: 9px; }
+.plate__mana-strip { display: flex; align-items: center; gap: 6px; }
+.plate__mana-caption { font: 500 8px/1 var(--font-ui); color: var(--parchmentDim); }
+.plate__mana { flex: 1; }
+.plate__tactical-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.plate__stance-badge { font: 500 9px/1 var(--font-ui); color: var(--parchmentDim); }
+.spell__label { display: none; }
+.plate__ult-beacon { display: none; margin-top: 5px; font: 500 9px/1 var(--font-ui); color: var(--el); }
+.has-ult .plate__ult-beacon { display: block; }
+.medallion__frame { display: grid; justify-items: center; gap: 3px; }
+.medallion.is-urgent { color: var(--gold); }
 
 /* Diagnostics sit above the instructions instead of covering them. */
 .debug { position: absolute; left: var(--gutter); top: 220px; max-width: calc(100vw - 2 * var(--gutter)); max-height: calc(100vh - 260px); overflow: auto; display: flex; gap: 12px; align-items: flex-start; padding: 12px; background: rgb(14 16 15 / 0.96); border-left: 3px solid var(--gold); pointer-events: none; z-index: 5; }

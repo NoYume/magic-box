@@ -3,14 +3,14 @@
   position: absolute;
   bottom: 18px;
   width: calc(50% - 1.5 * var(--gutter));
-  padding: 14px 18px;
+  padding: 10px 12px;
   background: var(--parchment);
   color: var(--inkDeep);
   pointer-events: none;
   transition: opacity 220ms var(--easeOut), transform 280ms var(--easeOut);
   --book-line: rgb(14 16 15 / 0.18);
-  border-radius: 4px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  border-radius: 0;
+  box-shadow: none;
 }
 .spellbook--p0 { left: var(--gutter); --el: var(--p0); --el-core: var(--p0-core); }
 .spellbook--p1 { right: var(--gutter); --el: var(--p1); --el-core: var(--p1-core); }
@@ -25,7 +25,7 @@
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   font: 600 10px/1 var(--font-ui);
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -35,8 +35,8 @@
   font-weight: 500;
 }
 .spellbook__sub {
-  margin: 14px 0 10px;
-  padding-top: 10px;
+  margin: 8px 0 6px;
+  padding-top: 6px;
   border-top: 1px solid var(--book-line);
 }
 
@@ -76,14 +76,14 @@
   place-items: center;
 }
 .spell-card .sign-art {
-  width: 50px;
-  height: 50px;
+  width: 34px;
+  height: 34px;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.12));
 }
 
 .spell-card__text b {
   display: block;
-  font: 700 21px/1 var(--font-display);
+  font: 700 17px/1 var(--font-display);
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
@@ -125,14 +125,12 @@
   align-items: center;
   bottom: 14px;
   padding: 6px 14px;
-  background: linear-gradient(180deg, rgba(16, 20, 23, 0.82) 0%, rgba(9, 11, 13, 0.94) 100%);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgb(14 16 15 / 0.82);
   color: var(--parchment);
-  border: 1px solid rgba(240, 238, 230, 0.14);
-  border-top: 2px solid var(--el);
-  border-radius: 8px;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65), 0 0 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border: 0;
+  border-bottom: 1px solid var(--el);
+  border-radius: 0;
+  box-shadow: none;
   --book-line: var(--hairline);
   z-index: 6;
 }
@@ -171,11 +169,10 @@
 }
 
 .spellbook[data-mode='compact'] .spell-card__icon-frame {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: 0;
   display: grid;
   place-items: center;
   transition: all 180ms var(--easeOut);
@@ -214,16 +211,13 @@
 
 /* Active Sign / Move Ignition */
 .spellbook[data-mode='compact'] .spell-card.is-active {
-  background: linear-gradient(180deg, var(--el) 0%, rgba(14, 16, 15, 0.95) 160%);
+  background: var(--el);
   color: var(--inkDeep);
-  box-shadow: 0 0 16px var(--el), inset 0 0 12px rgba(255, 255, 255, 0.35);
-  transform: translateY(-2px);
+  border-radius: 0;
 }
 
 .spellbook[data-mode='compact'] .spell-card.is-active .spell-card__icon-frame {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.7);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  background: none;
 }
 
 .spellbook[data-mode='compact'] .spell-card.is-active .sign-art {
