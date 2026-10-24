@@ -1,97 +1,148 @@
-// Wires a body source -> per-player gesture detectors -> battle rules -> renderer.
+// Arena: wires a source (bodies + hands) -> Match (posture, signs, rules, rounds) -> renderer, UI, audio.
 //
 // URL params:
-//   ?src=webcam                       laptop webcam + MediaPipe (default, for dev)
-//   ?src=zed&ws=ws://localhost:8765   ZED X tracker on the Jetson
+//   ?src=zed&ws=ws://<jetson>:8765   ZED X box (frames + depth from jetson/tracker.py)
+//   ?src=webcam                       laptop webcam, depth estimated from palm size (default)
+//   ?src=demo                         two scripted players, no camera needed
+// Keys: D debug overlay, M mute, R reset to the lobby (dev shortcut).
 
-import { createRenderer } from './fx.js';
-import { castSpell, createGame, handleGesture, resetGame, step } from './game.js';
-import { GestureDetector } from './gestures.js';
-import { createWebcamSource, createZedSource } from './sources.js';
+import { Sfx } from './audio/sfx.js';
+import { Match } from './game/match.js';
+import { PHASE } from './game/rounds.js';
+import { DebugLayer } from './render/debug-layer.js';
+import { Effects } from './render/effects.js';
+import { createStage } from './render/stage.js';
+import { createDemoSource } from './sources/demo.js';
+import { createWebcamSource } from './sources/webcam.js';
+import { createZedSource } from './sources/zed.js';
+import { applyThemeToDocument } from './theme.js';
+import { DebugPanel } from './ui/debug-panel.js';
+import { Hud } from './ui/hud.js';
+import { Screens } from './ui/screens.js';
+import { Spellbook } from './ui/spellbook.js';
 
-const SLOT_LOST_MS = 1500;
-const SPELL_KEYS = {
-  1: [0, 'fireball'], 2: [0, 'lightning'], 3: [0, 'frost'],
-  8: [1, 'fireball'], 9: [1, 'lightning'], 0: [1, 'frost'],
-};
+const FONT_FACES = ['600 16px Cinzel', '700 16px Cinzel', 'italic 500 16px "Cormorant Garamond"', '500 16px Inter'];
+const FONT_TIMEOUT_MS = 3000;
+const MAX_DT_MS = 50;
+const FPS_SMOOTHING = 0.05;
+const HUD_PHASES = new Set([PHASE.COUNTDOWN, PHASE.FIGHT, PHASE.KO, PHASE.ROUND_END]);
 
 const params = new URLSearchParams(location.search);
-const statusEl = document.getElementById('status');
-const setStatus = (text) => (statusEl.textContent = text);
+const $ = (id) => document.getElementById(id);
 
-const game = createGame();
-const detectors = [new GestureDetector(), new GestureDetector()];
-const slots = [null, null]; // { id, lastSeen }
-let latestBodies = [];
+let match = null;
 let pendingFx = [];
 
-// Keep each tracked person in the same slot; new people take the free slot on their side of the screen.
-function assignSlots(bodies, now) {
-  const assigned = [];
-  for (const body of bodies) {
-    const center = body.kp.pelvis ?? body.kp.neck;
-    if (!center) continue;
-    const sx = 1 - center.x;
-    let slot = slots.findIndex((s) => s?.id === body.id);
-    if (slot === -1) {
-      const preferred = sx < 0.5 ? 0 : 1;
-      slot = [preferred, 1 - preferred].find((i) => !slots[i] || now - slots[i].lastSeen > SLOT_LOST_MS) ?? -1;
-      if (slot === -1) continue;
-      slots[slot] = { id: body.id };
-      detectors[slot].reset();
-    }
-    slots[slot].lastSeen = now;
-    assigned.push({ slot, kp: body.kp, sx, sy: center.y });
-  }
-  return assigned;
+// Voice / AI hook (Muse Voice Transcribe layer): castIncantation(0, 'bolt', 0.8).
+// spellName: 'bolt' | 'ward' | 'gather' | 'ultimate'; intensity 0..1. Returns true if it cast.
+export function castIncantation(slot, spellName, intensity = 1) {
+  if (!match) return false;
+  const fx = match.castIncantation(slot, spellName, intensity);
+  pendingFx.push(...fx);
+  return fx.length > 0 || ['ward', 'gather'].includes(spellName);
 }
 
-function onBodies(bodies, now) {
-  latestBodies = assignSlots(bodies, now);
-  game.players.forEach((p, i) => (p.present = !!slots[i] && now - slots[i].lastSeen < SLOT_LOST_MS));
-  for (const { slot, kp, sx, sy } of latestBodies) {
-    Object.assign(game.players[slot], { x: sx, y: sy });
-    for (const ev of detectors[slot].update(kp, now)) {
-      if (ev.type === 'push') Object.assign(ev, { sx: 1 - ev.x, sy: ev.y });
-      pendingFx.push(...handleGesture(game, slot, ev, now));
-    }
-  }
+async function loadFonts() {
+  const timeout = new Promise((resolve) => setTimeout(resolve, FONT_TIMEOUT_MS));
+  await Promise.race([Promise.all(FONT_FACES.map((f) => document.fonts.load(f))), timeout]);
 }
 
-window.addEventListener('keydown', (e) => {
-  if (e.key === 'r') resetGame(game);
-  const spell = SPELL_KEYS[e.key];
-  if (spell) pendingFx.push(...castSpell(game, ...spell));
-});
+function createSource(kind, onStatus) {
+  if (kind === 'demo') return createDemoSource();
+  if (kind === 'zed') return createZedSource(params.get('ws') ?? `ws://${location.hostname || 'localhost'}:8765`, onStatus);
+  return createWebcamSource(onStatus);
+}
 
-// Exposed so the voice/AI layer can cast spells: window.arena.cast(0, 'fireball')
-window.arena = { cast: (slot, name) => pendingFx.push(...castSpell(game, slot, name)), game };
+function playSound(sfx, ev) {
+  const sounds = {
+    cast: () => sfx.cast(ev.projectile.empowered, ev.projectile.kind === 'ultimate'),
+    hit: () => (ev.damage > 0 ? sfx.impact(ev.damage, ev.projectile.empowered) : sfx.wardHit()),
+    wardShatter: () => sfx.shatter(),
+    wardUp: () => sfx.wardUp(),
+    dodge: () => sfx.whoosh(),
+    evade: () => sfx.whoosh(),
+    stance: () => ev.stance !== 'neutral' && sfx.stance(ev.stance),
+    ko: () => sfx.knockout(),
+    tick: () => sfx.tick(ev.value === 1),
+    roundStart: () => sfx.begin(),
+    joined: () => sfx.joined(),
+    matchOver: () => sfx.victory(),
+  };
+  sounds[ev.kind]?.();
+}
 
-function bannerText() {
-  if (game.winner !== null) return `PLAYER ${game.winner + 1} WINS!\n(press R)`;
-  const missing = game.players.filter((p) => !p.present).length;
-  return missing === 2 ? 'Step into the circle…' : '';
+function spellbookMode(phase) {
+  if (phase === PHASE.ATTRACT) return 'open';
+  if (HUD_PHASES.has(phase)) return 'compact';
+  return 'hidden';
+}
+
+function bindKeys({ debugLayer, debugPanel, sfx }) {
+  window.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+    if (key === 'd') {
+      const isOn = !debugLayer.visible;
+      debugLayer.setVisible(isOn);
+      debugPanel.setVisible(isOn);
+    }
+    if (key === 'm') sfx.toggleMute();
+    if (key === 'r') match = new Match({ mirror: match.roster.mirror });
+  });
 }
 
 async function start() {
-  const source =
-    params.get('src') === 'zed'
-      ? createZedSource(params.get('ws') ?? `ws://${location.hostname || 'localhost'}:8765`, onBodies, setStatus)
-      : await createWebcamSource(onBodies, setStatus);
-  const renderer = await createRenderer(source.canvas);
-  let last = performance.now();
-  renderer.app.ticker.add(() => {
+  applyThemeToDocument();
+  const screens = new Screens($('screens'));
+  const hud = new Hud($('hud'));
+  const books = [0, 1].map((slot) => new Spellbook($(`spellbook-${slot}`), slot));
+  const debugPanel = new DebugPanel($('debug'));
+  await loadFonts();
+  const source = await createSource(params.get('src') ?? 'webcam', (msg) => screens.setStatus(msg));
+  const stage = await createStage(source.canvas, { mirror: source.mirror });
+  const effects = new Effects(stage);
+  const debugLayer = new DebugLayer(stage);
+  const sfx = new Sfx();
+  match = new Match({ mirror: source.mirror });
+  window.arena = { castIncantation, get match() { return match; } };
+  bindKeys({ debugLayer, debugPanel, sfx });
+
+  let renderFps = 60;
+  stage.app.ticker.add((ticker) => {
     const now = performance.now();
-    const dt = Math.min((now - last) / 1000, 0.05);
-    last = now;
-    pendingFx.push(...step(game, dt));
-    for (const ev of pendingFx) renderer.onFx(ev, game);
+    const dtMs = Math.min(ticker.deltaMS, MAX_DT_MS);
+    renderFps += (1000 / Math.max(ticker.deltaMS, 1) - renderFps) * FPS_SMOOTHING;
+    const input = source.poll(now, { phase: match.flow.phase, phaseMs: match.flow.phaseMs, combat: match.combat });
+    if (input?.bodies) pendingFx.push(...match.ingestBodies(input.bodies, now));
+    if (input?.observations) pendingFx.push(...match.ingest(input.observations, now));
+    pendingFx.push(...match.step(dtMs));
+    for (const ev of pendingFx) {
+      effects.onFx(ev);
+      playSound(sfx, ev);
+    }
     pendingFx = [];
-    renderer.render(game, latestBodies, dt, bannerText());
+    const isFight = match.flow.phase === PHASE.FIGHT;
+    match.combat.players.forEach((p, slot) => sfx.gather(slot, p.charge, isFight && p.isGathering));
+    const snapshot = { combat: match.combat, flow: match.flow, view: match.view, matchStats: match.matchStats };
+    stage.frame(dtMs / 1000);
+    effects.update(dtMs / 1000, snapshot);
+    debugLayer.update(snapshot);
+    hud.setVisible(HUD_PHASES.has(match.flow.phase));
+    hud.update(snapshot);
+    screens.update(snapshot);
+    books.forEach((book, slot) => {
+      book.setMode(spellbookMode(match.flow.phase));
+      book.setCaster(match.view.casters[slot]);
+      book.setBody(match.combat.players[slot], match.combat.clockMs);
+    });
+    debugPanel.update({ renderFps, source, view: match.view, flow: match.flow });
   });
 }
 
 start().catch((err) => {
-  setStatus(`Failed to start: ${err.message}`);
-  console.error(err);
+  console.error('[arena] failed to start', err);
+  const toast = document.querySelector('.toast');
+  if (toast) {
+    toast.hidden = false;
+    toast.textContent = `The arena could not start: ${err.message}. Check the camera and reload.`;
+  }
 });
