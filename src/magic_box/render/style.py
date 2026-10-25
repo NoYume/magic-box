@@ -318,15 +318,23 @@ def make_background(w: int, h: int, theme: Theme, seed: int = 7) -> pygame.Surfa
     return surf
 
 
-def make_vignette(w: int, h: int, color: RGB) -> pygame.Surface:
-    """Edge vignette in `color` with per-pixel alpha (0 in the middle), for flashes."""
-    xs = np.abs(np.linspace(-1.0, 1.0, w, dtype=np.float32))[:, None]
-    ys = np.abs(np.linspace(-1.0, 1.0, h, dtype=np.float32))[None, :]
-    d = np.maximum(xs, ys)
-    a = np.clip((d - 0.55) / 0.45, 0.0, 1.0) ** 1.5
-    surf = pygame.Surface((w, h), pygame.SRCALPHA)
-    surf.fill((*color, 0))
-    alpha = pygame.surfarray.pixels_alpha(surf)
-    alpha[:, :] = (a * 255).astype(np.uint8)
-    del alpha
-    return surf
+def edge_glow(surface, rect, color: RGB, k: float, tint: float = 0.0) -> None:
+    """Additive glow along the inside edges of `rect` (three bands), plus an optional tint.
+
+    Built from `fill(..., BLEND_RGB_ADD)` strips, which is far cheaper than an alpha vignette.
+    """
+    x, y, w, h = rect
+    if tint > 0:
+        c = (int(color[0] * k * tint), int(color[1] * k * tint), int(color[2] * k * tint))
+        surface.fill(c, (x, y, w, h), special_flags=pygame.BLEND_RGB_ADD)
+    for width, share in ((90, 0.09), (44, 0.14), (16, 0.28)):
+        c = (int(color[0] * k * share), int(color[1] * k * share), int(color[2] * k * share))
+        if c == (0, 0, 0):
+            continue
+        for strip in (
+            (x, y, w, width),
+            (x, y + h - width, w, width),
+            (x, y + width, width, h - 2 * width),
+            (x + w - width, y + width, width, h - 2 * width),
+        ):
+            surface.fill(c, strip, special_flags=pygame.BLEND_RGB_ADD)

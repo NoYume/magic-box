@@ -18,6 +18,7 @@ from magic_box.render.camera_view import (
     frame_to_surface,
 )
 from magic_box.render.debug_overlay import DebugOverlay
+from magic_box.render.fx import Fx
 from magic_box.render.hud import Hud
 from magic_box.render.layout import Rect, compute_layout
 from magic_box.render.projectiles import draw_projectiles
@@ -54,6 +55,7 @@ class Window:
         self.proj_font = pygame.font.Font(None, self.render_cfg["projectiles"]["font_px"])
         self.layout = compute_layout(self.width, self.height, self.render_cfg)
         self.background = make_background(self.width, self.height, self.theme)
+        self.fx = Fx(cfg, self.theme, self.layout)
         self.opp_smoothers = (
             CropSmoother(self.render_cfg["crop_smoothing"]),
             CropSmoother(self.render_cfg["crop_smoothing"]),
@@ -116,6 +118,7 @@ class Window:
         dt = 0.0 if self._last_draw_t is None else min(MAX_DT_S, max(0.0, now - self._last_draw_t))
         self._last_draw_t = now
         self.hud.update(view, dt)
+        self.fx.update(view, dt)
         if view.scene == "fight":
             self.screen.fill(tuple(self.render_cfg["background_rgb"]))
             self._draw_fight(view, frame, states, now)
@@ -123,6 +126,7 @@ class Window:
             self.screen.blit(self.background, (0, 0))
             draw_scene(self.screen, view, self.scene_style, now)
         self._draw_banner(view, now)
+        self.fx.draw_overlay(self.screen)
 
     # -- banner -------------------------------------------------------------
 
@@ -217,6 +221,9 @@ class Window:
                     self.theme,
                     now,
                 )
+        self.fx.draw(self.screen)
+        for half in self.layout:
+            self._shake(half.half, self.fx.shake_offset(half.viewer_slot, now))
         div = rc["divider_px"]
         pygame.draw.rect(
             self.screen,
@@ -224,6 +231,16 @@ class Window:
             (self.width // 2 - div // 2, 0, div, self.height),
         )
         self.hud.draw_timer(self.screen, self.width // 2, view.timer_s, now)
+
+    def _shake(self, half: Rect, offset: tuple[int, int]) -> None:
+        if offset == (0, 0):
+            return
+        rect = pygame.Rect(half.as_tuple())
+        copy = self.screen.subsurface(rect).copy()
+        self.screen.set_clip(rect)
+        self.screen.fill(tuple(self.render_cfg["background_rgb"]), rect)
+        self.screen.blit(copy, (rect.x + offset[0], rect.y + offset[1]))
+        self.screen.set_clip(None)
 
     def _step_into_view(self, half: Rect, now: float) -> None:
         th = self.theme
