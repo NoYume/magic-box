@@ -48,6 +48,17 @@ def test_two_hand_when_other_hand_lags():
     assert it.update([], [], 2.0) == []
 
 
+def test_peak_speed_push_still_two_hand_when_the_other_hand_crossed_long_before():
+    # Ruling 2026-10-25: Push.speed is the thrust's peak, so the push can be reported well
+    # after both hands crossed. The other hand still past the threshold on the push frame counts.
+    it = Intent(CFG)
+    it.update([st(0.8, vz=(-THR - 0.5, -THR - 0.5))], [], 0.8)
+    it.update([st(0.9, vz=(-THR - 1.0, -THR - 1.0))], [], 0.9)
+    push = Push("R", 3.2, (300.0, 200.0))
+    acts = it.update([st(1.0, push=push, vz=(-THR - 0.2, -3.2))], [], 1.0)
+    assert kinds(acts) == [("push", 0, True)] and acts[0].push.speed == 3.2
+
+
 def test_other_hand_outside_window_is_single():
     it = Intent(CFG)
     it.update([st(1.0 - W - 0.05, vz=(-THR - 1.0, 0.0))], [], 1.0 - W - 0.05)
