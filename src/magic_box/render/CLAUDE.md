@@ -20,9 +20,9 @@ Draws the `GameView` and the latest camera frame as layout C (two 960x1080 halve
 - `window.py`: `Window` (`pump`, `tick`, `draw`, `close`); picks the scene.
 - `layout.py`: layout C geometry (halves, crop and self-view rects).
 - `camera_view.py`: opponent crop (8:9, padded, EMA-smoothed), mirrored self-view with skeleton, crop math.
-- `hud.py`: placeholder HUD (viewer panel, enemy HP bar).
+- `hud.py`: viewer panel, enemy HP bar and charged spell cues.
 - `projectiles.py`: spell projectiles flying wrist → viewer, scaled by progress.
-- `debug_overlay.py`: debug overlay (toggle `F1`); fps only today.
+- `debug_overlay.py`: debug overlay (toggle `F1`); metric top-down view, wrist-vz history, fps and drops.
 - `scenes/lobby.py`, `scenes/loading.py`, `scenes/victory.py`: scene placeholders (draw the scene name).
 
 ## Test without the Jetson
@@ -34,6 +34,5 @@ uv run python -m magic_box --fake --headless --max-ticks 60
 Tests use the SDL dummy drivers set in `tests/conftest.py`.
 
 ## Open TODOs
-- `TODO(Nikhil)` `projectiles.py`: `draw_projectiles` raises `NotImplementedError` when a projectile targets a viewer. The placeholder engine never emits projectiles, so `--fake` works today.
-- `TODO(Adetola)`: real `hud.py`; real lobby, loading and victory scenes.
-- `TODO(Enoch)` `debug_overlay.py`: top-down meters view and `wrist_vz` graph (M3, the depth proof for judges).
+- Tune crop smoothing, HUD sizing, projectile scale and debug graph ranges on the 1920×1080 monitor.
+- Replace system-font presentation only if time remains after live hardware validation.

@@ -1,7 +1,7 @@
 [project]
 name = "magic-box"
 version = "0.1.0"
-description = "Camera-only 1v1 magic duel console: ZED 2 + Jetson Orin Nano"
+description = "Camera-only 1v1 magic duel console: ZED X + Jetson Orin Nano"
 readme = "README.md"
 requires-python = "==3.10.*"
 dependencies = [
@@ -31,7 +31,8 @@ packages = ["src/magic_box"]
 line-length = 100
 target-version = "py310"
 src = ["src", "tests"]
-extend-exclude = ["*.md"]  # ruff formats fenced code in markdown; plans and specs are not code
+# `game/` and `jetson/` are the retained browser prototype, not the production Python runtime.
+extend-exclude = ["*.md", "game", "jetson"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "TID"]

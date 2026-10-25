@@ -1,11 +1,12 @@
+import time
 from pathlib import Path
 
-import pytest
-
 from magic_box.core.config import load_config
+from magic_box.core.contracts import VoiceEvent
 from magic_box.pipeline.frame_bus import FrameBus
 from magic_box.pipeline.sources import FakeSources, KeyboardVoiceSource, LiveSources, ReplaySources
 from magic_box.pipeline.streams import DropOldestQueue
+from magic_box.replay.record import SessionRecorder
 from tests.factories import make_state
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
@@ -42,6 +43,7 @@ def test_live_sources_read_queues_and_bus():
             got += src.poll(frozenset(), 0.0, 0.0).states
             if got:
                 break
+            time.sleep(0.001)  # multiprocessing.Queue feeder flushes asynchronously
         assert got == [make_state()]
         assert src.poll(frozenset(), 0.0, 0.0).frame is None
     finally:
@@ -49,9 +51,14 @@ def test_live_sources_read_queues_and_bus():
         bus.unlink()
 
 
-def test_replay_sources_not_implemented_yet():
-    with pytest.raises(NotImplementedError, match="TODO\\(Nikhil\\)"):
-        ReplaySources(Path("nowhere"))
+def test_replay_sources_feed_recorded_contracts(tmp_path):
+    recorder = SessionRecorder(tmp_path, CFG)
+    recorder.write_state(make_state(t=10.0))
+    recorder.write_voice(VoiceEvent(0, 10.0, "incantation", "embers burn", "fireball", 90.0))
+    recorder.close()
+    inputs = ReplaySources(tmp_path).poll(frozenset(), now=100.0, dt=0.0)
+    assert inputs.states == [make_state(t=10.0)]
+    assert [event.spell_id for event in inputs.voice] == ["fireball"]
 
 
 def test_live_sources_report_dropped_count():

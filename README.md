@@ -1,92 +1,10 @@
-# magic-box
-
-## Arena (hand-sign game)
-
-**Arena: a hand-sign spellcasting duel in a box (HackTX 26).**
-
-A Jetson Orin Nano + ZED X stereo camera sits in a box facing two players side by side at a
-desk. Plug it into any screen. You fight with **finger hand signs** (MediaPipe in the browser)
-and **body moves** (ZED body tracking): signs cast, the body focuses, braces and dodges.
-No controllers.
-
-## How to play
-Raise an open palm to join; hold it for a second while the game reads your hand and posture.
-Best of three rounds.
-
-| Hand sign | How | Effect |
-|---|---|---|
-| Ward | Open palm to the screen | Hand-sized ward at your palm, blocks while held, drains mana |
-| Gather | Fist, hold | Charges your next spell (rising tone) |
-| Bolt | Index + middle together, then **thrust toward the screen** | Fires a bolt; gather charge and thrust speed empower it |
-| Ultimate | Two-hand diamond, held 1 s at full charge | Heavy violet blast, long cooldown |
-
-| Body move | How | Effect |
-|---|---|---|
-| Focus | Lean in toward the screen | Gather charges twice as fast |
-| Brace | Lean back and hold | 40% less damage from hits |
-| Dodge | Quick sideways sway | Bolts landing in the next 450 ms miss (not the ultimate); 2.5 s cooldown |
-
-Body moves never deal damage on their own. Every sign is held through a short confirm fill
-before it counts, and posture moves are measured against your calibrated neutral, so casual
-sway does nothing.
-
-Keys: `D` debug overlay (landmarks, skeletons, FPS, thresholds), `M` mute, `R` reset (dev).
-Voice hook: `window.arena.castIncantation(slot, 'bolt' | 'ward' | 'gather' | 'ultimate', intensity)`.
-
-## Layout
-| Path | What |
-|---|---|
-| `jetson/tracker.py` | ZED X: body skeletons (JSON) + JPEG frames + mm depth map over WebSocket. Runs on the Jetson |
-| `jetson/fake_tracker.py` | Same wire format with synthetic bodies, frames and depth, no hardware |
-| `game/src/vision/` | Camera-to-screen transform, hand-sign classifier, depth sampling, hand and body rosters, posture |
-| `game/src/game/` | Cast state machine, combat rules, round flow, match orchestrator (all pure, unit tested) |
-| `game/src/sources/` | ZED, webcam (MediaPipe hands + pose) and scripted demo sources |
-| `game/src/render/`, `ui/`, `audio/` | PixiJS effects, HUD and screens, WebAudio SFX |
-| `docs/protocol.md` | Tracker → game message format |
-
-## Run
-```bash
-cd game && npm run dev                 # http://localhost:5173
-
-# Scripted demo: two bots play the whole loop, no camera needed
-open http://localhost:5173/?src=demo
-
-# Laptop webcam (hands + MediaPipe Pose, depth estimated)
-open http://localhost:5173/?src=webcam
-
-# Fake tracker (transport, bodies, depth; no hand signs in the drawn frames)
-cd jetson && py fake_tracker.py        # python3 on Mac/Linux
-open "http://localhost:5173/?src=zed&ws=ws://localhost:8765"
-
-# Real ZED X on the Jetson
-python3 /usr/local/zed/get_python_api.py && pip install -r jetson/requirements.txt
-python3 jetson/tracker.py --max-range 1.6 --record session.svo2
-open "http://<jetson-ip>:5173/?src=zed&ws=ws://<jetson-ip>:8765"
-```
-For a kiosk, start Chrome with `--autoplay-policy=no-user-gesture-required` so sound plays
-without a click.
-
-## Tuning on the real rig
-| What | Where |
-|---|---|
-| Sign thresholds (finger bend, palm facing, sword gap, min score) | `game/src/vision/tuning.js` `SIGN` |
-| Play depth, palm size, webcam focal | `game/src/vision/tuning.js` `DEPTH` |
-| Thrust speed / travel / window | `game/src/vision/tuning.js` `THRUST` |
-| Lean in / back distance, hold, dodge shift, play depth for bodies | `game/src/vision/tuning.js` `BODY` |
-| Confirm times, damage, cooldowns, round length | `game/src/game/balance.js` |
-| Body move effects (focus, brace, evade window) | `game/src/game/balance.js` `BODY_MOVES` |
-| Bystander cut-off | `jetson/tracker.py --max-range` |
-
-## Test
-```bash
-cd game && npm test                    # node --test, no dependencies
-py -m py_compile jetson/*.py
-```
-## Magic Box (voice-driven game)
+# Magic Box
 
 A 1v1 magic duel on a ZED 2 camera, a Jetson Orin Nano and a monitor. Two players cast spells by speaking an AI-written incantation, then push toward the camera to release them. The defender dodges by stepping aside or ducking, and real distance scales damage. Built at HackTX 2026.
 
-New here? Read `CLAUDE.md` (architecture, contracts, rules) and the `CLAUDE.md` in the folder you work in.
+The production runtime is the Python application under `src/magic_box/`: three spawned processes, shared-memory camera frames, streamed perception and voice events, pure-Python rules, and a pygame-ce renderer. The browser prototype under `game/` is not part of the console runtime.
+
+New here? Read `CLAUDE.md` (architecture, contracts, rules) and the `CLAUDE.md` in the package you work in.
 
 ## Laptop quickstart
 
@@ -109,9 +27,16 @@ Fake-mode keys (from `config.yaml`):
 | Hands together | `t` | `u` |
 | Spells (voice fallback, always on) | `1` `2` `3` | `8` `9` `0` |
 
-`F1` toggles the debug overlay. `Esc` quits.
+Both players raise their hands to leave the lobby. `F1` toggles the debug overlay and `Esc` quits.
 
-Other commands: `uv run pytest`, `uv run ruff check`, `uv run python scripts/check_env.py --laptop`.
+Other commands:
+
+```bash
+uv run pytest
+uv run ruff check
+uv run ruff format --check
+uv run python scripts/check_env.py --laptop
+```
 
 ## Jetson quickstart
 
@@ -129,6 +54,19 @@ From SSH, run `export DISPLAY=:0` first, otherwise pygame finds no video device.
 If `import pyzed.sl` fails with a numpy ABI error, change the numpy pin in `pyproject.toml`, run `uv lock`, and commit the lock file (CI uses `--locked`).
 
 Per-machine settings (real mic devices, fullscreen) go in `config.local.yaml`, which is gitignored. See `docs/hardware.md`. From a laptop, `scripts/sync_to_jetson.sh` copies the repo to the Jetson.
+
+## Architecture
+
+```text
+ZED 2 -> perception process -> PlayerState stream + shared-memory frames
+mics  -> voice process      -> VoiceEvent stream
+                                |
+                                v
+game process: intent -> pure rules -> GameView -> pygame-ce renderer
+                    \-> Spark worker (incantations and chronicle)
+```
+
+Only `perception/` imports `pyzed`; only `render/` imports `pygame`. The game loop never waits for camera, voice, disk, or network I/O. See `docs/superpowers/specs/2026-10-24-magic-box-design.md` for the complete design.
 
 ## Team
 

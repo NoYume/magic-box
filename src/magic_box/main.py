@@ -37,6 +37,7 @@ def run(argv: Sequence[str] | None = None) -> int:
     display: Window | None = None
     runtime: LiveRuntime | None = None
     on_tick = None
+    recorder: SessionRecorder | None = None
     try:
         cfg = load_config(args.config)
         if args.fake:
@@ -44,13 +45,11 @@ def run(argv: Sequence[str] | None = None) -> int:
         elif args.replay is not None:
             sources = ReplaySources(args.replay)
         else:
-            # TODO(Nikhil): send VoiceConfig on scene changes via runtime.control_q (spec §6)
             runtime = start_live(cfg)
             sources = runtime.sources
             on_tick = runtime.supervisor.poll
         if args.record is not None:
-            # TODO(Nikhil): hook the recorder into GameLoop (states, voice, events, frames)
-            SessionRecorder(args.record)
+            recorder = SessionRecorder(args.record, cfg)
         display = Window(cfg, headless=args.headless)
         display.debug = args.debug
         loop = GameLoop(
@@ -61,13 +60,20 @@ def run(argv: Sequence[str] | None = None) -> int:
             Engine(cfg),
             KeyboardVoiceSource(cfg),
             on_tick=on_tick,
+            camera_ok=(lambda: runtime.supervisor.alive("perception"))
+            if runtime is not None
+            else None,
+            control_q=runtime.control_q if runtime is not None else None,
+            recorder=recorder,
         )
         loop.run(max_ticks=args.max_ticks)
         return 0
-    except NotImplementedError as e:
-        print(f"not implemented yet: {e}", file=sys.stderr)
+    except (NotImplementedError, ValueError) as e:
+        print(f"cannot start: {e}", file=sys.stderr)
         return 2
     finally:
+        if recorder is not None:
+            recorder.close()
         if display is not None:
             display.close()
         if sources is not None:

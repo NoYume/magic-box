@@ -35,7 +35,7 @@ uv run python -m magic_box --fake
 On the Jetson: `uv run python scripts/check_env.py` confirms `pyzed.sl` imports inside the venv.
 
 ## Open TODOs
-- `TODO(Enoch)` in every module here: `zed_source.py`, `bodies.py`, `push.py`, `poses.py`, `motion.py`, `process.py`, `hands.py`.
-- `scripts/bench_tracking.py` and `scripts/record_session.py` are stubs (go/no-go for two-person fps is hour 1).
-- Open decision: body model (`BODY_18`/`34`/`38`) and camera resolution after the benchmark.
-- Open decision: MediaPipe finger gestures in or out.
+- Validate the ZED adapter, body-part mappings and thresholds against the installed SDK and recordings.
+- Run `scripts/bench_tracking.py` for the two-person fps go/no-go.
+- Decide the body model and camera resolution after that benchmark.
+- `hands.py` remains the optional, cut-first finger-gesture stub.

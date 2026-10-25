@@ -26,6 +26,16 @@ REQUIRED_SECTIONS: tuple[str, ...] = (
 
 SLOTS = {0, 1}
 
+CAMERA_MODES: dict[str, tuple[int, int]] = {
+    "HD2K": (2208, 1242),
+    "HD1200": (1920, 1200),
+    "HD1080": (1920, 1080),
+    "HD720": (1280, 720),
+    "SVGA": (960, 600),
+    "VGA": (672, 376),
+}
+BODY_FORMATS: tuple[str, ...] = ("BODY_18", "BODY_34", "BODY_38")
+
 
 class ConfigError(ValueError):
     """Raised when the merged config has one or more problems."""
@@ -63,6 +73,27 @@ def _check_zones(cfg: Config, problems: list[str]) -> None:
         problems.append("perception.zones: danger_max_m and far_min_m must be numbers")
     elif not danger < far:
         problems.append(f"perception.zones: danger_max_m ({danger}) must be < far_min_m ({far})")
+
+
+def _check_camera(cfg: Config, problems: list[str]) -> None:
+    if "camera" not in cfg:
+        return
+    res = _get(cfg, "camera", "resolution")
+    if res not in CAMERA_MODES:
+        problems.append(
+            f"camera.resolution: unknown mode {res!r} (known: {', '.join(CAMERA_MODES)})"
+        )
+    else:
+        w = _get(cfg, "camera", "image_width")
+        h = _get(cfg, "camera", "image_height")
+        mw, mh = CAMERA_MODES[res]
+        if (w, h) != (mw, mh):
+            problems.append(
+                f"camera.image_width/image_height: {w}x{h} does not match {res} ({mw}x{mh})"
+            )
+    fmt = _get(cfg, "camera", "body_format")
+    if fmt not in BODY_FORMATS:
+        problems.append(f"camera.body_format: must be one of {BODY_FORMATS}, got {fmt!r}")
 
 
 def _check_mics(cfg: Config, problems: list[str]) -> None:
@@ -119,6 +150,7 @@ def validate(cfg: Config) -> list[str]:
     """Return every problem found in `cfg` (empty list means valid)."""
     problems = [f"{name}: missing section" for name in REQUIRED_SECTIONS if name not in cfg]
     _check_zones(cfg, problems)
+    _check_camera(cfg, problems)
     _check_mics(cfg, problems)
     _check_key_spells(cfg, problems)
     _check_game(cfg, problems)

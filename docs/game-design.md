@@ -43,7 +43,7 @@ Muse Spark writes 3–7 words per spell, themed by class with an Austin or HackT
 | Scene | What happens |
 |---|---|
 | boot | Self-check: camera, both mics, network, API key. Shows status. Missing network still boots (voice offline, keyboard fallback). |
-| lobby | Players step into the play area. Each says their name, which doubles as a mic check, picks a class by saying its name, and both raise their hands to start. |
+| lobby | Players step into the play area. Each says “My name is …” (or “Call me …”), which doubles as a mic check, then says Fire Mage, Lightning Mage, or Holy Knight. Both raise their hands to start; the displayed defaults remain a keyboard/offline fallback. |
 | loading | Spark generates incantations, shown on each half as a tutorial card. Voice sessions restart with the match's keywords. Countdown. |
 | fight | Default 90 s round. KO, or higher HP at time-out, wins. |
 | victory | Winner banner, stats, and the Duel Chronicle (stretch). |

@@ -18,8 +18,8 @@ Stand-ins for the camera: keyboard-driven fake players, session recording and pl
 
 ## Files
 - `fake_input.py`: `FakePlayers` (working, tested).
-- `record.py`: session recorder (stub).
-- `play.py`: session player (stub).
+- `record.py`: session recorder for contract streams, MP4 frames and metadata.
+- `play.py`: timed session player.
 
 ## Test without the Jetson
 ```
@@ -29,6 +29,5 @@ uv run python -m magic_box --fake
 Keys are listed in the root `CLAUDE.md` (P1: `a d w s f c r t`; P2: `j l i k h n y u`).
 
 ## Open TODOs
-- `TODO(Nikhil)`: `record.py` (6 stubs) and `play.py` (2 stubs).
-- `--record DIR` and `--replay DIR` currently exit 2 with "not implemented yet".
-- Add a replay test once recordings exist: a recorded `.jsonl` goes in and the expected `Action`s must come out.
+- Validate MP4 codec availability and camera/frame timing on the Jetson.
+- Add a checked-in small hardware recording once one is available for regression tests.

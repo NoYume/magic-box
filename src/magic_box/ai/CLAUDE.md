@@ -27,6 +27,5 @@ uv run python -m magic_box --fake
 ```
 
 ## Open TODOs
-- `TODO(Nikhil)` in `spark_client.py`, `incantations.py` (2), `chronicle.py` (2).
-- Open decision (Nikhil): confirm Spark `base_url` and model id against dev.meta.ai docs (config marks it VERIFY).
-- The loop does not submit Spark jobs yet (`TODO(Nikhil)` in `pipeline/loop.py`).
+- Confirm Spark `base_url` and model id against current dev.meta.ai documentation.
+- Validate generated-incantation quality and the eight-second timeout against the live API.

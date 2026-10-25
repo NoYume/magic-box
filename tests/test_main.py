@@ -7,9 +7,9 @@ def test_fake_mode_runs_headless():
     assert run(["--fake", "--headless", "--max-ticks", "30"]) == 0
 
 
-def test_replay_not_implemented_exits_2(capsys):
+def test_missing_replay_exits_2(capsys):
     assert run(["--replay", "nowhere", "--headless", "--max-ticks", "1"]) == 2
-    assert "not implemented" in capsys.readouterr().err.lower()
+    assert "recording directory does not exist" in capsys.readouterr().err.lower()
 
 
 def test_fake_and_replay_are_exclusive():

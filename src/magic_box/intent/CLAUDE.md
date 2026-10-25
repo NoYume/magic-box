@@ -27,6 +27,5 @@ uv run python -m magic_box --fake
 Fake-mode keys produce pushes (`f`/`h`), ducks (`c`/`n`), poses (`r`,`t` / `y`,`u`) and spells (`1 2 3` / `8 9 0`).
 
 ## Open TODOs
-- `TODO(Nikhil)` in `fusion.py`: charge/push/pose/dodge fusion.
-- `TODO(Nikhil)` in `dodge.py`: windowed step/duck detection.
-- Open decision: size the charge window after measuring Muse partial-transcript latency (M4).
+- Tune step and duck thresholds from recordings.
+- Size the charge window after measuring Muse partial-transcript latency on the real rig.

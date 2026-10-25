@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from magic_box.core.config import load_config
+from magic_box.core.contracts import VoiceConfig
 from magic_box.game.engine import Engine
 from magic_box.intent.fusion import Intent
 from magic_box.pipeline.loop import GameLoop, latest_states
@@ -23,7 +24,7 @@ def test_stalled_camera_marks_tracking_lost():
 
 class ScriptedDisplay:
     def __init__(self, script):
-        self.script, self.draws, self.dropped = list(script), 0, []
+        self.script, self.draws, self.dropped, self.views = list(script), 0, [], []
 
     def pump(self):
         keys = self.script.pop(0) if self.script else frozenset()
@@ -35,6 +36,7 @@ class ScriptedDisplay:
     def draw(self, view, frame, states, fps, dropped=0):
         self.draws += 1
         self.dropped.append(dropped)
+        self.views.append(view)
 
     def close(self):
         pass
@@ -56,6 +58,46 @@ def test_loop_merges_keyboard_voice_from_second_tick():
     assert loop.run(max_ticks=3) == 3
     assert [(e.slot, e.spell_id) for e in intent.voice] == [(0, "fireball")]
     assert display.draws == 3
+
+
+def test_loop_configures_lobby_transcripts_with_class_keywords():
+    class SpyControlQueue:
+        def __init__(self):
+            self.items = []
+
+        def put(self, item):
+            self.items.append(item)
+
+    control = SpyControlQueue()
+    GameLoop(
+        CFG,
+        FakeSources(CFG),
+        ScriptedDisplay([]),
+        Intent(CFG),
+        Engine(CFG),
+        KeyboardVoiceSource(CFG),
+        control_q=control,
+    ).run(max_ticks=1)
+    assert len(control.items) == 1
+    config = control.items[0]
+    assert isinstance(config, VoiceConfig) and config.mode == "transcript"
+    assert set(config.incantations[0].values()) == {
+        row["name"] for row in CFG["game"]["classes"].values()
+    }
+
+
+def test_loop_shows_camera_reconnecting_when_perception_is_down():
+    display = ScriptedDisplay([])
+    GameLoop(
+        CFG,
+        FakeSources(CFG),
+        display,
+        Intent(CFG),
+        Engine(CFG),
+        KeyboardVoiceSource(CFG),
+        camera_ok=lambda: False,
+    ).run(max_ticks=1)
+    assert display.views[0].banner == "CAMERA RECONNECTING"
 
 
 def test_loop_forwards_dropped_count_to_display():

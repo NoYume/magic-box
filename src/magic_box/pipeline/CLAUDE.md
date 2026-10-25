@@ -32,9 +32,9 @@ uv run python -m magic_box --fake --headless --max-ticks 120
 ```
 
 ## Open TODOs
-- `TODO(Nikhil)` in `loop.py`: submit Spark jobs on `loading` / `victory` (spec §6).
-- `TODO(Nikhil)` in `loop.py` and `main.py`: send `VoiceConfig` on scene changes via `runtime.control_q` (spec §6). Nothing sends it today.
-- `TODO(Nikhil)` in `main.py`: `--record` builds a `SessionRecorder` but nothing feeds it; hook it into `GameLoop` (states, voice, events, frames).
-- `ReplaySources` waits on `replay/` (`--replay` exits 2 today).
+- Spark jobs run on the game process's worker thread; validate timeout behavior against the live API.
+- Validate `VoiceConfig` session restarts against Muse on the live rig.
+- Validate record/replay video encoding and timing on the Jetson.
+- Validate recorded frame timing and codec support on the Jetson.
 - The frame-bus seqlock has no explicit memory fences. Re-run `MAGIC_BOX_STRESS=1 uv run pytest tests/pipeline/test_frame_bus.py` on the Jetson (aarch64; the stress test free-runs 1280x720 writes for ~3 s) before relying on it.
-- Live mode starts perception and voice, both stubs today; on a laptop the window shows "STEP INTO VIEW".
+- Expose supervisor health to the engine/render path for the "CAMERA RECONNECTING" banner.

@@ -31,7 +31,6 @@ uv run python -m magic_box --fake     # P1: 1 2 3, P2: 8 9 0
 Real mics: set `voice.mics` in `config.local.yaml` (see `docs/hardware.md`).
 
 ## Open TODOs
-- `TODO(Nikhil)` in `matcher.py`, `mic.py` (3), `muse_stream.py` (4), `process.py`.
-- Open decision (Daniel): mic hardware model and channel routing.
-- Verify the Muse endpoint `voice.url` and model against the dev.meta.ai docs before first use.
-- Measure partial-transcript latency at M4.
+- Confirm mic hardware and channel routing on the Jetson.
+- Verify the Muse endpoint, model and handshake against current dev.meta.ai documentation.
+- Measure partial-transcript latency and reconnect behavior on the live API.

@@ -1,8 +1,8 @@
 """Environment check for the Jetson (or a laptop with --laptop).
 
-Run this first on a fresh Jetson: it confirms Python, JetPack, RAM, pyzed,
-numpy, CUDA, cv2, audio input and the API key. Prints one line per check and exits 1
-if any required check failed.
+Run this first on a fresh Jetson: it confirms Python, JetPack, RAM, pyzed, the
+ZED X camera and its daemon, numpy, CUDA, cv2, audio input and the API key. Prints
+one line per check and exits 1 if any required check failed.
 
 Owner: Daniel
 """
@@ -30,10 +30,14 @@ class Check:
     required: bool
 
 
-def _load_ai_config() -> dict:
+def _load_config() -> dict:
     from magic_box.core.config import load_config
 
-    return load_config(REPO_ROOT / "config.yaml")["ai"]
+    return load_config(REPO_ROOT / "config.yaml")
+
+
+def _load_ai_config() -> dict:
+    return _load_config()["ai"]
 
 
 def _python() -> tuple[bool, str]:
@@ -63,6 +67,31 @@ def _pyzed() -> tuple[bool, str]:
     import pyzed.sl as sl
 
     return True, f"SDK {sl.Camera.get_sdk_version()}"
+
+
+def _zed_camera() -> tuple[bool, str]:
+    import pyzed.sl as sl
+
+    devices = sl.Camera.get_device_list()
+    if not devices:
+        return False, "no ZED camera found (try: sudo systemctl restart zed_x_daemon)"
+    d = devices[0]
+    model = getattr(d.camera_model, "name", str(d.camera_model))
+    expected = _load_config()["camera"]["model"]
+    if model != expected:
+        return False, f"found {model}, config expects {expected}"
+    state = getattr(d.camera_state, "name", str(d.camera_state))
+    return True, f"{model} serial {d.serial_number} ({state})"
+
+
+def _zed_x_daemon() -> tuple[bool, str]:
+    out = subprocess.run(
+        ["systemctl", "is-active", "zed_x_daemon"], capture_output=True, text=True, timeout=5
+    )
+    state = out.stdout.strip() or "unknown"
+    if state == "active":
+        return True, "active"
+    return False, f"{state} (sudo systemctl restart zed_x_daemon)"
 
 
 def _numpy() -> tuple[bool, str]:
@@ -140,6 +169,8 @@ def run_checks(laptop: bool, network: bool) -> list[Check]:
         _run("jetpack", _jetpack, jetson_only),
         _run("ram", _ram, False),
         _run("pyzed", _pyzed, jetson_only),
+        _run("zed_camera", _zed_camera, jetson_only),
+        _run("zed_x_daemon", _zed_x_daemon, False),
         _run("numpy", _numpy, False),
         _run("cuda", _cuda, False),
         _run("cv2", _cv2, False),

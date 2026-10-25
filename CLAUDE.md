@@ -142,9 +142,9 @@ These are team rules. `tests/test_boundaries.py` enforces the import ones.
 ## Working without the Jetson
 
 - **`--fake`:** keyboard-driven players and a synthetic camera frame (two silhouettes that follow fake root x and z). Runs on any laptop. This is how you develop render, game and intent work.
-- **`--replay DIR`:** feeds a recorded session back with original timing. **Not implemented yet** (exits 2; TODO Nikhil).
-- **`--record DIR`:** writes a session directory (`states.jsonl`, `voice.jsonl`, `events.jsonl`, `frames.mp4`, `meta.json`). **Not implemented yet** (exits 2; TODO Nikhil).
-- **Live mode** (no `--fake`/`--replay`) starts the perception and voice processes. Both are stubs today, so on a laptop the window shows "STEP INTO VIEW".
+- **`--replay DIR`:** feeds a recorded session back with original timing.
+- **`--record DIR`:** writes a session directory (`states.jsonl`, `voice.jsonl`, `events.jsonl`, `frames.mp4`, `meta.json`).
+- **Live mode** (no `--fake`/`--replay`) starts the ZED perception and per-player Muse voice processes. Hardware and API behavior must still be validated on the Jetson.
 - Spell keys always work as a voice fallback, so you can test casting with no mic and no Wi-Fi.
 
 **Fake-mode keys** (from `config.yaml` `keys:`)
@@ -175,7 +175,7 @@ Per-machine overrides go in `config.local.yaml` (gitignored, deep-merged over `c
 | `uv run python scripts/check_env.py [--laptop]` | Environment check (Python, JetPack, RAM, pyzed, CUDA, cv2, audio, API key). |
 | `scripts/sync_to_jetson.sh` | rsync the repo from a laptop to the Jetson (`JETSON_HOST`, `JETSON_DIR` override the defaults). |
 
-`scripts/bench_tracking.py` and `scripts/record_session.py` are stubs today (TODO Enoch). `bench_tracking.py` is the hour-1 go/no-go for two-person tracking.
+`scripts/bench_tracking.py` is the hour-1 go/no-go for two-person tracking; `scripts/record_session.py` records a timed live session through the production runtime.
 
 ## Milestones
 

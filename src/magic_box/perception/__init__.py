@@ -1,4 +1,4 @@
-"""ZED 2 perception: camera, body tracking, pushes, poses (spec section 8).
+"""ZED X perception: camera, body tracking, pushes, poses (perception spec).
 
 Owner: Enoch
 """

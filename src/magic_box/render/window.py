@@ -16,7 +16,7 @@ from magic_box.render.camera_view import (
     draw_selfview,
     frame_to_surface,
 )
-from magic_box.render.debug_overlay import draw_debug_overlay
+from magic_box.render.debug_overlay import DebugOverlay
 from magic_box.render.hud import draw_enemy_bar, draw_hud
 from magic_box.render.layout import Rect, compute_layout
 from magic_box.render.projectiles import draw_projectiles
@@ -57,6 +57,7 @@ class Window:
             CropSmoother(self.render_cfg["crop_smoothing"]),
         )
         self.debug = False
+        self._debug_overlay = DebugOverlay(cfg)
         self._surf_cache: tuple[int, pygame.Surface] | None = None
         self._quit_key = pygame.key.key_code(cfg["keys"]["quit"])
         self._debug_key = pygame.key.key_code(cfg["keys"]["debug_overlay"])
@@ -102,12 +103,12 @@ class Window:
         if view.scene == "fight":
             self._draw_fight(view, frame, states)
         else:
-            draw_scene(self.screen, view)
-        if view.banner:
+            draw_scene(self.screen, view, self.cfg)
+        if view.banner and view.scene == "fight":
             img = self.banner_font.render(view.banner, True, TEXT_RGB)
             self.screen.blit(img, img.get_rect(center=(self.width // 2, self.height // 2)))
         if self.debug:
-            draw_debug_overlay(self.screen, states, fps, dropped)
+            self._debug_overlay.draw(self.screen, states, fps, dropped)
         pygame.display.flip()
 
     def _draw_fight(
@@ -131,7 +132,9 @@ class Window:
                 draw_opponent(self.screen, half.half, surf, crop)
             else:
                 self._centered_text("STEP INTO VIEW", self.hint_font, half.half)
-            draw_enemy_bar(self.screen, half.enemy_bar, view.players[half.shows_slot], self.font)
+            draw_enemy_bar(
+                self.screen, half.enemy_bar, view.players[half.shows_slot], self.font, rc
+            )
             me = states.get(half.viewer_slot)
             if surf is not None and me is not None and me.tracking_ok:
                 sv_crop = self.self_smoothers[half.viewer_slot].update(
@@ -144,11 +147,18 @@ class Window:
                     )
                 )
                 draw_selfview(self.screen, half.selfview, surf, sv_crop, me.keypoints_px)
-            draw_hud(self.screen, half.hud, view.players[half.viewer_slot], self.font)
+            draw_hud(self.screen, half.hud, view.players[half.viewer_slot], self.font, rc)
             if crop is None and surf is not None:
                 crop = Rect(0, 0, surf.get_width(), surf.get_height())
             if crop is not None:
-                draw_projectiles(self.screen, half.half, crop, view.projectiles, half.viewer_slot)
+                draw_projectiles(
+                    self.screen,
+                    half.half,
+                    crop,
+                    view.projectiles,
+                    half.viewer_slot,
+                    rc,
+                )
         div = rc["divider_px"]
         pygame.draw.rect(
             self.screen,
