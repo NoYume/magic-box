@@ -33,7 +33,7 @@ Turns the ZED X stream into `PlayerState`s and camera frames. Runs in its own pr
 - `bodies.py`: `filter_bodies` (range and the 2 closest) and `SlotAssigner` (bodies to slots 0 and 1).
 - `motion.py`: `MotionTracker`, `root_vx`.
 - `push.py`: `PushDetector`, wrist speed relative to the neck with cooldown and re-arm. `clear_windows()` drops the speed history only; `reset()` also re-arms and clears the cooldown (a new body in the slot).
-- `poses.py`: pose flags (`hands_up`, `hands_together`) from keypoints.
+- `poses.py`: pose flags (`hands_up`, `hands_together`, and the knight's `guard`: a wrist `guard_forward_m` in front of the neck, between head and shoulder height) from keypoints.
 - `tracker.py`: `PlayerTracker.step(capture, now)` makes the `PlayerState`s (slots, root, head, wrists, push, poses, zone).
 - `zed_source.py`: `ZedSource` opens the camera (live or SVO), grabs frames and bodies. `CameraError` marks a failed open worth retrying.
 - `process.py`: `run` (the entry point the supervisor spawns) and `run_loop` (open, grab, write the frame, publish the states, log stats).

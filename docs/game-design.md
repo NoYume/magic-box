@@ -37,6 +37,8 @@
 | | Heal (40) | +25 HP, capped at 100 | hands together |
 | | Judgment (45) | 25 damage, 1.5 s travel | push |
 
+**Parry and riposte (Holy Knight; Adetola, PR #2).** Hold one wrist toward the camera, between head and shoulder height, to guard. A guard raised in the 0.4 s before a projectile lands parries it: no damage, "PARRIED!", and a 1.5 s riposte window opens, in which the knight's next push that releases no spell fires a free 20-damage blade wave (0.5 s travel) at once, ignoring the basic cooldown. One guard parries one projectile (one bolt of a Chain). A new guard counts only 1.5 s after the last one. These values are untuned. P2 defaults to the Holy Knight so fake mode can show it.
+
 Effects don't stack: casting one again keeps the longer timer. Effect timers stop while the fight is paused.
 
 ## Resources and match

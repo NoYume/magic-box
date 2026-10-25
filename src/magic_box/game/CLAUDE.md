@@ -19,6 +19,9 @@ Pure game rules: classes, spells and their effects, HP and mana, charge and dodg
 - **KO hold:** after a KO the scene stays `fight` for `ko_hold_s` (2.5) so render can show the finishing blow (flash, damage number, K.O. overlay). The match is frozen: no actions, regen or timer, projectiles in flight are cleared at the end, and pause, abandon and camera logic don't run. `winner_slot` is already set. `ko` and `match_end` fire once, on the KO tick. Time-outs and abandons go to victory at once.
 - **Victory:** on KO (after the hold), time-out or abandon. `winner_slot` (None for a draw). Back to the lobby when both hold hands up after `victory_min_s` and at least `victory_read_s` (4.0) after the chronicle arrived (Spark, or the template the loop hands over after `ai.timeout_s` at most; the arrival is the first step that sees it), or at `victory_max_s` regardless.
 
+## Parry (Holy Knight; Adetola's PR #2)
+Classes in `parry_classes` guard with the `guard` pose (a rising edge; others ignore it). A guard counts if `parry_cooldown_s` (1.5) has passed since the last one that counted. A projectile landing within `parry_window_s` (0.4) of a counted guard is parried: no damage, the guard is spent, a `block` event with `parry=True` (counts in `blocks`), and `riposte_window_s` (1.5) opens. In it, the next push that releases no charged spell fires the riposte (`riposte_damage` 20, `riposte_travel_s` 0.5, spell id `riposte`) at once: no release-grace hold, no mana, ignores the basic cooldown and restarts it; not counted in `casts`. Parry is checked before Flame Wall's shield. One guard parries one projectile, so a Chain needs more. `game.default_classes` puts the knight in slot 1 so fake mode (`o` guards) shows it.
+
 ## Spell effects (config: per spell `effect` + `effect_s`, `heal_hp`, `hits` + `chain_gap_s`; multipliers under `game:`)
 | Spell | Effect |
 |---|---|
@@ -34,7 +37,7 @@ Rules: a spell is a projectile when it does damage or carries a hit effect (`man
 Events: `buff` (slot = caster; data `spell_id`, `effect`, `target`, `duration_s`), `heal` (slot = caster; `spell_id`, `amount`, `hp`), `block` (slot = defender; `spell_id`, `attacker`), plus `cast`, `hit` (Static Field hits for 0), `dodge`, `ko`, `match_end` (reason `ko`, `time` or `abandon`).
 
 ## View fields
-`PlayerView.effects` (fight only, `EFFECT_KINDS` order), `charge_s` and `cooldown_s` (fight only), `stats` (fight and victory; `{}` elsewhere): `damage` dealt (overkill not counted, 1 dp), `hits` landed, `casts` (charged spells, not basic attacks), `dodges` (projectiles dodged), `blocks`, `heals` (heal casts), `best_push_mps`. `GameView.classes` lists every class in every scene; `checks` is filled in every scene.
+`PlayerView.effects` (fight only, `EFFECT_KINDS` order), `charge_s` and `cooldown_s` (fight only), `can_parry` (every scene), `guard_s`, `guard_cooldown_s`, `riposte_s` (fight only). `stats` (fight and victory; `{}` elsewhere): `damage` dealt (overkill not counted, 1 dp), `hits` landed, `casts` (charged spells, not basic attacks), `dodges` (projectiles dodged), `blocks`, `heals` (heal casts), `best_push_mps`. `GameView.classes` lists every class in every scene; `checks` is filled in every scene.
 
 ## Pauses
 - **Tracking:** a player untracked for `pause_after_s` freezes the fight; the banner counts down to the abandon ("STEP INTO VIEW · 12"). A pause that lasts `abandon_after_s` ends the match: the player still tracked wins, a draw if both are gone (`match_end` reason `abandon`).
@@ -50,10 +53,10 @@ Events: `buff` (slot = caster; data `spell_id`, `effect`, `target`, `duration_s`
 ## Files
 - `engine.py`: `Engine` facade (`step`, the `provide_*` calls); boot checks, names and class picks, debounced hands up, pause / abandon / camera, builds the `GameView`.
 - `scenes.py`: `SceneMachine` (boot → lobby → loading → fight → victory), `Hold` (debounce), `parse_name` and `parse_lobby_speech`.
-- `state.py`: `MatchState` (HP, mana, charges, cooldowns, effects, stats, projectiles in flight, round timer, banner, event log).
+- `state.py`: `MatchState` (HP, mana, charges, cooldowns, effects, guard and riposte, stats, projectiles in flight, round timer, banner, event log).
 - `effects.py`: `Effects` (timed effects per player) and which effects go on the caster vs the target.
 - `combat.py`: `speed_mult`, `dist_mult`, `damage` (spec Appendix A).
-- `spells.py`: `SpellDef`, `load_spells`, `basic_attack` from config.
+- `spells.py`: `SpellDef`, `load_spells`, `basic_attack`, `riposte` from config.
 - `classes.py`: `class_ids`, `class_name`, `class_views`, `parse_class`, `class_prompt` from config.
 
 ## Test without the Jetson
@@ -61,7 +64,7 @@ Events: `buff` (slot = caster; data `spell_id`, `effect`, `target`, `duration_s`
 uv run pytest tests/game
 uv run python -m magic_box --fake
 ```
-In fake mode the loop reports the camera at once, so boot leaves after `boot_min_s` (2 s); with no camera report it would wait `boot_max_s` (8 s). Then hold hands up (`r` + `y`) to start, charge with the spell keys, push with `f` / `h`, two-hand spells with `v` / `m`, Holy Light with hands up (`r` / `y`), Heal with hands together (`t` / `u`). Transcripts can't come from the keyboard; tests send `Action("speech", ...)`.
+In fake mode the loop reports the camera at once, so boot leaves after `boot_min_s` (2 s); with no camera report it would wait `boot_max_s` (8 s). Then hold hands up (`r` + `y`) to start, charge with the spell keys, push with `f` / `h`, two-hand spells with `v` / `m`, Holy Light with hands up (`r` / `y`), Heal with hands together (`t` / `u`), guard with `g` / `o` (P2 is the knight by default). Transcripts can't come from the keyboard; tests send `Action("speech", ...)`.
 
 ## Open TODOs
 - Open decisions (Adetola): final classes, spells, costs, gestures and numbers; `heals` as a count vs HP. Ruled 2026-10-25: one dodge per Chain bolt.
