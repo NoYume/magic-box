@@ -124,6 +124,16 @@ def test_boot_does_not_leave_before_min_time():
     assert view.scene == "boot"
 
 
+def test_boot_countdown_shows_the_real_start_once_the_camera_is_ok():
+    """'STARTING IN 8' must not show when boot will leave at boot_min_s."""
+    e = Engine(CFG)
+    view, _ = run(e, 0.0, 0.5, states())
+    assert view.timer_s == pytest.approx(G["boot_max_s"] - 0.5)
+    e.provide_check("camera", True)
+    view, _ = e.step([], states(), 0.75)
+    assert view.timer_s == pytest.approx(G["boot_min_s"] - 0.75)
+
+
 def test_boot_gives_up_at_max_time_with_no_reports():
     e = Engine(CFG)
     view, _ = run(e, 0.0, G["boot_max_s"] - 0.1, states(), dt=0.25)

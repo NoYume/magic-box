@@ -266,7 +266,9 @@ class Engine:
         timer: float | None = None
         projectiles = ()
         if scene == "boot":
-            timer = max(0.0, self._g["boot_max_s"] - self._scenes.elapsed(now))
+            # Counts down to when boot will really leave: boot_min_s once the camera is ok.
+            end = self._g["boot_min_s"] if self._check("camera")[0] else self._g["boot_max_s"]
+            timer = max(0.0, end - self._scenes.elapsed(now))
         elif scene == "lobby":
             banner = CAMERA_BANNER if camera_down else self._lobby_banner
         elif scene == "loading":
