@@ -255,3 +255,16 @@ def _expected_basics(period: float, seconds: float = 10.0) -> int:
 def test_push_spam_keeps_the_basic_cadence(period):
     """A spell-only hold opened late in the cooldown must not swallow the next push after it."""
     assert _basics_from_spam(period) == _expected_basics(period)
+
+
+@pytest.mark.parametrize(("mana_slow", "held"), [(False, True), (True, False)])
+def test_affordability_counts_the_regen_during_the_hold(mana_slow, held):
+    """22 mana + 8/s x 0.6 s = 26.8 >= Fireball's 25 by the time a late charge lands; under
+    Static Field's mana_slow (x0.25) it is only 23.2."""
+    ms = MatchState(CFG, NAMES, 0.0, {0: "fire_mage", 1: "lightning_mage"}, {0: True, 1: True})
+    ms.take_events()
+    ms.players[0].mana = 22.0
+    if mana_slow:
+        ms.players[0].effects.add("mana_slow", ms.clock, 5.0)
+    ms.apply(push(0), STATES, 0.0)
+    assert (ms.players[0].held is not None) is held

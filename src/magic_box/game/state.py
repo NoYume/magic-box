@@ -306,8 +306,14 @@ class MatchState:
             self._basic(p, action, now)
 
     def _can_afford_a_release(self, p: PlayerMatch, push: Action) -> bool:
-        """Some spell this push could release is affordable now (else nothing to wait for)."""
-        return any(self._releases(sp, push) and p.mana >= sp.cost for sp in p.spells)
+        """Some spell this push could release is affordable by the end of the grace (mana
+        regen over the hold counted, slowed by mana_slow); else there is nothing to wait for."""
+        g = self.cfg["game"]
+        regen = g["mana_regen_per_s"] * g["release_grace_s"]
+        if p.effects.active("mana_slow", self.clock):
+            regen *= g["mana_slow_mult"]
+        mana = min(p.mana + regen, g["mana_max"])
+        return any(self._releases(sp, push) and mana >= sp.cost for sp in p.spells)
 
     @staticmethod
     def _releases(spell: SpellDef, push: Action) -> bool:
