@@ -109,6 +109,17 @@ class BootChecks:
             self._deadline_s = 0.0
             self._result = (True, "ai disabled")
 
+    @property
+    def network_ok(self) -> bool | None:
+        """None until the probe finished or timed out, then its verdict."""
+        self._expire_probe()
+        return None if self._result is None else self._result[0]
+
+    def _expire_probe(self) -> None:
+        if self._result is None and self._clock() - self._started_t > self._deadline_s:
+            # connect()'s timeout does not bound DNS, so give up on the probe ourselves
+            self._result = (False, "timeout")
+
     def poll(self, seen_frame: bool, camera_ok: bool) -> None:
         """Report newly decided checks; call once per tick."""
         if "api key" not in self._reported:
@@ -119,13 +130,7 @@ class BootChecks:
                 self._provide("api key", True, "")
             else:
                 self._provide("api key", False, "not set")
-        if (
-            "network" not in self._reported
-            and self._result is None
-            and self._clock() - self._started_t > self._deadline_s
-        ):
-            # connect()'s timeout does not bound DNS, so give up on the probe ourselves
-            self._result = (False, "timeout")
+        self._expire_probe()
         if "network" not in self._reported and self._result is not None:
             self._reported.add("network")
             self._provide("network", *self._result)

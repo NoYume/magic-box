@@ -296,3 +296,52 @@ def test_recorder_gets_states_voice_and_events():
     ).run(max_ticks=2)
     assert rec.items.count(("state", 0)) == 2 and ("event", "match_start") in rec.items
     assert ("voice", "incantation") in rec.items
+
+
+def test_incantation_config_is_sent_in_loading_once_the_engine_has_them():
+    q = ListQueue()
+    ai = FakeAi(poll_results=[[], [("incantations", {0: {}, 1: {}})]])
+    engine = SceneEngine(["lobby", "loading", "loading", "loading", "loading", "fight", "fight"])
+    GameLoop(
+        CFG,
+        FakeSources(CFG),
+        ScriptedDisplay([]),
+        Intent(CFG),
+        engine,
+        KeyboardVoiceSource(CFG),
+        ai=ai,
+        voice_control=q,
+    ).run(max_ticks=7)
+    modes = [c.mode for c in q.items]
+    assert modes == ["transcript", "incantation"]  # sent in loading; fight start does not repeat it
+    # sent on the tick after the incantations were handed over (tick index 2 -> 3)
+    assert engine.provided == [("incantations", {0: {}, 1: {}})]
+
+
+def test_spark_is_skipped_when_the_network_check_failed():
+    class OfflineAi(FakeAi):
+        def __init__(self):
+            super().__init__()
+            self.offline = []
+
+        def set_offline(self, offline):
+            self.offline.append(offline)
+
+    class FailedNet:
+        network_ok = False
+
+        def poll(self, seen_frame, camera_ok):
+            pass
+
+    ai = OfflineAi()
+    GameLoop(
+        CFG,
+        FakeSources(CFG),
+        ScriptedDisplay([]),
+        Intent(CFG),
+        SceneEngine(["lobby", "loading", "victory"]),
+        KeyboardVoiceSource(CFG),
+        ai=ai,
+        boot_checks=FailedNet(),
+    ).run(max_ticks=3)
+    assert ai.offline == [True, True]

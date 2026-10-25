@@ -247,3 +247,17 @@ def test_dead_voice_process_reports_both_mics_off_once():
         voice_alive=lambda: alive[0],
     ).run(max_ticks=6)
     assert mic == [(0, False), (1, False)]
+
+
+def test_network_ok_is_none_until_known_then_the_verdict():
+    now = [0.0]
+    bc = BootChecks(
+        CFG,
+        lambda *a: None,
+        env={},
+        probe=lambda u, t: (time.sleep(5), (True, "x"))[1],
+        clock=lambda: now[0],
+    )
+    assert bc.network_ok is None
+    now[0] = 99.0
+    assert bc.network_ok is False

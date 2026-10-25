@@ -147,3 +147,13 @@ def test_interpreter_exits_at_once_with_a_call_in_flight():
     done = subprocess.run([sys.executable, "-c", QUIT_SCRIPT, str(config)], timeout=20)
     assert done.returncode == 0
     assert time.monotonic() - started < 5.0  # interpreter start-up plus imports, not 30 s
+
+
+def test_offline_resolves_to_fallbacks_without_calling_spark(capsys):
+    client = BlockingClient(GOOD)
+    w = AiWorker(CFG, client=client)
+    w.set_offline(True)
+    w.start_incantations(CLASSES, NAMES, now=0.0)
+    assert wait_poll(w, 0.1) == [("incantations", fallback_incantations(CLASSES, CFG))]
+    assert "network check failed" in capsys.readouterr().err
+    w.close()

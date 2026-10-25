@@ -97,22 +97,35 @@ class GameLoop:
         self._perception_gave_up = perception_gave_up
         self._voice_alive = voice_alive
         self._voice_was_alive: bool | None = None
+        self._incantations_delivered = False
         self.exit_code = 0  # 3: perception gave up after delivering frames (relaunch the box)
 
     def _send_voice_config(self, config: VoiceConfig) -> None:
+        if config == self._last_voice_config:
+            return
         self._last_voice_config = config
         self._voice_control.put(config)
 
+    def _send_incantation_config(self, view) -> None:
+        if self._voice_control is None:
+            return
+        sets = {p.slot: {s.id: s.incantation for s in p.spells} for p in view.players}
+        self._send_voice_config(VoiceConfig(mode="incantation", incantations=sets))
+
     def _on_scene_entered(self, view, match_events: list[GameEvent], now: float) -> None:
         names = {p.slot: p.name for p in view.players}
+        if view.scene in ("loading", "victory") and self._ai is not None:
+            # Dead Wi-Fi: skip Spark so loading doesn't wait out its timeout.
+            set_offline = getattr(self._ai, "set_offline", None)
+            if set_offline is not None:
+                set_offline(self._checks.network_ok is False)
         if view.scene == "lobby" and self._voice_control is not None:
             self._send_voice_config(VoiceConfig(mode="transcript", incantations={}))
         elif view.scene == "loading" and self._ai is not None:
             classes = {p.slot: p.class_id for p in view.players}
             self._ai.start_incantations(classes, names, now)
         elif view.scene == "fight" and self._voice_control is not None:
-            sets = {p.slot: {s.id: s.incantation for s in p.spells} for p in view.players}
-            self._send_voice_config(VoiceConfig(mode="incantation", incantations=sets))
+            self._send_incantation_config(view)
         elif view.scene == "victory" and self._ai is not None:
             self._ai.start_chronicle(list(match_events), names, now)
 
@@ -184,10 +197,16 @@ class GameLoop:
             if view.scene != prev_scene:
                 self._on_scene_entered(view, match_events, now)
                 prev_scene = view.scene
+            if self._incantations_delivered and view.scene == "loading":
+                # The engine took the incantations on an earlier tick, so this view has them:
+                # open the Muse sessions now so the handshake is done by the time of the fight.
+                self._incantations_delivered = False
+                self._send_incantation_config(view)
             if self._ai is not None:
                 for kind, result in self._ai.poll(now):
                     if kind == "incantations":
                         self._engine.provide_incantations(result)  # type: ignore[arg-type]
+                        self._incantations_delivered = True
                     else:
                         self._engine.provide_chronicle(result)  # type: ignore[arg-type]
             self._keyboard_voice.set_spells(

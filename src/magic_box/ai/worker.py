@@ -9,6 +9,7 @@ the process can exit while a call is still in flight. A replaced or timed-out jo
 runs to its own end (bounded by the OpenAI client timeout) and its result is dropped.
 """
 
+import sys
 import threading
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import Future
@@ -49,6 +50,17 @@ class AiWorker:
         self._client = client if client is not None else SparkClient(cfg)
         self._jobs: dict[str, _Job] = {}
         self._closed = False
+        self._offline = False
+
+    def set_offline(self, offline: bool) -> None:
+        """While offline (the boot network check failed) jobs resolve to fallbacks at once."""
+        if offline and not self._offline:
+            print(
+                "spark: network check failed, using fallbacks without calling Spark",
+                file=sys.stderr,
+                flush=True,
+            )
+        self._offline = offline
 
     @property
     def closed(self) -> bool:
@@ -64,7 +76,7 @@ class AiWorker:
             return
         self._jobs.pop(kind, None)  # a replaced job's late result is never read
         future: Future | None = None
-        if self._available():
+        if self._available() and not self._offline:
             future = Future()
             thread = threading.Thread(
                 target=_run, args=(future, work), name=f"spark-{kind}", daemon=True
