@@ -12,9 +12,18 @@ export const SIGN = {
   FACING_MIN: 0.45,
   FACING_FULL: 0.75,
   // Fist: thumb tip must not stick out past the knuckles (rise above the middle MCP / palm size),
-  // which separates a fist from a thumbs-up.
-  FIST_THUMB_RISE_MAX: 0.3,
-  FIST_THUMB_RISE_FULL: 0.1,
+  // which separates a fist from a thumbs-up (~0.37). [ZED] Real fists with the thumb resting
+  // beside the knuckles read ~0.18 (debug log 20261024-235023), so full credit runs up to 0.2.
+  FIST_THUMB_RISE_MAX: 0.35,
+  FIST_THUMB_RISE_FULL: 0.2,
+  // Aim: ring and pinky extension at or below FULL counts as folded, at or above OPEN as not.
+  // [ZED] Real two-finger signs leave the ring finger half folded (~0.46, debug log 20261024-235023).
+  AIM_FOLD_OPEN: 0.8,
+  AIM_FOLD_FULL: 0.4,
+  // ...which a loosely relaxed hand also does, so index and middle must be clearly straight
+  // (relaxed reads ~0.7, real aims ~0.9).
+  AIM_STRAIGHT_MIN: 0.6,
+  AIM_STRAIGHT_FULL: 0.9,
   // Two-hand triangle: tip-to-tip gaps (/ palm size) and diamond height (index tips above thumbs).
   TOUCH_MAX: 0.55,
   TOUCH_FULL: 0.3,
@@ -42,6 +51,9 @@ export const HANDS = {
   LOST_MS: 350, // drop a hand track after this long unseen
   SEAM_HYSTERESIS: 0.03, // a tracked hand must cross the seam by this much to change sides
   INFERENCE_HZ: 30, // cap on hand inference rate (independent of render rate)
+  // Frames whose shape can't be read (small, blurred or edge-on hands fail the plausibility gate,
+  // ~30% of real ZED frames, mostly one at a time) skip the sign vote for this many in a row.
+  UNREADABLE_GRACE_FRAMES: 3,
 };
 
 export const DEPTH = {
@@ -63,10 +75,12 @@ export const THRUST = {
 
 // Sideways jab toward the opponent (the "finger gun" most players reach for). View widths, over
 // THRUST.WINDOW_MS. Needs no depth, so it works the same on the webcam and the ZED.
+// [ZED] The ZED X lens is ~110 degrees wide, so a view width is ~2.9 m at 1 m (a webcam's is ~1.2 m):
+// these widths were halved for it after the first ZED X debug log (no jab cleared 0.06).
 export const JAB = {
-  MIN_SPEED: 0.5, // view widths/s toward the opponent's side
-  MIN_TRAVEL: 0.06, // view widths toward the opponent within the window (~9 cm at the desk)
-  FULL_SPEED: 1.6, // widths/s at which jab power saturates
+  MIN_SPEED: 0.3, // view widths/s toward the opponent's side (~0.9 m/s at 1 m on the ZED X)
+  MIN_TRAVEL: 0.035, // view widths toward the opponent within the window (~10 cm at 1 m)
+  FULL_SPEED: 1.2, // widths/s at which jab power saturates
 };
 
 // Body posture (ZED body tracking, or MediaPipe Pose on the webcam). Offsets are measured from each

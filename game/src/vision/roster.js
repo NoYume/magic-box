@@ -156,7 +156,12 @@ export class HandRoster {
     track.frameSign = frame.sign;
     track.frameScore = frame.score;
     track.scores = frame.scores;
-    track.sign = track.smoother.push(frame.sign);
+    track.features = frame.features; // finger extension, palm facing, thumb rise (debug log)
+    // An unreadable frame (failed the plausibility gate) says nothing about the sign: skip its
+    // vote for a few frames in a row, so one-frame dropouts don't stall or break a sign.
+    track.unreadable = frame.features ? 0 : (track.unreadable ?? 0) + 1;
+    if (track.unreadable === 0 || track.unreadable > HANDS.UNREADABLE_GRACE_FRAMES) track.sign = track.smoother.push(frame.sign);
+    else track.sign ??= track.smoother.current;
     track.agreement = track.smoother.agreement;
     track.depthHistory.push({ t: tMs, z: hand.depth, x: hand.view.x }); // x feeds the sideways jab
     while (track.depthHistory.length && tMs - track.depthHistory[0].t > DEPTH_HISTORY_MS) track.depthHistory.shift();

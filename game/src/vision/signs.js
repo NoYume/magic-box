@@ -11,6 +11,8 @@ import { mid, smoothstep } from './vec.js';
 export const SIGNS = Object.freeze({ NONE: 'none', WARD: 'ward', GATHER: 'gather', AIM: 'aim', ULTIMATE: 'ultimate' });
 
 const SINGLE_HAND_SIGNS = [SIGNS.WARD, SIGNS.GATHER, SIGNS.AIM];
+const folded = (extension) => smoothstep(SIGN.AIM_FOLD_OPEN, SIGN.AIM_FOLD_FULL, extension);
+const straight = (extension) => smoothstep(SIGN.AIM_STRAIGHT_MIN, SIGN.AIM_STRAIGHT_FULL, extension);
 
 export function scoreSigns(features) {
   const { ext, facing, thumbRise } = features;
@@ -20,7 +22,7 @@ export function scoreSigns(features) {
     [SIGNS.WARD]: Math.min(...open, smoothstep(SIGN.FACING_MIN, SIGN.FACING_FULL, facing)),
     [SIGNS.GATHER]: Math.min(...curled, smoothstep(SIGN.FIST_THUMB_RISE_MAX, SIGN.FIST_THUMB_RISE_FULL, thumbRise)),
     // Index + middle out, together or in a V: the thrust that fires it is what makes it deliberate.
-    [SIGNS.AIM]: Math.min(ext.index, ext.middle, 1 - ext.ring, 1 - ext.pinky),
+    [SIGNS.AIM]: Math.min(straight(ext.index), straight(ext.middle), folded(ext.ring), folded(ext.pinky)),
   };
 }
 

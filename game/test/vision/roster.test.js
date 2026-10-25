@@ -49,6 +49,39 @@ test('should_smooth_sign_over_frames', () => {
   assert.deepEqual(signs, ['none', 'none', 'none', 'gather', 'gather', 'gather']);
 });
 
+// Regression from the first ZED X debug log: 30% of real frames failed the plausibility gate,
+// mostly one frame at a time, and each one voted "none", so a sign rarely got the 4 of 6 votes
+// it needs to start.
+const unreadable = () => {
+  const obs = observation('open');
+  return { ...obs, world: obs.world.map((p) => ({ ...p, x: p.x * 0.2 })) }; // palm far too narrow
+};
+
+test('should_recognize_a_sign_when_every_other_frame_is_unreadable', () => {
+  const roster = new HandRoster();
+  const signs = [];
+  for (let i = 0; i < 12; i++) {
+    const frame = i % 2 === 0 ? observation('open') : unreadable();
+    signs.push(roster.update([frame], i * FRAME_MS).slots[0][0].sign);
+  }
+  assert.equal(signs.at(-1), 'ward', signs.join(' '));
+});
+
+test('should_release_a_sign_after_a_long_unreadable_run', () => {
+  const roster = new HandRoster();
+  let t = 0;
+  for (let i = 0; i < 6; i++) roster.update([observation('open')], (t += FRAME_MS));
+  let sign;
+  for (let i = 0; i < 9; i++) sign = roster.update([unreadable()], (t += FRAME_MS)).slots[0][0].sign;
+  assert.equal(sign, 'none');
+});
+
+test('should_start_a_track_on_an_unreadable_frame_without_a_sign', () => {
+  const roster = new HandRoster();
+  const hand = roster.update([unreadable()], 0).slots[0][0];
+  assert.equal(hand.sign, 'none');
+});
+
 test('should_not_flip_slot_when_hand_barely_crosses_seam', () => {
   const roster = new HandRoster();
   roster.update([observation('open', { cx: 0.55 })], 0); // view x 0.45 -> slot 0

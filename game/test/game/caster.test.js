@@ -106,6 +106,13 @@ test('should_cast_bolt_on_sideways_jab_toward_opponent', () => {
   assert.equal(casts.length, 1);
 });
 
+// The ZED X lens is ~110 degrees wide: at 1 m, 0.045 of the view is ~13 cm, a firm finger-gun
+// flick. The first ZED X debug log never saw a jab clear the old 0.06-width bar.
+test('should_cast_bolt_on_a_short_jab_sized_for_the_zed_x_wide_lens', () => {
+  const { casts } = play([...hold('sword', 15), ...jab('sword', 4, 0.7, 0.045), ...hold('sword', 5).map((f) => ({ ...f, cx: 0.655 }))]);
+  assert.equal(casts.length, 1);
+});
+
 test('should_not_cast_on_slow_slide_or_jab_away_from_opponent', () => {
   const slow = play([...hold('sword', 15), ...jab('sword', 30, 0.7, 0.1)]);
   const away = play([...hold('sword', 15), ...jab('sword', 4, 0.7, -0.1)]);

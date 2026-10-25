@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { SIGNS, SignSmoother, classifyHand, scoreTriangle } from '../../src/vision/signs.js';
-import { makeTrianglePair, placeHand } from '../../src/vision/synthetic-hand.js';
+import { SIGNS, SignSmoother, classifyHand, scoreSigns, scoreTriangle } from '../../src/vision/signs.js';
+import { makeHand, makeTrianglePair, placeHand } from '../../src/vision/synthetic-hand.js';
+import { SIGN } from '../../src/vision/tuning.js';
 import { vec } from '../../src/vision/vec.js';
 import { FRAME, NOISE_M, NOISE_SEEDS, VARIATIONS, handFixture } from '../helpers/hands.js';
 
@@ -30,6 +31,22 @@ for (const pose of NEGATIVES) {
     }
   });
 }
+
+// Regressions from the first ZED X debug log (logs/20261024-235023): this is how real hands read.
+test('should_aim_when_the_ring_finger_only_half_folds', () => {
+  const world = makeHand({ curls: [0, 0, 0.48, 0.75], thumb: 0.95, spread: 0 });
+  const { image3d } = placeHand(world, { cx: 0.3, cy: 0.5, depth: 0.7, ...FRAME });
+  assert.equal(classifyHand({ world, image3d }).sign, SIGNS.AIM);
+  // seq 5435 of that log: index and middle out, ring half folded, scored 0.51 before
+  const scores = scoreSigns({ ext: { index: 0.91, middle: 0.92, ring: 0.49, pinky: 0.25 }, facing: 0.97, thumbRise: -0.01 });
+  assert.ok(scores.aim >= SIGN.MIN_SCORE, JSON.stringify(scores));
+});
+
+test('should_gather_when_the_fist_thumb_rests_beside_the_knuckles', () => {
+  const fist = { ext: { index: 0, middle: 0, ring: 0, pinky: 0 }, facing: 0.94 };
+  assert.ok(scoreSigns({ ...fist, thumbRise: 0.2 }).gather >= SIGN.MIN_SCORE);
+  assert.ok(scoreSigns({ ...fist, thumbRise: 0.37 }).gather < SIGN.MIN_SCORE, 'a thumbs-up stays out');
+});
 
 test('should_not_ward_when_open_palm_is_edge_on_to_camera', () => {
   for (const yaw of [1.2, -1.3, 1.5]) {
