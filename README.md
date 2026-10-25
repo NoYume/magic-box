@@ -23,9 +23,12 @@ Fake-mode keys (from `config.yaml`):
 | Duck | `c` | `n` |
 | Hands up | `r` | `y` |
 | Hands together | `t` | `u` |
+| Two-hand push | `v` | `m` |
 | Spells (voice fallback, always on) | `1` `2` `3` | `8` `9` `0` |
 
 `F1` toggles the debug overlay. `Esc` quits.
+
+A match starts when both players raise their hands in the lobby (`r` + `y` in fake mode).
 
 Other commands: `uv run pytest`, `uv run ruff check`, `uv run python scripts/check_env.py --laptop`.
 

@@ -48,6 +48,22 @@ Muse Spark writes 3–7 words per spell, themed by class with an Austin or HackT
 | fight | Default 90 s round. KO, or higher HP at time-out, wins. |
 | victory | Winner banner, stats, and the Duel Chronicle (stretch). |
 
+## Thin engine (2026-10-24)
+
+`game/` now holds a thin engine so the whole pipeline plays end to end. It implements Appendix A (damage, mana, charge and dodge windows, the 90 s round) except the effects of spells that do no damage: Flame Wall, Static Field, Holy Light and Heal spend mana, log a `cast` event and show a banner, and Chain hits once. Classes stay fixed from `game.default_classes`, and there is no boot scene. The lobby starts a match when both players raise their hands. Adetola replaces any of this.
+
+New `game` numbers in `config.yaml`:
+
+| Key | Value | Meaning |
+|---|---|---|
+| `banner_s` | 1.2 | how long a banner shows |
+| `loading_min_s` / `loading_max_s` | 3.0 / 10.0 | loading scene length bounds (waits for Spark up to the max) |
+| `victory_min_s` / `victory_max_s` | 5.0 / 30.0 | victory scene: hands up allowed after the min, auto return at the max |
+| `pause_after_s` | 2.0 | a player untracked this long pauses the match ("STEP INTO VIEW") |
+| `name_max_chars` | 12 | longest name taken from lobby speech |
+
+`charge_window_s` (3.0) is a guess until the Muse partial latency is measured.
+
 ## Open questions
 
 - Final classes, spells, costs, gestures and numbers.
