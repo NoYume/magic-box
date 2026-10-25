@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from magic_box.core.contracts import EFFECT_KINDS, RELEASE_KINDS
+from magic_box.core.contracts import EFFECT_KINDS, RELEASE_KINDS, ZONES
 
 Config = dict[str, Any]
 
@@ -349,26 +349,181 @@ THEME_FONTS: tuple[str, ...] = ("tiny", "small", "text", "big", "huge", "giant")
 THEME_TITLES: tuple[str, ...] = ("boot", "lobby", "headline", "ko", "banner")
 
 
+RENDER_NUMBERS: dict[str, tuple[str, ...]] = {
+    "theme": ("shadow_px", "panel_alpha", "radius_px", "text_cache_max"),
+    "hud": (
+        "pad_px",
+        "hp_bar_h_px",
+        "mana_bar_h_px",
+        "enemy_bar_h_px",
+        "ease_per_s",
+        "ghost_hold_s",
+        "ghost_per_s",
+        "low_hp_frac",
+        "spell_row_h_px",
+        "effect_icon_px",
+        "timer_low_s",
+    ),
+    "fx": (
+        "max_particles",
+        "max_texts",
+        "shake_px",
+        "shake_s",
+        "flash_s",
+        "flash_alpha",
+        "number_s",
+        "number_rise_px",
+        "sparkle_count",
+        "burst_count",
+        "particle_s",
+        "glow_s",
+        "ko_s",
+        "ko_slowmo",
+        "banner_pop_s",
+        "glow_heal_s",
+        "glow_cast_s",
+        "glow_start_s",
+        "particle_gravity_px",
+        "ring_size_px",
+        "sparkle_drift_px",
+    ),
+    "audio": ("volume", "sample_rate", "buffer", "tick_last_s", "mix_channels"),
+    "projectiles": (
+        "start_radius_px",
+        "end_radius_px",
+        "end_y_frac",
+        "font_px",
+        "glow_scale",
+        "glow_max_px",
+        "glow_step_px",
+        "glow_big_from_px",
+        "glow_big_step_px",
+        "trail_steps",
+        "trail_spacing",
+        "dodge_ring_px",
+    ),
+    "scenes": ("title_px", "text_px", "card_w_frac", "countdown_px", "chronicle_w_frac"),
+}
+RENDER_POSITIVE: tuple[tuple[str, str], ...] = (
+    ("audio", "sample_rate"),
+    ("audio", "buffer"),
+    ("audio", "mix_channels"),
+    ("projectiles", "glow_max_px"),
+    ("projectiles", "glow_step_px"),
+    ("projectiles", "glow_big_from_px"),
+    ("projectiles", "glow_big_step_px"),
+    ("theme", "text_cache_max"),
+)
+RENDER_COLORS: dict[str, tuple[str, ...]] = {
+    "hud": (
+        "hp_rgb",
+        "hp_low_rgb",
+        "ghost_rgb",
+        "mana_rgb",
+        "bar_back_rgb",
+        "charge_rgb",
+        "cooldown_rgb",
+    ),
+    "fx": ("hit_rgb", "damage_rgb", "dodge_rgb", "block_rgb", "heal_rgb", "buff_rgb", "ko_rgb"),
+    "projectiles": ("default_rgb", "dodge_rgb"),
+    "scenes": ("text_rgb", "dim_rgb"),
+}
+RENDER_RANGES: tuple[tuple[str, str], ...] = (
+    ("hud", "zone_meter_m"),
+    ("fx", "burst_size_px"),
+    ("fx", "sparkle_size_px"),
+    ("fx", "sparkle_rise_px"),
+)
+# (section, key): (required sub-keys, value kind); an empty tuple means any keys
+RENDER_MAPS: dict[tuple[str, str], tuple[tuple[str, ...], str]] = {
+    ("theme", "colors"): (THEME_COLORS, "rgb"),
+    ("theme", "font_px"): (THEME_FONTS, "number"),
+    ("theme", "title_px"): (THEME_TITLES, "number"),
+    ("hud", "zone_rgb"): (ZONES, "rgb"),
+    ("hud", "effect_rgb"): (EFFECT_KINDS, "rgb"),
+    ("fx", "speed_px"): (("hit", "hit_side", "graze", "dodge", "block"), "number"),
+    ("fx", "ring_count"): (("dodge", "block"), "number"),
+    ("projectiles", "rgb"): ((), "rgb"),
+    ("projectiles", "family"): ((), "str"),
+}
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_rgb(value: Any) -> bool:
+    return (
+        isinstance(value, (list, tuple))
+        and len(value) in (3, 4)
+        and all(isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 255 for v in value)
+    )
+
+
+def _is_range(value: Any) -> bool:
+    return (
+        isinstance(value, (list, tuple))
+        and len(value) == 2
+        and all(_is_number(v) for v in value)
+        and value[0] <= value[1]
+    )
+
+
+_KINDS = {"rgb": _is_rgb, "number": _is_number, "str": lambda v: isinstance(v, str)}
+_KIND_TEXT = {"rgb": "[r, g, b] with 0-255 ints", "number": "numbers", "str": "strings"}
+
+
+def _check_render_map(cfg: Config, section: str, key: str, problems: list[str]) -> None:
+    where = f"render.{section}.{key}"
+    required, kind = RENDER_MAPS[(section, key)]
+    node = _get(cfg, "render", section, key)
+    if not isinstance(node, dict):
+        problems.append(f"{where}: missing or not a mapping")
+        return
+    missing = [k for k in required if k not in node]
+    if missing:
+        problems.append(f"{where}: missing {', '.join(missing)}")
+    bad = [str(k) for k, v in node.items() if not _KINDS[kind](v)]
+    if bad:
+        problems.append(f"{where}: {', '.join(bad)} must be {_KIND_TEXT[kind]}")
+
+
 def _check_render(cfg: Config, problems: list[str]) -> None:
+    """Every render key read at runtime: present, the right type (bools are not numbers)."""
     if "render" not in cfg:
         return
-    colors = _get(cfg, "render", "theme", "colors")
-    missing = [k for k in THEME_COLORS if not isinstance(colors, dict) or k not in colors]
-    if missing:
-        problems.append(f"render.theme.colors: missing {', '.join(missing)}")
-    titles = _get(cfg, "render", "theme", "title_px")
-    missing = [k for k in THEME_TITLES if not isinstance(titles, dict) or k not in titles]
-    if missing:
-        problems.append(f"render.theme.title_px: missing {', '.join(missing)}")
-    fonts = _get(cfg, "render", "theme", "font_px")
-    missing = [k for k in THEME_FONTS if not isinstance(fonts, dict) or k not in fonts]
-    if missing:
-        problems.append(f"render.theme.font_px: missing {', '.join(missing)}")
+    for section, keys in RENDER_NUMBERS.items():
+        for key in keys:
+            if not _is_number(_get(cfg, "render", section, key)):
+                problems.append(f"render.{section}.{key}: missing or not a number")
+    for section, key in RENDER_POSITIVE:
+        value = _get(cfg, "render", section, key)
+        if _is_number(value) and value <= 0:
+            problems.append(f"render.{section}.{key}: must be > 0")
+    for section, keys in RENDER_COLORS.items():
+        for key in keys:
+            if not _is_rgb(_get(cfg, "render", section, key)):
+                problems.append(f"render.{section}.{key}: missing or not [r, g, b] (0-255 ints)")
+    for section, key in RENDER_RANGES:
+        if not _is_range(_get(cfg, "render", section, key)):
+            problems.append(f"render.{section}.{key}: must be [low, high] numbers, low <= high")
+    for section, key in RENDER_MAPS:
+        _check_render_map(cfg, section, key, problems)
+    if not isinstance(_get(cfg, "render", "theme", "stars"), dict):
+        problems.append("render.theme.stars: missing or not a mapping")
+    else:
+        for key in ("count", "blue"):
+            if not _is_number(_get(cfg, "render", "theme", "stars", key)):
+                problems.append(f"render.theme.stars.{key}: missing or not a number")
+        if not _is_range(_get(cfg, "render", "theme", "stars", "brightness")):
+            problems.append("render.theme.stars.brightness: must be [low, high] numbers")
+    if not isinstance(_get(cfg, "render", "audio", "enabled"), bool):
+        problems.append("render.audio.enabled: must be true or false")
     cap = _get(cfg, "render", "fx", "max_particles")
-    if not isinstance(cap, int) or cap < 0:
+    if not isinstance(cap, int) or isinstance(cap, bool) or cap < 0:
         problems.append("render.fx.max_particles: must be an integer >= 0")
     volume = _get(cfg, "render", "audio", "volume")
-    if not isinstance(volume, (int, float)) or not 0 <= volume <= 1:
+    if not _is_number(volume) or not 0 <= volume <= 1:
         problems.append("render.audio.volume: must be a number from 0 to 1")
 
 
