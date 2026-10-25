@@ -21,7 +21,7 @@ Spec: `docs/superpowers/specs/2026-10-24-nikhil-pipeline-design.md` section 10. 
 - With `ai.enabled: false` or no key, return the fallbacks immediately (no call).
 - Always have a fallback: fixed incantations from `config.yaml` (`fallback` per spell, used per spell when a generated one is rejected), and a template chronicle filled from the event log (2-4 sentences, never raises).
 - Incantation validation: 3-7 words (`ai.min_words`/`max_words`), ASCII letters, spaces and apostrophes only, unique within the player's own set. Slot 1 is checked against slot 0's final set with rapidfuzz `ratio` below `ai.max_cross_similarity`. The prompt also asks for common words a speech recognizer spells reliably (no acronyms such as "HackTX") and a different first word per spell.
-- **`ai.reasoning_effort: minimal`.** Spark reasons before answering. With the model's default effort the incantation call timed out at 8 s (every match would use the config fallback); `low` took 6.2 s, `minimal` 3.1-3.2 s. `null` omits the field. `none` is rejected (HTTP 400).
+- **`ai.reasoning_effort: minimal`.** Spark reasons before answering. With the model's default effort the incantation call timed out at 8 s (every match would use the config fallback); `low` took 6.2 s, `minimal` 3.1-3.8 s. `null` omits the field. `none` is rejected (HTTP 400).
 - Use the OpenAI SDK against `ai.base_url` with `ai.model` (`muse-spark-1.3`). Read the key from the env var named by `ai.api_key_env` (`META_MODEL_API_KEY`). Never hard-code or log it. Errors are logged as type and HTTP status only (`describe_error`).
 - No `pygame`, `pyzed`, `cv2`.
 
@@ -30,7 +30,7 @@ Spec: `docs/superpowers/specs/2026-10-24-nikhil-pipeline-design.md` section 10. 
 |---|---|---|
 | Incantations, 2 players × 3 spells | model default | timed out at 8 s (`APITimeoutError`) |
 | Incantations | `low` | 6.2 s (6/6 passed validation) |
-| Incantations | `minimal` | 3.1-3.2 s (6/6 passed validation, 3 runs) |
+| Incantations | `minimal` | 3.1-3.8 s (6/6 passed validation, 3 runs) |
 | Chronicle (88 words) | `minimal` | 1.7 s |
 | Bad key | - | `AuthenticationError 401` in 0.3 s |
 
