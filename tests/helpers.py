@@ -59,3 +59,13 @@ def crash_immediately(stop) -> None:
 def wait_for_stop(stop) -> None:
     """Child target that idles until the stop event is set."""
     stop.wait(10)
+
+
+def flood_queue_then_exit(q, cancel) -> None:
+    """Child target: queue far more than a pipe holds with no reader, then return."""
+    if cancel:
+        pass
+    for _ in range(200):
+        q.put(b"x" * 4096)
+    if cancel:
+        q.cancel_join()

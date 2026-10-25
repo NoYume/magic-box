@@ -142,3 +142,6 @@ class ListQueue:
 
     def put(self, item) -> None:
         self.items.append(item)
+
+    def cancel_join(self) -> None:
+        self.cancel_join_calls = getattr(self, "cancel_join_calls", 0) + 1

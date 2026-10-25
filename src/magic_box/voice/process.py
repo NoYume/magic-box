@@ -461,16 +461,19 @@ def run(cfg: Config, voice_q: DropOldestQueue, control_q: DropOldestQueue, stop:
     """Capture mics, stream to Muse, publish VoiceEvents; read VoiceConfig from control_q."""
     v = cfg["voice"]
     parent_aware = ParentAwareStop(stop)
-    asyncio.run(
-        serve(
-            cfg,
-            voice_q.put,
-            control_q.drain,
-            parent_aware.is_set,
-            env=os.environ,
-            stream_factory=lambda slot, key: MuseStream(
-                v["url"], key, v["model"], v["handshake_timeout_s"]
-            ),
-            mic_factory=lambda sink: MicHub(v["mics"], v["sample_rate"], v["chunk_ms"], sink),
+    try:
+        asyncio.run(
+            serve(
+                cfg,
+                voice_q.put,
+                control_q.drain,
+                parent_aware.is_set,
+                env=os.environ,
+                stream_factory=lambda slot, key: MuseStream(
+                    v["url"], key, v["model"], v["handshake_timeout_s"]
+                ),
+                mic_factory=lambda sink: MicHub(v["mics"], v["sample_rate"], v["chunk_ms"], sink),
+            )
         )
-    )
+    finally:
+        voice_q.cancel_join()  # the game may be gone; never hang at exit on unread events

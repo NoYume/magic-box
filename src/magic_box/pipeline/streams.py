@@ -56,6 +56,14 @@ class DropOldestQueue:
                 break
         return items
 
+    def cancel_join(self) -> None:
+        """Producer side, at exit: don't wait for the feeder thread to flush to a dead reader.
+
+        Without this a child with more than ~64 KB queued and no reader never exits. Losing
+        the unread items is fine for a drop-oldest stream.
+        """
+        self._queue.cancel_join_thread()
+
     @property
     def dropped(self) -> int:
         return self._dropped.value

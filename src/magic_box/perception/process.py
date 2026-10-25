@@ -84,5 +84,6 @@ def run(cfg: Config, state_q: DropOldestQueue, frame_bus_name: str, stop: Event)
     try:
         run_loop(source, PlayerTracker(cfg), bus.write, state_q.put, ParentAwareStop(stop), cfg)
     finally:
+        state_q.cancel_join()  # the game may be gone; never hang at exit on unread states
         source.close()
         bus.close()

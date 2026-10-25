@@ -53,3 +53,23 @@ def test_parent_aware_stop_follows_event_and_parent():
     ev2 = Ev()
     ev2.flag = True
     assert ParentAwareStop(ev2, alive).is_set()
+
+
+def test_cancel_join_lets_a_child_exit_with_unread_items():
+    import time
+
+    from magic_box.pipeline.streams import DropOldestQueue, spawn_context
+    from tests.helpers import flood_queue_then_exit
+
+    ctx = spawn_context()
+    q = DropOldestQueue(1000, ctx)
+    child = ctx.Process(target=flood_queue_then_exit, args=(q, True))
+    child.start()
+    start = time.monotonic()
+    child.join(15)
+    try:
+        assert not child.is_alive() and child.exitcode == 0
+        assert time.monotonic() - start < 15
+    finally:
+        if child.is_alive():
+            child.kill()

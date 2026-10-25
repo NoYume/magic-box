@@ -119,3 +119,4 @@ def test_run_wires_camera_tracker_bus_and_queue(monkeypatch):
     assert (bus.name, bus.size, bus.closed) == ("bus-name", (960, 600), True)
     assert [f.frame_idx for f in bus.frames] == [0] and [s.slot for s in q.items] == [0]
     assert src.close_calls >= 1
+    assert q.cancel_join_calls == 1  # never hang at exit on unread states
