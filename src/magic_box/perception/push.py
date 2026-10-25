@@ -4,12 +4,24 @@ Owner: Enoch
 """
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from magic_box.core.config import Config
 from magic_box.core.contracts import Push, Px, Vec3
 from magic_box.perception.kinematics import WindowedVelocity
 
 HANDS = ("L", "R")
+
+
+@dataclass
+class _Pending:
+    """A detected push waiting for the thrust to peak."""
+
+    hand: str
+    origin_px: Px
+    t0: float
+    peak: float
+    last: float
 
 
 class PushDetector:
@@ -22,6 +34,7 @@ class PushDetector:
         self._rearm_speed = p["push_speed_mps"] * p["push_rearm_ratio"]
         self._cooldown = p["push_cooldown_s"]
         self._window_s = p["push_window_s"]
+        self._peak_wait_s = p["push_peak_wait_s"]
         self.reset()
 
     def clear_windows(self) -> None:
@@ -32,6 +45,7 @@ class PushDetector:
         self.clear_windows()
         self._armed = {h: True for h in HANDS}
         self._last_push_t = float("-inf")
+        self._pending: _Pending | None = None
 
     def update(
         self,
@@ -42,6 +56,7 @@ class PushDetector:
     ) -> tuple[Push | None, dict[str, float]]:
         if cam_t < self._last_push_t:  # camera time rewound (SVO loop)
             self._last_push_t = cam_t
+            self._pending = None
         wrist_vz = {h: 0.0 for h in HANDS}
         qualifying: list[tuple[float, str]] = []
         for hand in HANDS:
@@ -61,10 +76,26 @@ class PushDetector:
                 and cam_t - self._last_push_t >= self._cooldown
             ):
                 qualifying.append((-v, hand))
+        if self._pending is not None:
+            return self._follow_pending(cam_t, wrist_vz), wrist_vz
         if not qualifying:
             return None, wrist_vz
         for _, hand in qualifying:
             self._armed[hand] = False
         self._last_push_t = cam_t
         speed, hand = max(qualifying)
-        return Push(hand=hand, speed=speed, origin_px=wrists_px[hand]), wrist_vz
+        self._pending = _Pending(hand, wrists_px[hand], cam_t, speed, speed)
+        return None, wrist_vz
+
+    def _follow_pending(self, cam_t: float, wrist_vz: dict[str, float]) -> Push | None:
+        """Follow the thrust; emit at its peak (first falling frame) or on timeout."""
+        pend = self._pending
+        assert pend is not None
+        speed = -wrist_vz[pend.hand]
+        falling = speed < pend.last
+        pend.peak = max(pend.peak, speed)
+        pend.last = speed
+        if falling or cam_t - pend.t0 >= self._peak_wait_s:
+            self._pending = None
+            return Push(hand=pend.hand, speed=pend.peak, origin_px=pend.origin_px)
+        return None

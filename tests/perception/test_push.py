@@ -27,7 +27,8 @@ def _pushes(out):
 def test_fast_push_fires_once():
     out = _run(PushDetector(CFG), [(0.0, -0.1 * i) for i in range(8)] + [(0.0, -0.7)] * 10)
     pushes = _pushes(out)
-    assert len(pushes) == 1 and out[2][0] is pushes[0]  # fires once travel passes 0.12 m
+    assert len(pushes) == 1
+    assert next(i for i, (p, _) in enumerate(out) if p) <= 5
     assert pushes[0].hand == "R" and pushes[0].speed == pytest.approx(3.0)
     assert pushes[0].origin_px == PX["R"]
 
@@ -106,10 +107,85 @@ def test_cam_t_rewind_does_not_lock_out_pushes():
 
 def test_clear_windows_keeps_cooldown_and_arming():
     det = PushDetector(CFG)
-    out = _run(det, [(0.0, -0.1 * i) for i in range(4)])
+    out = _run(det, [(0.0, -0.1 * i) for i in range(6)])
     assert len(_pushes(out)) == 1
     det.clear_windows()
     later = [
-        det.update((4 + i) * DT, _wrists(r_dz=-0.4 - 0.1 * i), PX, 2.0) for i in range(6)
+        det.update((6 + i) * DT, _wrists(r_dz=-0.4 - 0.1 * i), PX, 2.0) for i in range(6)
     ]  # still fast, well inside push_cooldown_s
     assert not _pushes(later)
+
+
+def _punch(peak_dz_per_frame, ramp=4, hold=0, tail=12):
+    """R wrist accelerates to a per-frame step, holds it, then stops."""
+    z, frames = 0.0, []
+    for i in range(ramp):
+        z -= peak_dz_per_frame * (i + 1) / ramp
+        frames.append((0.0, z))
+    for _ in range(hold):
+        z -= peak_dz_per_frame
+        frames.append((0.0, z))
+    frames += [(0.0, z)] * tail
+    return frames
+
+
+def test_fast_punch_reports_a_higher_speed_than_a_slow_one():
+    slow = _pushes(_run(PushDetector(CFG), _punch(0.08, ramp=5, hold=3)))
+    fast = _pushes(_run(PushDetector(CFG), _punch(0.2, ramp=5, hold=3)))
+    assert len(slow) == len(fast) == 1
+    assert fast[0].speed > slow[0].speed + 1.0
+    assert fast[0].speed > 4.0
+
+
+def test_speed_is_the_peak_not_the_threshold_crossing():
+    pushes = _pushes(_run(PushDetector(CFG), _punch(0.2, ramp=5, hold=3)))
+    assert pushes[0].speed > P["push_speed_mps"] * 2
+
+
+def test_extra_latency_is_at_most_push_peak_wait():
+    # accelerating the whole time, so the peak never arrives: the timeout must emit
+    frames = [(0.0, -0.01 * i * i) for i in range(20)]
+    out = _run(PushDetector(CFG), frames)
+    fire = next(i for i, (p, _) in enumerate(out) if p)
+    # detection frame: first frame where the unmodified detector would have fired
+    ref = PushDetector(CFG)
+    ref._peak_wait_s = 0.0
+    ref_out = _run(ref, frames)
+    ref_fire = next(i for i, (p, _) in enumerate(ref_out) if p)
+    assert (fire - ref_fire) * DT <= P["push_peak_wait_s"] + 1e-9
+
+
+def test_emits_on_the_first_falling_frame():
+    out = _run(PushDetector(CFG), _punch(0.2, ramp=4, hold=0, tail=12))
+    fire = next(i for i, (p, _) in enumerate(out) if p)
+    speeds = [-vz["R"] for _, vz in out]
+    assert speeds[fire] < speeds[fire - 1]  # the frame where the speed first fell
+
+
+def test_two_quick_punches_respect_the_cooldown():
+    # punch, retract, punch again: the second thrust starts inside push_cooldown_s (0.4 s)
+    zs = [-0.05, -0.15, -0.35, -0.6, -0.6, -0.3, 0.0, 0.0, -0.3, -0.9, -0.9, -0.9, -0.9, -0.9]
+    out = _run(PushDetector(CFG), [(0.0, z) for z in zs] + [(0.0, -0.9)] * 6)
+    pushes = _pushes(out)
+    assert len(pushes) == 1
+    # and after the cooldown a second punch fires again
+    zs2 = zs + [0.0] * 8 + [-0.05, -0.15, -0.35, -0.6, -0.6]
+    assert len(_pushes(_run(PushDetector(CFG), [(0.0, z) for z in zs2]))) == 2
+
+
+def test_origin_px_is_the_wrist_at_detection():
+    px_seq = [{"L": (700.0, 200.0), "R": (540.0 + 10 * i, 210.0)} for i in range(20)]
+    det = PushDetector(CFG)
+    out = []
+    for i, (ldz, rdz) in enumerate(_punch(0.2, ramp=4, hold=2)):
+        out.append(det.update(i * DT, _wrists(ldz, rdz), px_seq[i], 2.0))
+    push = _pushes(out)[0]
+    assert push.origin_px[0] < px_seq[next(i for i, (p, _) in enumerate(out) if p)]["R"][0]
+
+
+def test_reset_drops_a_pending_push():
+    det = PushDetector(CFG)
+    out = _run(det, _punch(0.2, ramp=5, hold=3)[:3])
+    assert not _pushes(out)
+    det.reset()
+    assert not _pushes(_run(det, [(0.0, -0.9)] * 6))

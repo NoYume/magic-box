@@ -45,6 +45,14 @@ def test_zone_thresholds_must_be_ordered(tmp_path):
         load_config(_write(tmp_path, cfg))
 
 
+@pytest.mark.parametrize("bad", [-0.01, 0.2, "x", True])
+def test_push_peak_wait_must_be_between_0_and_0_1(tmp_path, bad):
+    cfg = _base()
+    cfg["perception"]["push_peak_wait_s"] = bad
+    with pytest.raises(ConfigError, match="push_peak_wait_s"):
+        load_config(_write(tmp_path, cfg))
+
+
 def test_mics_must_cover_both_slots(tmp_path):
     cfg = _base()
     cfg["voice"]["mics"] = [{"slot": 0, "device": None, "channel": 0}]
@@ -104,6 +112,7 @@ def test_repo_config_has_perception_tunables():
         "open_retry_s",
         "max_grab_failures",
         "stats_every_s",
+        "push_peak_wait_s",
     ):
         assert key in p, key
     assert "wrist_vz_smoothing" not in p

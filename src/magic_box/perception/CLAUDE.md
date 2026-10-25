@@ -7,10 +7,10 @@ Turns the ZED X stream into `PlayerState`s and camera frames. Runs in its own pr
 ## Inputs → Outputs
 - In: the ZED X (live over GMSL2, or an SVO2 file via `camera.svo_path`), settings from `camera` and `perception` in `config.yaml`.
 - Out: up to two `PlayerState`s per camera frame (one per slot) on the state stream; the left image as a `Frame` on the shared-memory frame bus. A slot that has never been seen publishes nothing.
-- `push` is set only on the frame a push is detected. One push gives one event: a cooldown and a re-arm (`push_rearm_ratio`) stop repeats.
+- `push` is set only on the frame a push is emitted (at its peak). One push gives one event: a cooldown and a re-arm (`push_rearm_ratio`) stop repeats.
 - `pose_flags` are continuous. `zone` uses `perception.zones`.
 - The push is measured on the wrist relative to the neck (the root when there is no neck), so walking toward the camera does not fire it. A two-hand push arrives as one `Push` (the faster hand). Intent recognises it when the other hand's `wrist_vz` crosses `-push_speed_mps` within ~100 ms of the push (`wrist_vz` is published every frame).
-- `Push.speed` is the window-average speed at the moment the push threshold is crossed. For most punches that is just above `push_speed_mps` (about 1.5-1.7 m/s), not the punch's peak speed. Whether to report peak speed instead is an open decision for Adetola (game balance) and Enoch.
+- `Push.speed` is the peak wrist speed of the thrust. The push is detected as before (window speed over `push_speed_mps` and `push_min_travel_m`), then held until the speed first falls or `push_peak_wait_s` (0.1 s) passes, whichever is first, and emitted with the peak speed. So `push` arrives up to `push_peak_wait_s` after the threshold crossing, on top of intent's `two_hand_window_s` hold. `origin_px` is the wrist pixel at detection. Cooldown runs from detection. A pending push is dropped by `reset()` (new body) or a camera-time rewind.
 - A player who leaves is republished at once with `tracking_ok=False`, the last pose flags and zone, `push=None`, `root_vx=0` and zero `wrist_vz`. Intent must gate on `tracking_ok`.
 - `wrists` and `keypoints_px` hold only valid points. `wrist_vz` always has `"L"` and `"R"`.
 

@@ -38,6 +38,7 @@ perception:         # owner: Enoch
   zones:                      # root Z thresholds, meters (guess)
     danger_max_m: 1.6         # z < this -> danger
     far_min_m: 2.4            # z >= this -> far
+  push_peak_wait_s: 0.1       # (guess) max wait after detection for the thrust to peak; Push.speed is the peak. Adds to intent.two_hand_window_s
 
 pipeline:           # owner: Nikhil
   state_queue_size: 256

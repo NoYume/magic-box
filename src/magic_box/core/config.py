@@ -86,6 +86,17 @@ def _check_zones(cfg: Config, problems: list[str]) -> None:
         problems.append(f"perception.zones: danger_max_m ({danger}) must be < far_min_m ({far})")
 
 
+def _check_push_peak_wait(cfg: Config, problems: list[str]) -> None:
+    wait = _get(cfg, "perception", "push_peak_wait_s")
+    if wait is None:
+        if "perception" in cfg:
+            problems.append("perception.push_peak_wait_s: missing")
+    elif isinstance(wait, bool) or not isinstance(wait, (int, float)) or not 0 <= wait <= 0.1:
+        problems.append(
+            f"perception.push_peak_wait_s: must be a number from 0 to 0.1, got {wait!r}"
+        )
+
+
 def _check_camera(cfg: Config, problems: list[str]) -> None:
     if "camera" not in cfg:
         return
@@ -193,6 +204,7 @@ def validate(cfg: Config) -> list[str]:
     """Return every problem found in `cfg` (empty list means valid)."""
     problems = [f"{name}: missing section" for name in REQUIRED_SECTIONS if name not in cfg]
     _check_zones(cfg, problems)
+    _check_push_peak_wait(cfg, problems)
     _check_camera(cfg, problems)
     _check_mics(cfg, problems)
     _check_key_spells(cfg, problems)
