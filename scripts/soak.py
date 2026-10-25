@@ -212,7 +212,7 @@ def render_sizes(window) -> dict[str, int]:
     """Sizes of the render caches and FX lists (whatever this render version has)."""
     out: dict[str, int] = {}
     theme = getattr(window, "theme", None)
-    for name in ("_text", "_panels", "_glows", "_sized_fonts", "_scaled"):
+    for name in ("_text", "_panels", "_glows", "_sized_fonts", "_scaled", "_fits"):
         if hasattr(theme, name):
             out[name.strip("_")] = len(getattr(theme, name))
     fx = getattr(window, "fx", None)
@@ -274,6 +274,8 @@ def main(argv=None) -> int:
         ticks = display.ticks - last_sample[1]
         last_sample[0], last_sample[1] = now, display.ticks
         perf = dict(getattr(getattr(loop, "_perf", None), "last", {}) or {})
+        if args.fast:  # PerfStats measures latency on the real clock; the fake one runs ahead
+            perf = {k: v for k, v in perf.items() if not k.startswith("latency")}
         row = {
             "t": now - start,
             "ticks": display.ticks,
