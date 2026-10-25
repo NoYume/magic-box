@@ -39,6 +39,17 @@ def test_glow_is_cached_per_radius_step(theme):
     assert (32, (0, 255, 0), False) in theme._glows and (40, (0, 255, 0), False) not in theme._glows
 
 
+def test_scaled_images_are_cached_per_quantized_scale(theme):
+    img = theme.text("K.O.!", "huge", (255, 0, 0))
+    a = theme.scaled(img, 1.2)
+    assert a is theme.scaled(img, 1.2) and a is theme.scaled(img, 1.201)
+    assert a.get_width() == round(img.get_width() * 1.2)
+    assert theme.scaled(img, 1.0) is img
+    for i in range(200):
+        theme.scaled(img, 1.0 + (i + 1) * 0.05)
+    assert len(theme._scaled) <= 64
+
+
 def test_glow_steps_are_bounded_by_glow_max(theme):
     steps = theme.glow_steps
     assert steps == sorted(steps) and steps[-1] == CFG["render"]["projectiles"]["glow_max_px"]

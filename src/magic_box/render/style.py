@@ -15,6 +15,8 @@ import numpy as np
 import pygame
 
 RGB = tuple[int, int, int]
+SCALE_STEP = 0.02  # pop and grow animations snap to this, so their frames are cached
+SCALE_CACHE_MAX = 64
 REPO_ROOT = Path(__file__).resolve().parents[3]  # src/magic_box/render/style.py -> repo
 
 
@@ -78,6 +80,7 @@ class Theme:
         self.display_path = display_font_path(t.get("display_font"))
         self.title_px: dict[str, int] = {k: int(v) for k, v in t["title_px"].items()}
         self.glow_steps = glow_steps(render_cfg["projectiles"])
+        self._scaled: dict[tuple, tuple[pygame.Surface, pygame.Surface]] = {}
 
     def slot_rgb(self, slot: int | None) -> RGB:
         if slot is None:
@@ -135,6 +138,22 @@ class Theme:
         rect = img.get_rect(**{anchor: (round(pos[0]), round(pos[1]))})
         surface.blit(img, rect)
         return rect
+
+    def scaled(self, img: pygame.Surface, scale: float) -> pygame.Surface:
+        """`img` smoothscaled by `scale` (quantized to SCALE_STEP), cached; `img` itself at 1.0."""
+        q = round(scale / SCALE_STEP) * SCALE_STEP
+        if abs(q - 1.0) < 1e-9:
+            return img
+        key = (id(img), round(q, 6))
+        hit = self._scaled.get(key)
+        if hit is not None and hit[0] is img:
+            return hit[1]
+        if len(self._scaled) >= SCALE_CACHE_MAX:
+            del self._scaled[next(iter(self._scaled))]
+        size = (max(1, round(img.get_width() * q)), max(1, round(img.get_height() * q)))
+        out = pygame.transform.smoothscale(img, size)
+        self._scaled[key] = (img, out)
+        return out
 
     def fit_text(self, text: str, font: str, max_w: int) -> str:
         """Clip `text` with an ellipsis so it fits `max_w` pixels."""

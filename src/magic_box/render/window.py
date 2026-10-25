@@ -178,10 +178,7 @@ class Window:
         cx, cy = half.x + half.w // 2, int(half.h * 0.42)
         band = th.panel(half.w - 20, img.get_height() + 36, th.c["panel"], 170)
         self.screen.blit(band, band.get_rect(center=(cx, cy)))
-        if scale > 1.001:
-            img = pygame.transform.smoothscale(
-                img, (round(img.get_width() * scale), round(img.get_height() * scale))
-            )
+        img = th.scaled(img, scale)
         self.screen.blit(img, img.get_rect(center=(cx, cy)))
 
     # -- fight --------------------------------------------------------------

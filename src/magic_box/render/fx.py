@@ -377,11 +377,7 @@ class Fx:
         for t in self.texts:
             k = t.age / t.life
             pop = 1.0 + 0.6 * max(0.0, 1.0 - k * 6.0)
-            img = t.surf
-            if pop > 1.01:
-                img = pygame.transform.smoothscale(
-                    img, (round(img.get_width() * pop), round(img.get_height() * pop))
-                )
+            img = self.theme.scaled(t.surf, pop)
             img.set_alpha(round(255 * min(1.0, 2.0 * (1.0 - k))))
             surface.blit(img, img.get_rect(center=(round(t.x), round(t.y - t.rise * k))))
 
@@ -396,9 +392,7 @@ class Fx:
             "K.O.!", self.theme.font_px(self.theme.title_px["ko"], display=True), self.ko_rgb
         )
         scale = 0.7 + 0.5 * min(1.0, k * 2.0)
-        img = pygame.transform.smoothscale(
-            base, (round(base.get_width() * scale), round(base.get_height() * scale))
-        )
+        img = self.theme.scaled(base, scale)
         img.set_alpha(round(255 * min(1.0, 4.0 * (1.0 - k))))
         for cx in (w // 4, 3 * w // 4):
             surface.blit(img, img.get_rect(center=(cx, h // 2)))
