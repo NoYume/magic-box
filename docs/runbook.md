@@ -189,7 +189,7 @@ What a good start looks like:
 2. **Lobby** banner: `SAY NAME · SAY FIRE, LIGHTNING OR HOLY · HANDS UP`. Each player's card shows TRACKED and MIC OK. Say your name and class, then **wait until your card shows your name and class before raising your hands**: the final transcript arrives about 3 s after you stop talking.
 
 **If something is wrong at the venue**
-- **CAMERA RECONNECTING for more than 30 s:** press `Esc` and rerun the launcher. Do not unplug the camera. If perception dies six times (the first run plus five restarts; the count resets after `pipeline.restart_reset_s`, 60 s, of healthy running) after it had delivered frames, the game exits with code 3 and prints `perception gave up`; `run_demo.sh` then restarts the whole box by itself. A laptop without `pyzed` never delivered a frame, so it does not exit.
+- **CAMERA RECONNECTING for more than 30 s:** press `Esc` and rerun the launcher. Do not unplug the camera. If perception dies six times (the first run plus five restarts; the count resets after `pipeline.restart_reset_s`, 60 s, of healthy running) after it had delivered frames, the game exits with code 3 and prints `perception gave up`; `run_demo.sh` then starts the game again by itself, with fresh camera and voice processes. A laptop without `pyzed` never delivered a frame, so it does not exit (it stays on CAMERA RECONNECTING).
 - **`check_env.py` doesn't list both mics:** swap in the spare mic before starting. If one mic fails to open at start, only that player gets `no mic` (MIC OFF) and the other keeps working; spell keys still work for the dead one.
 - **Wi-Fi is down:** the boot `network` check fails and the game uses the config incantations and the template chronicle at once, with no 8 s wait. **Restarting the game re-probes the network**, so after Wi-Fi comes back, restart it (`Esc`, then the launcher).
 - **The ZED takes a long time to open:** time from launch to the first frame in the boot log, then set `pipeline.camera_boot_timeout_s` (5.0) above it in `config.local.yaml`. Until then a slow open shows a failed `camera` check.
@@ -203,12 +203,13 @@ Change values in `config.local.yaml` on the Jetson, then quit (`Esc`) and start 
 - Header: render fps, camera fps, dropped queue items, and stage times `poll / intent / engine / draw` in ms plus `lat` (PlayerState to draw). `--debug` also prints a `perf:` line with the worst tick every 10 s.
 - A panel per half: tracked or lost, distance and zone, pose flags, and a `wrist_vz` graph with the red push threshold line. The panel flashes on a push.
 - A top-down map in meters below the panels, mirrored like the players' view.
+- Render fps: a macOS laptop shows about 48 fps because its sleep oversleeps (frame work is only 2-5 ms). On the Jetson the header should read about 60. If it also reads about 48 there, the fix is in `Window.tick` (`render/window.py`): tell Nikhil.
 
 **What to change**
 
 | Symptom | Key (default) | Direction |
 |---|---|---|
-| Basic attacks feel laggy with the mics on | `game.release_grace_s` (0.6) | Lower to 0.3, or 0 to turn the hold off. It holds an uncharged push this long in case a voice charge is about to land. First knob to try. |
+| Basic attacks feel laggy with the mics on | `game.release_grace_s` (0.6) | Lower to 0.3, or 0 to turn the hold off. It holds an uncharged push this long in case a voice charge is about to land, but only while the player can afford a spell that push could release (out of mana, the basic fires at once). First knob to try. |
 | A spoken spell fizzles before the player can push | `game.charge_window_s` (3.0) | Raise to 3.5. Lower toward 2.5 only if `check_muse.py` suggests it with real voices. |
 | The charge lands too long after speaking | `voice.perfect_hold_s` (0.5) | Lower to 0.25, or 0 (publish the first match). Costs ×1.15 perfect bonuses. |
 | The ×1.15 perfect bonus almost never fires | `voice.perfect_hold_s` (0.5) | Raise to 0.8. Charges land later. |
@@ -227,10 +228,12 @@ Change values in `config.local.yaml` on the Jetson, then quit (`Esc`) and start 
 | Zone readout disagrees with the floor tape | `perception.zones.danger_max_m` (1.6), `far_min_m` (2.4) | Match the tape, or move the tape. |
 | Every hit lands at the same multiplier | `game.combat.speed_ref_mps` (2.0) | `Push.speed` is now the punch's peak. Check `best_push_mps` on the victory screen and set the reference near a typical punch. |
 | Loading card shows the config incantations (Spark fell back) | `ai.timeout_s` (8), `game.loading_max_s` (10) | Check Wi-Fi first (phone hotspot). If Spark times out often, raise `ai.timeout_s` and keep `game.loading_max_s` above it. |
-| Voice sessions take too long to be ready at the fight | `game.loading_read_s` (4.0) | The loading card stays up this long after the incantations arrive. The Muse sessions open as soon as the incantations are known (handshake 0.4-1.1 s). Raise it if players need longer to read. |
+| Players can't finish reading their incantations before the fight | `game.loading_read_s` (4.0) | Raise to 6. The loading card stays up at least this long after the incantations arrive, with no countdown until they do. Lower it if loading drags. The Muse sessions open as soon as the incantations are known (handshake 0.4-1.1 s), so keep it above about 1.5 s. |
+| Holy Light or Heal doesn't fire when the pose is made on the last word | `game.pose_grace_s` (1.0) | Raise to 1.5. A charge releases a pose that is already held only if the pose rose within this time before the charge. |
+| A buff fires from a pose held since before the incantation | `game.pose_grace_s` (1.0) | Lower to 0.6. Hands up held since the lobby never releases; a new pose edge does. |
 | A child process keeps dying and the box restarts too often | `pipeline.restart_reset_s` (60), `pipeline.max_restarts` (5) | A child that runs `restart_reset_s` without dying gets its restart count back. |
 | Sound too loud or too quiet | `render.audio.volume` (0.6) | Adjust. `render.audio.enabled: false` mutes. |
-| K.O. effect gets cut off | `game.ko_hold_s` (2.5), `render.fx.ko_s` (2.5) | Keep `ko_hold_s` at least `fx.ko_s`. |
+| K.O. effect gets cut off, or the frozen fight outlasts it | `game.ko_hold_s` (2.5), `render.fx.ko_s` (2.5) | Change both together and keep them equal. Validation rejects `fx.ko_s` above `ko_hold_s`. |
 
 **Jetson fps fallbacks.** If render fps drops below 60, try these in order (details in `src/magic_box/render/CLAUDE.md`):
 1. `render.crop_cache: true` (the default): reuses the scaled crop while it barely moves.
@@ -277,13 +280,14 @@ Run with `-- --debug` so the overlay is one key away. Tick each line, and write 
 
 **Lobby**
 - [ ] "My name is Ada" sets the name. It shows after about 3 s (Muse waits for silence before the final transcript).
-- [ ] "Fire", "lightning", "holy" and "knight" each pick a class; the last keyword said wins.
+- [ ] "Fire", "lightning", "holy" and "knight" each pick a class; the last keyword said wins. If Muse writes "lightening", that works too.
 - [ ] "My name is Ada, fire" sets both.
 - [ ] Chatter ("I'm ready", "so what do I do now", "this is cool") does not rename anyone. A one- or two-word reply ("Bob") does.
 - [ ] Both raise hands and hold about 0.3 s: loading starts. A one-frame flicker does not start it.
 
 **Loading**
-- [ ] Each half shows its player's class, incantations and release cue, and a countdown. Long incantations shrink and wrap instead of being cut off.
+- [ ] Each half shows its player's class, incantations and release cue. Long incantations shrink and wrap instead of being cut off.
+- [ ] No countdown until the incantations arrive (about 3-4 s with Spark), then at least 4 s (`loading_read_s`) to read them before the fight.
 - [ ] The incantations are Spark-written, not the config ones (for example, not "embers of the forty acres burn").
 
 **Fight: each spell** (say it, then release). Damage and effects show on the target's half.
@@ -293,18 +297,19 @@ Run with `-- --debug` so the overlay is one key away. Tick each line, and write 
 - [ ] Bolt: push. Fast (0.9 s travel).
 - [ ] Chain: push. Three bolts 0.25 s apart; each needs its own dodge.
 - [ ] Static Field: two-hand push. Target shows MANA SLOWED; their mana refills slowly for 5 s.
-- [ ] Holy Light: one arm overhead. EMPOWERED; hits for 6 s do ×1.5.
+- [ ] Holy Light: one arm overhead. EMPOWERED; hits for 6 s do ×1.5. Also raise the arm on the last word of the incantation: the spell fires when the charge lands (`pose_grace_s`).
+- [ ] An arm already up since before the incantation does not fire Holy Light; lower it and raise it again.
 - [ ] Heal: hands together at the chest. +25 HP, not above 100.
 - [ ] Judgment: push.
 - [ ] Spell keys (P1 `1 2 3`, P2 `8 9 0`) charge the same spells with no voice.
 - [ ] A clean reading gets the ×1.15 perfect bonus sometimes (watch the damage number).
 
 **Fight: everything else**
-- [ ] Basic attack: a push with nothing charged. With mics on it lands about 0.6 s late (`release_grace_s`).
-- [ ] Say a spell and push on the last word: the spell fires, not a basic attack.
+- [ ] Basic attack: a push with nothing charged. With mics on it lands about 0.6 s late (`release_grace_s`). Out of mana for every spell that push could release, it fires at once.
+- [ ] Say a spell and push on the last word: the spell fires, not a basic attack. This works even right after a basic attack, during its cooldown.
 - [ ] Dodge by a 0.3 m sidestep and by a 0.25 m duck during the red ring: DODGE! and no damage.
 - [ ] Damage rises when the players stand closer: the distance multiplier runs from ×1.4 at 1.2 m to ×0.7 at 2.8 m, for the attacker at release and the defender at impact.
-- [ ] One player steps out for more than 2 s: STEP INTO VIEW, the fight freezes; stepping back resumes it.
+- [ ] One player steps out for more than 2 s: the fight freezes and the banner counts down (`STEP INTO VIEW · 20`, `· 19`, ...); stepping back resumes it.
 - [ ] One player stays out about 22 s (2 s to pause, then `abandon_after_s` 20 s): the match ends and the tracked player wins.
 - [ ] KO: the fight freezes for `game.ko_hold_s` (2.5 s) while the K.O. overlay and slow-motion effects play (`render.fx.ko_s`, 2.5 s), then victory.
 - [ ] Time-out at 90 s: higher HP wins.
@@ -315,13 +320,14 @@ Run with `-- --debug` so the overlay is one key away. Tick each line, and write 
 
 **Victory and rematch**
 - [ ] Winner headline, a stats card per player, the chronicle (Spark-written with Wi-Fi, a template without).
-- [ ] After 5 s, both raise their hands: back to the lobby with names and classes kept. Hands still up from victory don't start a match: lower them, then raise them again.
+- [ ] Hands up does nothing until 5 s have passed and the chronicle is on screen (Spark, or the template within 8 s). Then both raise their hands: back to the lobby with names and classes kept. After 30 s it goes back on its own. Hands still up from victory don't start a match: lower them, then raise them again.
 
 **Failures**
 - [ ] Network off mid-match: MIC OFF; spell keys still work; the next loading card uses config incantations; the chronicle uses the template. Network back on: mics reconnect within about 10 s.
 - [ ] Camera: **do not unplug it** to test this (GMSL2). Cover the lens instead to test the tracking pause. The CAMERA RECONNECTING path is covered by unit tests only.
 - [ ] `Esc` quits within about a second, and the next start opens the camera without a daemon restart.
 - [ ] Ten minutes of play without a frame-rate drop or a restart in `game.log`.
+- [ ] Optional, while nobody plays: `uv run python scripts/soak.py --seconds 600` (fake mode, headless, random inputs). It prints fps and RSS samples and exits 1 on a crash or memory growth.
 
 ## 10. Before judging
 
