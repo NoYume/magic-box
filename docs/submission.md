@@ -10,73 +10,63 @@ Every number here was measured. Laptop numbers are labeled as laptop numbers. Li
 
 ---
 
+## Elevator pitch
+
+Magic Box is a two-player duel controlled by voice and motion. Say a Muse-written spell, then punch to cast it. A ZED X measures speed, distance and dodges in 3D while a Jetson runs the game.
+
 ## Devpost draft
 
 ### Magic Box
 
-A two-player magic duel you play with your voice and your body. Say the spell, then throw it at the camera.
+Say an incantation into your mic, then throw the spell at your opponent with a push toward the camera. Magic Box is a two-player duel played with voice and body movement.
 
 ### Inspiration
 
-We wanted a game where you cast a spell the way it happens in stories: you say the words, then you throw it. That needs two things a normal webcam game doesn't have. It needs real depth, so a punch toward the screen can be measured in meters per second and a dodge in meters. And it needs speech recognition fast enough to keep up with a fight. A ZED X stereo camera on a Jetson Orin Nano gives us the first. Meta's Muse Voice Transcribe and Muse Spark give us the second.
+In stories, casting a spell takes words and a gesture. We wanted that moment to feel physical: if you punch harder or step closer, the hit should change. A webcam can't measure how fast a wrist moves toward it or how far someone steps to dodge. We used a ZED X stereo camera and a Jetson Orin Nano for depth and body tracking, with Meta's Muse Voice Transcribe for the spoken part. Muse Spark writes the words players cast.
 
 ### What it does
 
-Two players stand side by side in front of one monitor. The screen is split down the middle. Each player watches their own half, which shows a live close-up of the opponent.
+Two players stand side by side at one monitor. Each half of the screen shows a live close-up of the opponent. At startup, the game checks the camera, both mics, network and API key. In the lobby, players say their names and choose Fire Mage, Lightning Mage or Holy Knight by voice, then raise their hands to begin. Muse Spark writes three incantations per player, themed to their name and class, and the loading screen shows how to cast each one.
 
-- **Boot:** a self-check of the camera, both mics, the network and the API key.
-- **Lobby:** each player says their name and a class (Fire Mage, Lightning Mage or Holy Knight), then both raise their hands to start.
-- **Loading:** Muse Spark writes three incantations for each player, themed to their class and name. Each half shows them as a tutorial card.
-- **Fight:** 90 seconds. A player reads an incantation into their own clip-on mic to charge a spell, then releases it with a gesture: a fast push toward the camera, a two-hand push, one arm overhead, or hands together at the chest. The defender sees the projectile coming and dodges by stepping aside or ducking.
-- **Victory:** the winner, each player's stats, and a Duel Chronicle that Muse Spark writes from the match log.
+The fight lasts 90 seconds. Saying an incantation into a clip-on mic charges a spell; releasing it takes a fast push, a two-hand push, an arm overhead or hands together at the chest. The defender can see the projectile coming and step aside or duck. After the fight, the screen shows the winner, both players' stats and a Duel Chronicle written by Muse Spark from the match log.
 
-Depth decides the fight:
-- **Push speed** is the wrist's peak speed toward the camera in m/s, measured relative to the neck so walking forward doesn't count. Harder punches do more damage.
-- **Distance** scales damage from ×1.4 at 1.2 m to ×0.7 at 2.8 m, for both the attacker and the defender. Stepping in is risky and rewarding.
-- **Dodges** are a 0.3 m sidestep or a 0.25 m duck inside the last 0.6 s of a projectile's flight.
+The camera measures the wrist's peak speed toward it relative to the neck, so walking forward alone doesn't count as a punch. A harder punch does more damage. Distance matters for attacker and defender alike: the multiplier runs from ×1.4 at 1.2 m to ×0.7 at 2.8 m. A dodge takes a 0.3 m sidestep or a 0.25 m duck in the last 0.6 s of a projectile's flight.
 
-There are nine spells, three per class. Six do more than damage: a shield that blocks the next hit, a three-bolt Chain where each bolt needs its own dodge, slower mana regen for the target, a shorter charge window for the target, a heal and a damage buff. Press `F1` and a debug overlay shows a top-down map of both players in meters and each wrist's speed graph against the push threshold.
+Each class has three spells. Six have effects beyond damage: a shield against the next hit, a three-bolt Chain that requires three dodges, slower mana regeneration or a shorter charge window for the target, a heal, and a damage buff. `F1` opens a debug overlay with both players on a top-down map in meters and a graph of each wrist's speed against the push threshold.
 
 ### How we built it
 
-- **Hardware:** a Stereolabs ZED X on GMSL2 through a ZED Link capture card, a Jetson Orin Nano, an external monitor and one clip-on mic per player. Everything runs on the Jetson. No laptop is in the loop.
-- **Three processes**, started with `spawn` and supervised (a crashed child restarts):
-  - **Perception** is the only code that touches the ZED SDK. It runs depth and body tracking for two people, assigns them to player slots, detects pushes, poses and zones, and writes the camera image into a shared-memory double buffer.
-  - **Voice** runs one Muse Voice Transcribe WebSocket per player mic, with that player's incantation words sent as keywords. It matches partial transcripts against only that player's spells with fuzzy matching.
-  - **Game** is a pygame-ce loop that never blocks [TODO 08:00: add the measured fps on the Jetson]: fusion of body and voice into actions, the game rules, and the renderer. Muse Spark calls run on background threads with an 8 s deadline and a fallback.
-- **Contracts:** every message between processes is a typed dataclass that round-trips to JSON lines. That gave us `--fake` mode (keyboard players and a synthetic camera) to build the game on laptops, and `--record` / `--replay` to replay real sessions.
-- **Visuals and sound:** a HUD per player, five scenes, hit and K.O. effects, per-element projectiles with glows and trails, and sounds synthesized with numpy at startup. Titles use Cinzel Decorative (SIL Open Font License).
-- **Tests:** 960 automated tests, run headless in GitHub Actions with Ruff lint and format checks. They include 30 end-to-end tests that drive the real game loop through whole fake matches on a fake clock. A soak script plays random fake matches for as long as you ask and watches fps and memory.
+A Stereolabs ZED X connects over GMSL2 through a ZED Link capture card to a Jetson Orin Nano. The Jetson drives the monitor and runs the game; each player has a clip-on mic. There is no laptop in the demo loop.
+
+Three supervised processes start with `spawn`, and a crashed child restarts. Perception alone accesses the ZED SDK. It tracks two bodies, assigns player slots, detects pushes and poses, and puts camera frames in a shared-memory double buffer. Voice keeps a Muse Voice Transcribe WebSocket open for each mic; it sends that player's incantation words as keywords and fuzzy-matches partial transcripts against their spells. The pygame-ce game loop fuses voice and body input, runs the rules and draws the screen without blocking [TODO 08:00: add the measured fps on the Jetson]. Muse Spark runs in background threads with an 8 s deadline and fallback text.
+
+Typed dataclasses carry messages between processes and round-trip to JSON lines. We could build on laptops using `--fake`, with keyboard players and a synthetic camera, then use `--record` and `--replay` for real sessions. The game has a HUD for each player, five scenes, hit and K.O. effects, projectiles with glows and trails, and sounds synthesized with NumPy at startup. Titles use Cinzel Decorative (SIL Open Font License).
+
+We run 960 automated tests headless in GitHub Actions alongside Ruff lint and format checks. Thirty end-to-end tests play whole fake matches on a fake clock. A soak script plays random matches and watches frame rate and memory use.
 
 ### Challenges we ran into
 
-- **Spark was too slow at first.** With the model's default reasoning, generating six incantations ran past our 8 s deadline every time, so every match would have used the fixed fallback text. Setting `reasoning_effort: minimal` brought it to 3.1-3.8 s with all six incantations passing validation (laptop Wi-Fi, three runs).
-- **Partial transcripts match early.** Muse's cumulative partials reach our match threshold on the first few words of a phrase, so the "perfect incantation" bonus almost never fired. We now hold a sub-perfect match for up to 0.5 s in case the full phrase lands.
-- **A 30-character keyword limit.** Muse rejects the whole session handshake if any keyword is longer than 30 characters. We found this live and now send single words.
-- **Voice is slower than a punch.** The charge lands about 0.4 s after the player stops talking. A player who punches on the last word would throw a basic attack instead of the spell, so the game holds an uncharged push for up to 0.6 s while that player's mic is on.
-- **Peak speed, not threshold speed.** At first the push speed was read at the moment it crossed the threshold, which is almost the same for every punch. We now wait up to 0.1 s for the peak, so damage tracks how hard you punch.
-- **GMSL2 is not hot-pluggable.** Re-plugging the camera while the Jetson runs needs a daemon restart, so the camera cable is taped down and nobody touches it.
+Muse Spark initially missed our 8 s deadline when generating six incantations with its default reasoning setting. With `reasoning_effort: minimal`, it took 3.1-3.8 s and all six incantations passed validation in three runs on laptop Wi-Fi.
+
+Muse's cumulative partial transcripts can match a spell after only the first few words. That meant the full-phrase "perfect incantation" bonus rarely fired. We now wait up to 0.5 s on a sub-perfect match to give the rest of the phrase time to arrive. We also found that one keyword longer than 30 characters makes Muse reject the entire session handshake, so we send single words.
+
+Speech and gestures arrive on different clocks. In our laptop tests, the charge arrived about 0.4 s after speech ended. If someone punched on the last word, they got a basic attack instead of their spell. While that player's mic is on, we now hold an uncharged push for up to 0.6 s. For punches, reading speed as soon as it crossed the threshold made nearly every hit look alike. We wait up to 0.1 s for the wrist's peak speed instead.
+
+The GMSL2 camera connection isn't hot-pluggable. Re-plugging it while the Jetson runs requires a daemon restart, so we taped down the cable.
 
 ### Accomplishments that we're proud of
 
-- The full loop works end to end: boot, lobby by voice, Spark-written incantations, a fight driven by voice and body, and a Spark-written chronicle.
-- Both Meta APIs were verified live. In 17 test sessions on a laptop with synthesized speech, Muse matched the right spell every time and never a wrong one.
-- The game is built to keep running on bad venue Wi-Fi: spell keys always work, and incantations and the chronicle fall back to built-in text.
-- Quitting takes 0.27 s even with a Spark call in flight (laptop test).
-- `[TODO 08:00]` Jetson numbers: tracking fps and the share of frames with two people tracked (`bench_tracking.py`), and render fps with both players in the fight (F1 overlay).
+We have the full sequence from boot and voice-controlled lobby through Spark-written incantations, a voice-and-body fight and the match chronicle. Both Meta APIs were verified live on a laptop. Using synthesized speech, Muse matched the correct spell in all 17 test sessions and made no wrong matches. Spell keys and built-in text for incantations and the chronicle let the game run when venue Wi-Fi fails. A laptop test also measured 0.27 s to quit with a Spark request still in flight.
+
+`[TODO 08:00]` Add Jetson tracking fps and the share of frames with two people tracked (`bench_tracking.py`), plus render fps during a fight with both players (F1 overlay).
 
 ### What we learned
 
-- Depth makes body input honest. Speeds and distances in meters let us write rules a player can feel.
-- Real-time speech has latency you have to design around, not just measure.
-- Typed contracts between processes let four people build in parallel and test without the hardware.
+Measuring depth in meters let us tie damage and dodges to movements players can feel. We also had to make room for speech latency in the rules: a correct transcript that arrives after the punch is too late without a grace period. Typed contracts let four of us build and test separate processes before we had the hardware together.
 
 ### What's next
 
-- Tune the numbers with more players: push threshold, dodge distances, charge window.
-- More classes and spells, and gestures beyond pushes.
-- An enclosure so the console is one box with a camera and a screen.
-- Spectator view on a second display.
+We want to test with more players and tune the push threshold, dodge distances and charge window. We'd also like more classes, spells and gestures beyond pushes, a single enclosure for the camera and screen, and a spectator view on a second display.
 
 ### Built with
 
