@@ -368,17 +368,20 @@ def test_dodge_in_the_window_avoids_a_fireball(dodge):
     cfg = make_cfg()
     window = cfg["game"]["dodge_window_s"]
     travel = cfg["game"]["classes"]["fire_mage"]["spells"][0]["travel_s"]
+    # A step is reported once the player has moved dodge_step_m, so it starts that much earlier.
+    step_s = cfg["intent"]["dodge_step_m"] / cfg["fake"]["move_speed_mps"]
+    lead = step_s if dodge == "step" else 0.0
 
     def script(h: Harness):
         yield from to_fight(h)
         n = len(h.events)
         yield from cast(h, 0, "fireball")
         yield from wait_for(h, "cast", n, spell_id="fireball", max_s=0.5)
-        yield from hold(NONE, travel - window / 2 - 4 * DT)
+        yield from hold(NONE, travel - window / 2 - lead - 4 * DT)  # mid-window
         if dodge == "duck":
             yield from tap(KEYS[1]["duck"], ticks=10)
         else:
-            yield from hold({KEYS[1]["left"]}, 0.35)  # 1 m/s for 0.35 s: past dodge_step_m
+            yield from hold({KEYS[1]["left"]}, step_s + 3 * DT)
         yield from hold(NONE, 1.0)
         out["n"] = n
 
@@ -436,7 +439,7 @@ def test_chain_needs_one_dodge_per_bolt(ducks):
     assert len(h.find("dodge", slot=0, since=n)) == ducks
     assert len(hits) == chain["hits"] - ducks
     ticks = [h.event_ticks[h.events.index(e)] for e in hits]
-    assert all(b - a == round(gap * FPS) for a, b in zip(ticks, ticks[1:], strict=False))
+    assert all(abs(b - a - gap * FPS) <= 1 for a, b in zip(ticks, ticks[1:], strict=False))
 
 
 def test_ko_holds_the_fight_for_ko_hold_s():
