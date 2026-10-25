@@ -330,7 +330,7 @@ class Fx:
         total = float(self.f["ko_s"])
         k = 1.0 - self.ko_left / max(total, 1e-6)
         w, h = surface.get_size()
-        base = self.theme.text("K.O.!", self.theme.font_px(260), self.ko_rgb)
+        base = self.theme.text("K.O.!", self.theme.font_px(240, display=True), self.ko_rgb)
         scale = 0.7 + 0.5 * min(1.0, k * 2.0)
         img = pygame.transform.smoothscale(
             base, (round(base.get_width() * scale), round(base.get_height() * scale))

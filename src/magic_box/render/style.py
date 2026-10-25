@@ -8,11 +8,13 @@ keyed by (text, font, color), panels by size and color, glow sprites by radius s
 
 import math
 from collections.abc import Mapping
+from pathlib import Path
 
 import numpy as np
 import pygame
 
 RGB = tuple[int, int, int]
+REPO_ROOT = Path(__file__).resolve().parents[3]  # src/magic_box/render/style.py -> repo
 
 
 def rgb(value) -> RGB:
@@ -26,6 +28,23 @@ def lerp_rgb(a: RGB, b: RGB, t: float) -> RGB:
         round(a[1] + (b[1] - a[1]) * t),
         round(a[2] + (b[2] - a[2]) * t),
     )
+
+
+def to_display(surf: pygame.Surface, alpha: bool) -> pygame.Surface:
+    """Convert to the display's pixel format (much faster blits) once a video mode is set."""
+    if pygame.display.get_init() and pygame.display.get_surface() is not None:
+        return surf.convert_alpha() if alpha else surf.convert()
+    return surf
+
+
+def display_font_path(name: str | None) -> str | None:
+    """Resolve `render.theme.display_font` against the repo root; None if unset or missing."""
+    if not name:
+        return None
+    path = Path(name)
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    return str(path) if path.is_file() else None
 
 
 def pulse(t: float, speed: float, steps: int = 8) -> float:
@@ -54,7 +73,8 @@ class Theme:
         self._text: dict[tuple, pygame.Surface] = {}
         self._panels: dict[tuple, pygame.Surface] = {}
         self._glows: dict[tuple, pygame.Surface] = {}
-        self._sized_fonts: dict[int, pygame.font.Font] = {}
+        self._sized_fonts: dict[tuple, pygame.font.Font] = {}
+        self.display_path = display_font_path(t.get("display_font"))
 
     def slot_rgb(self, slot: int | None) -> RGB:
         if slot is None:
@@ -64,10 +84,13 @@ class Theme:
     def font(self, name: str) -> pygame.font.Font:
         return self.fonts[name]
 
-    def font_px(self, px: int) -> pygame.font.Font:
-        font = self._sized_fonts.get(px)
+    def font_px(self, px: int, display: bool = False) -> pygame.font.Font:
+        """The default font at `px`, or the display font (titles, banners) if `display`."""
+        path = self.display_path if display else None
+        key = (px, path)
+        font = self._sized_fonts.get(key)
         if font is None:
-            font = self._sized_fonts[px] = pygame.font.Font(None, px)
+            font = self._sized_fonts[key] = pygame.font.Font(path, px)
         return font
 
     def text(
@@ -91,6 +114,7 @@ class Theme:
                 surf.blit(fg, (0, 0))
             else:
                 surf = fg
+            surf = to_display(surf, alpha=True)
             self._text[key] = surf
         return surf
 
@@ -130,6 +154,7 @@ class Theme:
             pygame.draw.rect(surf, (*color, a), (0, 0, w, h), border_radius=self.radius)
             if edge is not None:
                 pygame.draw.rect(surf, (*edge, 255), (0, 0, w, h), 3, border_radius=self.radius)
+            surf = to_display(surf, alpha=True)
             self._panels[key] = surf
         return surf
 
@@ -140,6 +165,7 @@ class Theme:
         surf = self._glows.get(key)
         if surf is None:
             surf = make_glow(r, color, core)
+            surf = to_display(surf, alpha=False)
             self._glows[key] = surf
         return surf
 

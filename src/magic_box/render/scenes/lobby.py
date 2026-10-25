@@ -27,8 +27,9 @@ def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
     th = style.theme
     assert th is not None
     w, _ = surface.get_size()
-    th.blit_text(surface, "MAGIC BOX", "giant", th.c["gold"], "midtop", (w // 2, 24))
-    th.blit_text(surface, "1 v 1 MAGIC DUEL", "text", th.c["dim"], "midtop", (w // 2, 160))
+    th.blit_text(
+        surface, "MAGIC BOX", th.font_px(130, display=True), th.c["gold"], "midtop", (w // 2, 8)
+    )
     half = w // 2
     for p in view.players:
         _draw_card(surface, style, p, view, p.slot * half, half, t)

@@ -20,7 +20,7 @@ Draws the `GameView` and the latest camera frame as layout C (two 960x1080 halve
 ## Files
 - `window.py`: `Window` (`pump`, `tick`, `draw`, `close`, and `render(view, frame, states, now)` which draws without flipping, for tests and previews). Picks the scene, draws the banner (per half with a pop in the fight, a bottom ribbon elsewhere, the victory scene uses it as its headline), the round timer, FX and the KO overlay, and plays sounds. Audio is off when headless.
 - `layout.py`: layout C geometry (halves, crop and self-view rects).
-- `style.py`: `Theme` (fonts and colors from `render.theme`, a bounded text cache with drop shadows, cached panels and additive glow sprites) plus widgets: bars, rings, chips, check marks, effect icons, `edge_glow`, the scene background.
+- `style.py`: `Theme` (fonts and colors from `render.theme`, the optional display font, a bounded text cache with drop shadows, cached panels and additive glow sprites) plus widgets: bars, rings, chips, check marks, effect icons, `edge_glow`, the scene background.
 - `hud.py`: `Hud` (stateful). Viewer panel: name, MIC and TRACKED chips, distance with a three-zone meter, basic-attack cooldown bar, eased HP bar with a damage ghost (low HP pulses), mana bar, three spell rows (cost badge, name, release cue, incantation; greyed when unaffordable; the charged one glows with a charge ring and the big cue), effect icons with countdowns above the panel. Opponent bar at the top with their effects and a pulsing "CHARGING <SPELL>!" warning. Round timer at the top center (red under `hud.timer_low_s`). `release_cue` turns `SpellView.release` into text.
 - `projectiles.py`: projectiles flying from the attacker's wrist toward the viewer. Per spell family (`render.projectiles.family`): fire tongues, lightning arcs, holy rays or a basic orb, with an additive glow and a stateless trail. Red pulsing ring and "DODGE!" in the dodge window.
 - `fx.py`: `Fx` driven by `GameView.events`: hit = red flash + shake on the target's half, "-N" by their HP bar and "N" over the opponent on the attacker's half; dodge "DODGE!" / "MISS"; block flash "BLOCKED!"; heal sparkles "+N"; buff edge glow; cast edge pulse; KO banner with slow-motion FX. Particles and texts are capped (`fx.max_particles`, `fx.max_texts`).
@@ -41,7 +41,7 @@ Measured on the dev laptop (Apple M5, SDL dummy video): a populated fight frame 
 
 ## Open TODOs
 - Measure the fight frame on the Jetson with the live camera. If it is slow: lower `fx.max_particles`, `projectiles.trail_steps` and `projectiles.glow_max_px`.
-- The default pygame font is used; an OFL display font under `assets/fonts/` would look better.
+- Titles, the victory headline and the KO banner use Cinzel Decorative Bold (`assets/fonts/`, SIL OFL, license beside it; `render.theme.display_font`). Everything players must read fast (HUD, fight banners) stays in the bold default font.
 - Sound is synthesized, not designed; real samples could go in `assets/sounds/`.
 
 ## Jetson fps fallbacks

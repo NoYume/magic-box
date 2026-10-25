@@ -20,10 +20,12 @@ def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
     assert th is not None
     c = th.c
     w = surface.get_width()
-    th.blit_text(surface, "MAGIC BOX", "giant", c["gold"], "midtop", (w // 2, 50))
-    th.blit_text(surface, "SYSTEM CHECK", "big", c["dim"], "midtop", (w // 2, 225))
+    th.blit_text(
+        surface, "MAGIC BOX", th.font_px(150, display=True), c["gold"], "midtop", (w // 2, 30)
+    )
+    th.blit_text(surface, "SYSTEM CHECK", "big", c["dim"], "midtop", (w // 2, 240))
     rows = max(1, len(view.checks))
-    rect = pygame.Rect((w - CARD_W) // 2, 300, CARD_W, rows * ROW_H + 40)
+    rect = pygame.Rect((w - CARD_W) // 2, 310, CARD_W, rows * ROW_H + 40)
     card(surface, style, rect, edge=c["panel_edge"])
     y = rect.y + 20
     if not view.checks:

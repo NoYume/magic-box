@@ -32,6 +32,16 @@ def test_glow_is_cached_per_radius_step(theme):
     assert theme.glow(17, (255, 0, 0)).get_size() == (48, 48)
 
 
+def test_display_font_resolves_and_falls_back(theme):
+    from magic_box.render.style import display_font_path
+
+    assert theme.display_path is not None and Path(theme.display_path).is_file()
+    assert display_font_path("assets/fonts/missing.ttf") is None
+    assert display_font_path(None) is None
+    assert theme.font_px(40, display=True) is not theme.font_px(40)
+    assert (Path(theme.display_path).parent / "CinzelDecorative-OFL.txt").is_file()
+
+
 def test_helpers():
     assert pretty_id("holy_knight") == "Holy Knight"
     assert lerp_rgb((0, 0, 0), (200, 100, 50), 0.5) == (100, 50, 25)
