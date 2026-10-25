@@ -24,14 +24,14 @@ Per-player speech recognition. Runs in its own process, one Muse WebSocket per p
 - `matcher.py`: rapidfuzz incantation match using `match_threshold` / `perfect_threshold`.
 
 ## Test without the Jetson
-There is no `tests/voice/` yet; create it and test `matcher.py` with sample transcripts. In the app, the spell keys are the fallback and always work:
+Tests live in `tests/voice/` (`test_mic.py` uses `fake_sd.py`, no real mic). In the app, the spell keys are the fallback and always work:
 ```
 uv run python -m magic_box --fake     # P1: 1 2 3, P2: 8 9 0
 ```
 Real mics: set `voice.mics` in `config.local.yaml` (see `docs/hardware.md`).
 
 ## Open TODOs
-- `TODO(Nikhil)` in `matcher.py`, `mic.py` (3), `muse_stream.py` (4), `process.py`.
+- `TODO(Nikhil)` in `matcher.py`, `process.py`.
 - Open decision (Daniel): mic hardware model and channel routing.
 - Verify the Muse endpoint `voice.url` and model against the dev.meta.ai docs before first use.
 - Measure partial-transcript latency at M4.
