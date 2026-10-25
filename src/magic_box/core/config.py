@@ -235,6 +235,14 @@ def _check_game_effects(cfg: Config, classes: dict, problems: list[str]) -> None
     lo, hi = _get(cfg, "game", "boot_min_s"), _get(cfg, "game", "boot_max_s")
     if _is_num(lo) and _is_num(hi) and lo > hi:
         problems.append("game.boot_min_s: must be <= game.boot_max_s")
+    words = _get(cfg, "game", "name_max_words")
+    if not isinstance(words, int) or isinstance(words, bool) or words < 1:
+        problems.append("game.name_max_words: must be an integer >= 1")
+    stop = _get(cfg, "game", "name_stop_words")
+    if not isinstance(stop, list) or not all(
+        isinstance(w, str) and w and not any(c.isspace() for c in w) for w in stop
+    ):
+        problems.append("game.name_stop_words: must be a list of single words, quoted")
     seen: dict[str, str] = {}
     for cls_name, cls in classes.items():
         _check_keywords(cls_name, _get(cls, "keywords"), seen, problems)

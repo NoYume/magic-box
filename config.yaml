@@ -118,6 +118,14 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
   victory_max_s: 30.0
   pause_after_s: 2.0
   name_max_chars: 12
+  name_max_words: 2           # a lobby name is at most this many words
+  name_stop_words: [          # never part of a lobby name (chatter); quoted so YAML keeps yes/no/on as words
+    "a", "an", "the", "and", "or", "but", "i", "im", "i'm", "it", "it's", "its", "me", "my", "you",
+    "we", "pick", "picks", "choose", "chooses", "want", "wanna", "play", "playing", "as", "with",
+    "is", "be", "to", "do", "please", "um", "uh", "oh", "ready", "here", "good", "fine", "ok",
+    "okay", "yes", "yeah", "no", "done", "going", "gonna", "trying", "not", "so", "just", "in",
+    "on", "at", "this", "that", "what", "how", "hello", "hi", "hey", "now", "too", "thanks",
+    "thank", "wait", "cool", "nice", "great", "sure", "right", "let's", "lets", "go", "start", "fight"]
   boot_min_s: 2.0             # boot: shortest self-check screen; leaves once the camera is ok
   boot_max_s: 8.0             # boot: go to the lobby at this point whatever the checks say
   hands_up_hold_s: 0.3        # (guess) hands up, or down, must hold this long to count (Jetson flicker)

@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 
 import pytest
@@ -105,32 +106,65 @@ def test_hands_held_from_victory_wait_in_lobby_until_lowered():
     [
         ("my name is ada lovelace!", "Ada Lovelace"),
         ("I'm Bo.", "Bo"),
-        ("It's Zoë", "Zoë"),
-        ("call me maximilian the great", "Maximilian T"),
+        ("my name's Cy", "Cy"),
+        ("hi my name is ada", "Ada"),
+        ("hi, my name is Ada", "Ada"),
+        ("call me Ada Lovelace", "Ada Lovelace"),
+        ("call me ada lovelace the third", "Ada Lovelace"),
+        ("call me maximilian bartholomew", "Maximilian B"),  # name_max_chars (12)
+        ("call me maximilian the great", "Maximilian"),
+        ("ok so i am bo", "Bo"),
+        ("Bob", "Bob"),
+        ("Ada Lovelace", "Ada Lovelace"),
+        ("ada's", "Ada's"),
+        ("Zoë!", "Zoë"),
+        ("It's Zoë", None),  # "it's" is no prefix, and a stop word
+        ("this is cool", None),
+        ("it's working", None),
+        ("I'm ready", None),
+        ("i am not ready", None),
+        ("so what do I do now", None),
+        ("Ada Lovelace Byron", None),  # no prefix: 1 or 2 words only
+        ("hello", None),
+        ("hi", None),
+        ("okay", None),
         ("   ", None),
         ("my name is", None),
-        ("ada's", "Ada's"),
         ("'", None),
         ("my name is -", None),
+        ("myname is ada", None),  # word boundaries
     ],
 )
 def test_parse_name(text, name):
-    assert parse_name(text, 12) == name
+    assert parse_name(text, CFG) == name
 
 
 @pytest.mark.parametrize(
     "text,name,class_id",
     [
         ("ada", "Ada", None),
+        ("Bob", "Bob", None),
+        ("hello", None, None),
+        ("I'm ready", None, None),
         ("fire", None, "fire_mage"),
+        ("lightning", None, "lightning_mage"),
         ("My name is Ada, fire", "Ada", "fire_mage"),
+        ("hi, my name is Ada, fire", "Ada", "fire_mage"),
         ("my name is Ada and I choose lightning", "Ada", "lightning_mage"),
         ("I'm Zoë the holy knight", "Zoë", "holy_knight"),
         ("I want to be a knight", None, "holy_knight"),
         ("I am a fire mage", None, "fire_mage"),
         ("my name is knight", None, "holy_knight"),
         ("fire is my name", None, "fire_mage"),
+        ("Ada fire", None, "fire_mage"),  # a keyword is never part of a short-reply name
     ],
 )
 def test_parse_lobby_speech(text, name, class_id):
     assert parse_lobby_speech(text, CFG) == (name, class_id)
+
+
+def test_stop_words_come_from_config():
+    cfg = copy.deepcopy(CFG)
+    cfg["game"]["name_stop_words"] = ["bob"]
+    assert parse_name("Bob", cfg) is None
+    assert parse_name("hello", cfg) == "Hello"

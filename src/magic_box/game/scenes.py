@@ -9,52 +9,77 @@ import string
 from magic_box.core.config import Config
 from magic_box.game.classes import class_keywords, parse_class
 
-NAME_PREFIXES = ("my name is", "i'm", "i am", "this is", "call me", "it's")
-# With a class keyword in the same transcript, the name stops at the first of these.
-NAME_STOP_WORDS = frozenset(
-    "a an the and or but i im i'm pick picks choose chooses want wanna play playing as with"
-    " is be to will please um uh".split()
+# Name prefixes, searched anywhere in the transcript on word boundaries; the first wins.
+# "this is" and "it's" are left out on purpose: "this is cool" must not rename anyone.
+NAME_PREFIXES: tuple[tuple[str, ...], ...] = (
+    ("my", "name", "is"),
+    ("my", "name's"),
+    ("call", "me"),
+    ("i", "am"),
+    ("i'm",),
 )
 _TOKENS = re.compile(r"[^\W\d_]+(?:['-][^\W\d_]+)*|[^\w\s'-]")  # words, or one punctuation
 
 
-def _strip_prefix(s: str) -> tuple[str, bool]:
-    for prefix in NAME_PREFIXES:
-        if s == prefix or s.startswith(prefix + " "):
-            return s[len(prefix) :], True
-    return s, False
+def _tokens(text: str) -> list[str]:
+    return _TOKENS.findall(text.lower().replace("’", "'"))
 
 
-def parse_name(text: str, max_chars: int) -> str | None:
-    """Turn a spoken phrase into a display name, or None when nothing is left."""
-    s, _ = _strip_prefix(text.lower().replace("’", "'").strip())
-    s = "".join(c for c in s if c.isalpha() or c in " -'")
+def _is_word(token: str) -> bool:
+    return token[0].isalpha()
+
+
+def _after_prefix(tokens: list[str]) -> int | None:
+    """Index just after the first name prefix in `tokens`, or None."""
+    for i in range(len(tokens)):
+        for prefix in NAME_PREFIXES:
+            if tuple(tokens[i : i + len(prefix)]) == prefix:
+                return i + len(prefix)
+    return None
+
+
+def _format_name(words: list[str], max_chars: int) -> str | None:
+    s = "".join(c for c in " ".join(words) if c.isalpha() or c in " -'")
     s = string.capwords(s)[:max_chars].strip()  # capwords: "ada's" -> "Ada's", not "Ada'S"
     return s if any(c.isalpha() for c in s) else None
 
 
-def parse_lobby_speech(text: str, cfg: Config) -> tuple[str | None, str | None]:
-    """(name, class id) from one lobby transcript; either may be None.
+def parse_name(text: str, cfg: Config) -> str | None:
+    """A display name from one lobby transcript, or None to keep the current name.
 
-    No class keyword: the whole transcript is a name (`parse_name`). With a keyword the
-    class is picked, and a name is taken only after a name prefix, up to the first keyword,
-    punctuation or filler word: "My name is Ada, fire" gives ("Ada", "fire_mage"), and
-    "my name is knight" gives (None, "holy_knight").
+    - After a name prefix anywhere ("hi, my name is Ada"): the words that follow, up to the
+      first class keyword, punctuation mark or stop word, at most `game.name_max_words`.
+    - No prefix: the transcript is a name only if it is 1 to `name_max_words` words and none
+      is a class keyword or stop word ("Ada"); chatter ("so what do I do now") is ignored.
     """
-    max_chars = cfg["game"]["name_max_chars"]
-    class_id = parse_class(text, cfg)
-    if class_id is None:
-        return parse_name(text, max_chars), None
-    rest, had_prefix = _strip_prefix(text.lower().replace("’", "'").strip())
-    if not had_prefix:
-        return None, class_id
+    g = cfg["game"]
+    stop = {w.lower() for w in g["name_stop_words"]}
     keywords = class_keywords(cfg)
-    words: list[str] = []
-    for tok in _TOKENS.findall(rest):
-        if not tok[0].isalpha() or tok in keywords or tok in NAME_STOP_WORDS:
-            break
-        words.append(tok)
-    return parse_name(" ".join(words), max_chars), class_id
+    max_words = g["name_max_words"]
+    tokens = _tokens(text)
+    after = _after_prefix(tokens)
+    if after is not None:
+        words: list[str] = []
+        for tok in tokens[after:]:
+            if not _is_word(tok) or tok in keywords or tok in stop:
+                break
+            words.append(tok)
+            if len(words) == max_words:
+                break
+    else:
+        words = [t for t in tokens if _is_word(t)]
+        if not 1 <= len(words) <= max_words or any(w in stop or w in keywords for w in words):
+            return None
+    return _format_name(words, g["name_max_chars"])
+
+
+def parse_lobby_speech(text: str, cfg: Config) -> tuple[str | None, str | None]:
+    """(name, class id) from one lobby transcript; either may be None (keep the current one).
+
+    "My name is Ada, fire" gives ("Ada", "fire_mage"); "my name is knight" gives
+    (None, "holy_knight"); "so what do I do now" gives (None, None).
+    """
+    return parse_name(text, cfg), parse_class(text, cfg)
 
 
 class Hold:

@@ -218,7 +218,10 @@ def test_speech_sets_names_in_lobby():
         ("My name is Ada, fire", "fire_mage", "Ada"),
         ("my name is ada and i pick holy", "holy_knight", "Ada"),
         ("call me Bo the lightning mage", "lightning_mage", "Bo"),
-        ("this is Cy playing lightning", "lightning_mage", "Cy"),
+        ("this is Cy playing lightning", "lightning_mage", "P1"),  # "this is": no prefix
+        ("so what do I do now", "fire_mage", "P1"),
+        ("hi my name is ada", "fire_mage", "Ada"),
+        ("I'm ready", "fire_mage", "P1"),
         ("I am a fire mage", "fire_mage", "P1"),
         ("my name is knight", "holy_knight", "P1"),  # the name is the keyword: class only
     ],
@@ -228,6 +231,15 @@ def test_lobby_speech_picks_class_by_keyword_else_name(text, class_id, name):
     view = speak(e, to_lobby(e), 0, text)
     assert (view.players[0].class_id, view.players[0].name) == (class_id, name)
     assert view.players[1].class_id == "lightning_mage"
+
+
+def test_lobby_chatter_keeps_the_name():
+    e = Engine(CFG)
+    t = to_lobby(e)
+    speak(e, t, 0, "call me ada")
+    for i, chatter in enumerate(["so what do I do now", "this is cool", "hello", "I'm ready"]):
+        view = speak(e, t + (i + 1) * DT, 0, chatter)
+        assert view.players[0].name == "Ada" and view.players[0].heard == chatter
 
 
 def test_keyword_as_name_keeps_the_old_name():

@@ -92,3 +92,24 @@ def test_game_numbers_are_numbers_at_least_0(key, value):
 def test_boot_min_must_not_exceed_boot_max():
     found = problems(lambda c: c["game"].update(boot_min_s=9.0, boot_max_s=8.0))
     assert any("game.boot_min_s" in p for p in found)
+
+
+@pytest.mark.parametrize("words", [None, "ready", [True], ["two words"], [""]])
+def test_name_stop_words_must_be_a_list_of_single_words(words):
+    found = problems(lambda c: c["game"].update(name_stop_words=words))
+    assert any("game.name_stop_words" in p for p in found)
+
+
+def test_name_stop_words_cover_the_ruling():
+    words = set(CFG["game"]["name_stop_words"])
+    ruling = (
+        "ready here good fine ok okay yes yeah no done going gonna trying not so just playing"
+        " in on at the this that what how hello hi hey now"
+    ).split()
+    assert set(ruling) <= words
+
+
+@pytest.mark.parametrize("value", [0, True, 1.5])
+def test_name_max_words_must_be_an_integer_at_least_1(value):
+    found = problems(lambda c: c["game"].update(name_max_words=value))
+    assert any("game.name_max_words" in p for p in found)
