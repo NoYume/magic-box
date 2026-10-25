@@ -13,3 +13,6 @@ recordings/*
 .DS_Store
 dist/
 node_modules/
+
+# Arena debug logs (jetson/debug_log.py)
+logs/

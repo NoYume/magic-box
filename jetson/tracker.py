@@ -21,6 +21,8 @@ import cv2
 import numpy as np
 import pyzed.sl as sl
 import websockets
+from debug_log import DEFAULT_LOG_DIR, DebugLog, chain_http, receive
+from static_site import DEFAULT_GAME_DIR, as_process_request, static_site
 
 # Indices into the BODY_34 keypoint array.
 KEYPOINTS = {
@@ -35,7 +37,7 @@ KEYPOINTS = {
 DETECTION_CONFIDENCE = 40
 FRAME_WIDTH = 960  # JPEG width; height follows the camera aspect ratio
 DEPTH_WIDTH = 160  # depth map width; height follows the camera aspect ratio
-JPEG_QUALITY = 70
+JPEG_QUALITY = 85  # small hands lose finger detail below this (debug log 20261024-235023)
 MSG_FRAME = 0x01
 MSG_DEPTH = 0x02
 FRAME_HEADER = struct.Struct("<BBI")  # type, reserved, capture seq
@@ -53,6 +55,12 @@ def parse_args():
     parser.add_argument("--record", help="record the live session to this .svo2 path")
     parser.add_argument("--max-range", type=float, default=1.6, help="depth and bodies beyond this (meters) are dropped: ignores bystanders")
     parser.add_argument("--depth", default="PERFORMANCE", help="ZED DEPTH_MODE (PERFORMANCE, NEURAL, ...)")
+    parser.add_argument(
+        "--static", default=str(DEFAULT_GAME_DIR), help="game page served on this port ('' = off)"
+    )
+    parser.add_argument(
+        "--log-dir", default=str(DEFAULT_LOG_DIR), help="game debug log directory, key L ('' = off)"
+    )
     return parser.parse_args()
 
 
@@ -191,20 +199,25 @@ class CaptureThread(threading.Thread):
             last = now
 
 
-async def serve(capture, port):
+async def serve(capture, port, static_dir, log_dir):
     clients = set()
+    debug_log = DebugLog(log_dir) if log_dir else None
 
     async def handler(ws):
         clients.add(ws)
         print(f"[tracker] client connected ({len(clients)})")
         await ws.send(capture.hello())
         try:
-            await ws.wait_closed()
+            await receive(ws, debug_log)  # debug log records and marks from the game
         finally:
             clients.discard(ws)
 
-    async with websockets.serve(handler, "0.0.0.0", port, max_size=None):
+    site = static_site(static_dir) if static_dir else None
+    hook = as_process_request(chain_http(debug_log, site))
+    async with websockets.serve(handler, "0.0.0.0", port, max_size=None, process_request=hook):
         print(f"[tracker] streaming on ws://0.0.0.0:{port}")
+        if static_dir:
+            print(f"[tracker] game page: http://<this-host>:{port}/ (from {static_dir})")
         sent_seq = 0
         last_log = time.time()
         while True:
@@ -214,6 +227,8 @@ async def serve(capture, port):
                 websockets.broadcast(clients, depth)  # depth first so it is ready when the frame is processed
                 websockets.broadcast(clients, frame)
                 websockets.broadcast(clients, text)
+                if debug_log:
+                    debug_log.on_capture(frame, depth, text)
             if time.time() - last_log > STATS_PERIOD_S:
                 print(f"[tracker] {capture.fps:.1f} fps, {len(clients)} client(s)")
                 websockets.broadcast(clients, json.dumps({"type": "stats", "fps": round(capture.fps, 1)}))
@@ -227,7 +242,7 @@ def main():
     capture = CaptureThread(zed)
     capture.start()
     try:
-        asyncio.run(serve(capture, args.port))
+        asyncio.run(serve(capture, args.port, args.static, args.log_dir))
     finally:
         zed.disable_recording()
         zed.close()

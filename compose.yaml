@@ -1,0 +1,44 @@
+# Arena on the Jetson. The tracker serves the game page and the camera stream on one port:
+#   docker compose up --build -d arena                    # live ZED X
+#   docker compose --profile fake up --build -d arena-fake   # no camera: synthetic bodies and depth
+# Then open http://<jetson>:8765/ in a browser on any machine on the network.
+# Only one process can open the ZED X at a time: stop anything else that is using it first.
+name: magic-box-arena
+
+services:
+  arena:
+    build:
+      context: .
+      dockerfile: jetson/Dockerfile
+    image: magic-box-arena:latest
+    container_name: magic-box-arena
+    runtime: nvidia
+    privileged: true # GMSL camera devices
+    network_mode: host # serves :8765 directly
+    ipc: host
+    volumes:
+      - /dev:/dev
+      - /tmp:/tmp # nvargus socket (/tmp/argus_socket)
+      - /var/nvidia/nvcam/settings:/var/nvidia/nvcam/settings
+      - /etc/systemd/system/zed_x_daemon.service:/etc/systemd/system/zed_x_daemon.service:ro
+      - zed-resources:/usr/local/zed/resources # AI models; the first run optimizes them (minutes)
+      - zed-settings:/usr/local/zed/settings # camera calibration
+      - ./logs:/app/logs # the game's debug log (key L, ?log=1), see jetson/debug_log.py
+    command: ["python3", "jetson/tracker.py", "--max-range", "1.6"]
+    # No restart policy on purpose: at boot it would race other ZED users for the camera.
+
+  arena-fake:
+    profiles: [fake]
+    build:
+      context: .
+      dockerfile: jetson/Dockerfile
+    image: magic-box-arena:latest
+    container_name: magic-box-arena-fake
+    network_mode: host
+    volumes:
+      - ./logs:/app/logs
+    command: ["python3", "jetson/fake_tracker.py"]
+
+volumes:
+  zed-resources:
+  zed-settings:

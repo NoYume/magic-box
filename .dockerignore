@@ -1,0 +1,5 @@
+# The Arena image needs only the tracker and the game page.
+*
+!jetson/
+!game/
+**/__pycache__

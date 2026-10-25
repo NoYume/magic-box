@@ -18,6 +18,8 @@ import time
 import cv2
 import numpy as np
 import websockets
+from debug_log import DEFAULT_LOG_DIR, DebugLog, chain_http, receive
+from static_site import DEFAULT_GAME_DIR, as_process_request, static_site
 
 PORT = 8765
 FPS = 30
@@ -102,26 +104,30 @@ def fake_frame(t, seq):
 
 async def main():
     clients = set()
+    debug_log = DebugLog(DEFAULT_LOG_DIR)
     hello = json.dumps({"type": "hello", "frame": [FRAME_W, FRAME_H], "depth": [DEPTH_W, DEPTH_H]})
 
     async def handler(ws):
         clients.add(ws)
         await ws.send(hello)
         try:
-            await ws.wait_closed()
+            await receive(ws, debug_log)
         finally:
             clients.discard(ws)
 
-    async with websockets.serve(handler, "0.0.0.0", PORT):
-        print(f"fake tracker on ws://localhost:{PORT}")
+    process_request = as_process_request(chain_http(debug_log, static_site(DEFAULT_GAME_DIR)))
+    async with websockets.serve(handler, "0.0.0.0", PORT, process_request=process_request):
+        print(f"fake tracker on ws://localhost:{PORT}, game page on http://localhost:{PORT}/")
         start = time.time()
         seq = 0
         while True:
             t = time.time() - start
             seq = (seq + 1) % 2**32  # one capture: depth, frame and bodies share the seq
-            websockets.broadcast(clients, fake_depth(t, seq))
-            websockets.broadcast(clients, fake_frame(t, seq))
-            websockets.broadcast(clients, fake_bodies(t, seq))
+            depth, frame, bodies = fake_depth(t, seq), fake_frame(t, seq), fake_bodies(t, seq)
+            websockets.broadcast(clients, depth)
+            websockets.broadcast(clients, frame)
+            websockets.broadcast(clients, bodies)
+            debug_log.on_capture(frame, depth, bodies)
             await asyncio.sleep(1 / FPS)
 
 

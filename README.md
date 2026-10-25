@@ -66,6 +66,32 @@ open "http://<jetson-ip>:5173/?src=zed&ws=ws://<jetson-ip>:8765"
 For a kiosk, start Chrome with `--autoplay-policy=no-user-gesture-required` so sound plays
 without a click.
 
+### Docker on the Jetson
+The image (`jetson/Dockerfile`) carries the ZED SDK, pyzed and the tracker's packages, so the host
+needs only JetPack, the ZED Link driver and Docker. The tracker serves the game page and the camera
+stream on one port, so nothing else needs to run:
+```bash
+docker compose up --build -d arena                       # live ZED X
+docker compose --profile fake up --build -d arena-fake   # no camera: synthetic bodies and depth
+docker compose logs -f arena
+open http://<jetson-ip>:8765/                            # redirects to ?src=zed
+docker compose down
+```
+Only one process can open the ZED X, so stop anything else using it first. The first live run
+downloads and optimizes the body-tracking model, which takes a few minutes; the result is kept in
+the `zed-resources` volume.
+
+### Debug log (why was that detection iffy?)
+Open `http://<jetson-ip>:8765/?src=zed&debug=1&log=1`, or press `L` in the game to start logging
+and `B` to mark a bad moment. The tracker writes what the browser saw for each capture (hand
+landmarks, sign scores and finger features, depth, rejections, body slots and posture) next to the
+ZED skeletons and raw frames, in `logs/<session>/` on the Jetson; a mark also keeps every frame of
+the last 10 s. Live views: `/debug/annotated.jpg` (the newest record drawn on its frame),
+`/debug/frame.jpg`, `/debug/state.json`. Summarize and render a session:
+```bash
+python3 jetson/debug_report.py logs/<session> --render --marks   # writes logs/<session>/annotated/
+```
+
 ## Tuning on the real rig
 | What | Where |
 |---|---|
