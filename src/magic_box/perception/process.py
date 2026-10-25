@@ -13,7 +13,7 @@ from magic_box.core.contracts import Frame, PlayerState
 from magic_box.perception.tracker import PlayerTracker
 from magic_box.perception.zed_source import CameraError, ZedSource
 from magic_box.pipeline.frame_bus import FrameBus
-from magic_box.pipeline.streams import DropOldestQueue
+from magic_box.pipeline.streams import DropOldestQueue, ParentAwareStop
 
 
 def log_line(msg: str) -> None:
@@ -82,7 +82,7 @@ def run(cfg: Config, state_q: DropOldestQueue, frame_bus_name: str, stop: Event)
     bus = FrameBus.attach(frame_bus_name, cam["image_width"], cam["image_height"])
     source = ZedSource(cfg)
     try:
-        run_loop(source, PlayerTracker(cfg), bus.write, state_q.put, stop, cfg)
+        run_loop(source, PlayerTracker(cfg), bus.write, state_q.put, ParentAwareStop(stop), cfg)
     finally:
         source.close()
         bus.close()

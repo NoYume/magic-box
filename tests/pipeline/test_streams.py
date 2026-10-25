@@ -21,3 +21,35 @@ def test_cross_process_order_preserved():
     proc.start()
     proc.join(10)
     assert drain_until(q, 100) == list(range(100))
+
+
+def test_parent_aware_stop_follows_event_and_parent():
+    from magic_box.pipeline.streams import ParentAwareStop
+
+    class Ev:
+        flag = False
+
+        def is_set(self):
+            return self.flag
+
+        def wait(self, t=None):
+            return self.flag
+
+    now = [0.0]
+    parent = [True]
+    checks = []
+
+    def alive():
+        checks.append(now[0])
+        return parent[0]
+
+    ev = Ev()
+    s = ParentAwareStop(ev, alive, check_s=1.0, clock=lambda: now[0])
+    assert not s.is_set() and not s.is_set()
+    assert checks == [0.0]  # the parent is polled once per second, not per call
+    now[0] = 1.1
+    parent[0] = False
+    assert s.is_set() and s.is_set()  # stays set once the parent is gone
+    ev2 = Ev()
+    ev2.flag = True
+    assert ParentAwareStop(ev2, alive).is_set()

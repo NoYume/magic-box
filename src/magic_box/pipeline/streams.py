@@ -5,6 +5,8 @@ Owner: Nikhil
 
 import multiprocessing
 import queue
+import time
+from collections.abc import Callable
 from multiprocessing.context import BaseContext
 
 
@@ -57,3 +59,45 @@ class DropOldestQueue:
     @property
     def dropped(self) -> int:
         return self._dropped.value
+
+
+class ParentAwareStop:
+    """Wraps a stop Event so a child also stops when its parent process is gone.
+
+    After a native crash or an OOM kill of the game, children would keep the ZED and the
+    mics open and block the launcher's restart. The parent check runs at most once per
+    `check_s`, so calling `is_set()` every frame stays cheap.
+    """
+
+    def __init__(
+        self,
+        stop,
+        parent_alive: Callable[[], bool] | None = None,
+        check_s: float = 1.0,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._stop = stop
+        self._parent_alive = parent_alive if parent_alive is not None else _parent_alive
+        self._check_s = check_s
+        self._clock = clock
+        self._next_check = 0.0
+        self._orphaned = False
+
+    def is_set(self) -> bool:
+        if self._stop.is_set() or self._orphaned:
+            return True
+        now = self._clock()
+        if now >= self._next_check:
+            self._next_check = now + self._check_s
+            if not self._parent_alive():
+                self._orphaned = True
+                return True
+        return False
+
+    def wait(self, timeout: float | None = None) -> bool:
+        return self._stop.wait(timeout)
+
+
+def _parent_alive() -> bool:
+    parent = multiprocessing.parent_process()
+    return parent is None or parent.is_alive()

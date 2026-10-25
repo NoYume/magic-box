@@ -19,7 +19,7 @@ from typing import Any
 
 from magic_box.core.config import Config
 from magic_box.core.contracts import VoiceConfig, VoiceEvent
-from magic_box.pipeline.streams import DropOldestQueue
+from magic_box.pipeline.streams import DropOldestQueue, ParentAwareStop
 from magic_box.voice.matcher import keywords_for, match_incantation
 from magic_box.voice.mic import MicError, MicHub
 from magic_box.voice.muse_stream import MuseStream
@@ -456,12 +456,13 @@ async def serve(
 def run(cfg: Config, voice_q: DropOldestQueue, control_q: DropOldestQueue, stop: Event) -> None:
     """Capture mics, stream to Muse, publish VoiceEvents; read VoiceConfig from control_q."""
     v = cfg["voice"]
+    parent_aware = ParentAwareStop(stop)
     asyncio.run(
         serve(
             cfg,
             voice_q.put,
             control_q.drain,
-            stop.is_set,
+            parent_aware.is_set,
             env=os.environ,
             stream_factory=lambda slot, key: MuseStream(
                 v["url"], key, v["model"], v["handshake_timeout_s"]
