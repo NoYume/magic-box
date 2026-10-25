@@ -90,7 +90,7 @@ def test_missing_portaudio_raises_mic_error_and_stop_closes():
     assert all(s.closed for s in sd.streams)
 
 
-def test_partial_start_failure_closes_opened_streams():
+def test_one_dead_device_only_fails_its_own_slot():
     class Flaky(FakeSD):
         def InputStream(self, **kwargs):  # noqa: N802
             if kwargs["device"] == "b":
@@ -101,9 +101,23 @@ def test_partial_start_failure_closes_opened_streams():
     h = hub(
         [{"slot": 0, "device": "a", "channel": 0}, {"slot": 1, "device": "b", "channel": 0}], sd, []
     )
-    with pytest.raises(MicError, match="b"):
+    h.start()
+    assert h.failed_slots == {1}
+    assert [s.started and not s.closed for s in sd.streams] == [True]  # slot 0 keeps listening
+
+
+def test_all_devices_dead_still_raises_and_closes():
+    class Dead(FakeSD):
+        def InputStream(self, **kwargs):  # noqa: N802
+            raise OSError("boom")
+
+    h = hub(
+        [{"slot": 0, "device": "a", "channel": 0}, {"slot": 1, "device": "b", "channel": 0}],
+        Dead(),
+        [],
+    )
+    with pytest.raises(MicError):
         h.start()
-    assert sd.streams and all(s.closed for s in sd.streams)
 
 
 def test_sink_error_is_isolated_per_slot():

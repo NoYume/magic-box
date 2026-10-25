@@ -59,6 +59,7 @@ class MicHub:
         self._sink = sink
         self._sd = sd
         self._streams: list[Any] = []
+        self.failed_slots: set[int] = set()  # slots whose own device would not open
         grouped: dict[Any, dict[int, int]] = {}
         for m in mics:
             device = m.get("device")  # missing or None: the system default input
@@ -72,16 +73,27 @@ class MicHub:
                 import sounddevice as sd
             except (ImportError, OSError) as e:
                 raise MicError(f"sounddevice/PortAudio unavailable: {e}") from e
+        errors: list[MicError] = []
         for dev in self._devices:
+            stream = None
             try:
                 stream = self._open(sd, dev)
                 self._streams.append(stream)
                 stream.start()
             except Exception as e:
-                self.stop()
-                if isinstance(e, MicError):
-                    raise
-                raise MicError(f"cannot start mic device {dev.device!r}: {e}") from e
+                # A dead device only silences its own slots; the other device keeps working.
+                if stream is not None:
+                    self._close_stream(stream)
+                    self._streams.remove(stream)
+                self.failed_slots.update(dev.slot_channels)
+                errors.append(
+                    e
+                    if isinstance(e, MicError)
+                    else MicError(f"cannot start mic device {dev.device!r}: {e}")
+                )
+        if len(errors) == len(self._devices):  # nothing works at all
+            self.stop()
+            raise errors[0]
 
     def _open(self, sd: Any, dev: _Device) -> Any:
         def make(rate: int) -> Any:
@@ -128,11 +140,15 @@ class MicHub:
 
         return callback
 
+    @staticmethod
+    def _close_stream(stream: Any) -> None:
+        for op in (stream.stop, stream.close):
+            try:
+                op()
+            except Exception:
+                pass
+
     def stop(self) -> None:
         streams, self._streams = self._streams, []
         for stream in streams:
-            for op in (stream.stop, stream.close):
-                try:
-                    op()
-                except Exception:
-                    pass
+            self._close_stream(stream)

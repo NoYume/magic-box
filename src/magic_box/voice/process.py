@@ -431,8 +431,12 @@ async def serve(
         await _idle(should_stop)
         return
 
+    dead = set(getattr(mic, "failed_slots", ()))
+    for slot in sorted(dead):
+        log_line(f"no mic for slot {slot}; the other player's mic keeps working")
+        publish(VoiceEvent(slot, clock(), "status", "no mic", None, 0.0))
     sessions = _Sessions(cfg, api_key, publish, stream_factory, queues, sleep, clock)
-    slot_tasks = [asyncio.ensure_future(sessions.run_slot(slot)) for slot in SLOTS]
+    slot_tasks = [asyncio.ensure_future(sessions.run_slot(s)) for s in SLOTS if s not in dead]
     control = asyncio.ensure_future(sessions.control(drain_control))
     try:
         await _idle(should_stop)

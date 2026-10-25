@@ -291,6 +291,14 @@ def test_no_api_key_publishes_status_and_idles():
     assert not r.mic.started and r.factory.streams == []
 
 
+def test_one_dead_mic_reports_no_mic_for_its_slot_only():
+    mic = FakeMic()
+    mic.failed_slots = {1}
+    r = run_serve(mic=mic, stop_after=0.5)
+    assert [(e.slot, e.text) for e in r.events if e.text == "no mic"] == [(1, "no mic")]
+    assert r.factory.by_slot[0] and not r.factory.by_slot[1]  # no session for slot 1
+
+
 def test_no_mic_publishes_status_and_idles():
     r = run_serve(mic=FakeMic(fail=True), stop_after=0.3)
     assert len(r.events) == 2
