@@ -5,6 +5,7 @@ The game loop calls `Supervisor.poll()` every tick; it never blocks.
 Owner: Nikhil
 """
 
+import functools
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -125,6 +126,7 @@ class LiveRuntime:
     frame_bus: FrameBus
     stop_timeout_s: float = 2.0
     terminate_timeout_s: float = 1.0
+    levels: Sequence[float] | None = None  # per-slot mic RMS (0..1), written by the voice process
 
     def close(self) -> None:
         # The window is already closed when this runs, so the wait is not visible to players.
@@ -141,8 +143,10 @@ def start_live(cfg: Config) -> LiveRuntime:
     control_q = DropOldestQueue(pipe["control_queue_size"], ctx)
     frame_bus = FrameBus.create(cfg["camera"]["image_width"], cfg["camera"]["image_height"])
     specs = [ProcSpec("perception", perception_run, (cfg, state_q, frame_bus.name))]
+    levels = ctx.RawArray("d", 2)  # the voice process writes, the screen reads: no queue, no lock
     if cfg["voice"]["enabled"]:
-        specs.append(ProcSpec("voice", voice_run, (cfg, voice_q, control_q)))
+        voice_target = functools.partial(voice_run, levels=levels)
+        specs.append(ProcSpec("voice", voice_target, (cfg, voice_q, control_q)))
     supervisor = Supervisor(
         specs, ctx, pipe["restart_backoff_s"], pipe["max_restarts"], pipe["restart_reset_s"]
     )
@@ -159,4 +163,5 @@ def start_live(cfg: Config) -> LiveRuntime:
         frame_bus,
         pipe["stop_timeout_s"],
         pipe["terminate_timeout_s"],
+        levels,
     )

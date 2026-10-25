@@ -60,6 +60,10 @@ class MicHub:
         self._sd = sd
         self._streams: list[Any] = []
         self.failed_slots: set[int] = set()  # slots whose own device would not open
+        # Audio the capture lost, for the voice process's health log. Written on the audio
+        # thread only; plain ints are enough to read from another thread.
+        self.overflows = 0  # PortAudio callbacks that reported input_overflow (samples lost)
+        self.dropped_blocks = 0  # blocks or chunks the callback itself had to drop
         grouped: dict[Any, dict[int, int]] = {}
         for m in mics:
             device = m.get("device")  # missing or None: the system default input
@@ -121,6 +125,8 @@ class MicHub:
 
     def _make_callback(self, dev: _Device) -> Callable[..., None]:
         def callback(indata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
+            if getattr(status, "input_overflow", False):
+                self.overflows += 1
             for slot, channel in dev.slot_channels.items():
                 try:
                     samples = resample(
@@ -128,6 +134,7 @@ class MicHub:
                     )
                     buf = np.concatenate((dev.buffers[slot], samples))
                 except Exception:
+                    self.dropped_blocks += 1
                     continue  # never raise on the audio thread; drop this block
                 n = self._chunk_samples
                 while len(buf) >= n:
@@ -135,7 +142,7 @@ class MicHub:
                     try:
                         self._sink(slot, chunk.tobytes())
                     except Exception:
-                        pass  # a failing sink drops that chunk only
+                        self.dropped_blocks += 1  # a failing sink drops that chunk only
                 dev.buffers[slot] = buf
 
         return callback

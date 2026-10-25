@@ -132,3 +132,26 @@ def test_gave_up_only_when_dead_and_out_of_restarts():
     assert sup.gave_up("p")
     sup._restarts["p"] = 1
     assert not sup.gave_up("p")  # a restart is still available
+
+
+def write_level_and_wait(cfg, voice_q, control_q, stop, levels=None) -> None:
+    """Stands in for voice.process.run: the voice process writes the mic level, then idles."""
+    levels[1] = 0.25
+    wait_for_stop(stop)
+
+
+def test_mic_levels_cross_the_process_boundary(monkeypatch):
+    # start_live gives the voice process a shared array; the game reads what voice writes.
+    import magic_box.pipeline.processes as processes
+
+    monkeypatch.setattr(processes, "voice_run", write_level_and_wait)
+    cfg = {**CFG, "pipeline": {**CFG["pipeline"], "max_restarts": 0}}
+    rt = start_live(cfg)
+    try:
+        assert len(rt.levels) == 2
+        deadline = time.monotonic() + 15
+        while rt.levels[1] != 0.25 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert tuple(rt.levels) == (0.0, 0.25)
+    finally:
+        rt.close()

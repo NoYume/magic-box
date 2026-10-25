@@ -44,6 +44,8 @@ uv run python -m magic_box --fake
 uv run python -m magic_box --fake --headless --max-ticks 120
 ```
 
+`LiveRuntime.levels` is a shared `RawArray('d', 2)` that `start_live` passes to the voice process (`functools.partial(voice_run, levels=levels)`); the screen reads it for the mic wave.
+
 ## Open TODOs
 - `TODO(Nikhil)`: verify the live path on the Jetson (perception + voice + Spark together), then size `game.charge_window_s` from the measured partial latency.
 - The frame-bus seqlock has no explicit memory fences. Re-run `MAGIC_BOX_STRESS=1 uv run pytest tests/pipeline/test_frame_bus.py` on the Jetson (aarch64; the stress test free-runs 1280x720 writes for ~3 s) before relying on it.

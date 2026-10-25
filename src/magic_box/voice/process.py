@@ -17,6 +17,8 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping
 from multiprocessing.synchronize import Event
 from typing import Any
 
+import numpy as np
+
 from magic_box.core.config import Config
 from magic_box.core.contracts import VoiceConfig, VoiceEvent
 from magic_box.pipeline.streams import DropOldestQueue, ParentAwareStop
@@ -34,11 +36,34 @@ CLOSE_BAD_REQUEST = 1008  # Muse: bad request or pacing; don't retry unchanged
 SPEECH_START_LEAD_S = 1.0  # Muse's speechStart lands after the speech began (queue, network
 #                            and endpointer latency): the crosstalk window starts this much earlier
 
+PACE_SLACK_S = 0.25  # voice.pace_slack_s: how far the audio sent may trail the wall clock
+PACE_MAX_PAD_S = 2.0  # most silence one catch-up adds, so a long stall never bursts more
+HEALTH_LOG_S = 10.0  # the audio-path health line is logged at most this often per slot
+
 _CONNECTED, _FAILED, _WOKEN = "connected", "failed", "woken"
 
 
 def log_line(msg: str) -> None:
     print(f"voice: {msg}", file=sys.stderr, flush=True)
+
+
+def chunk_rms(pcm: bytes) -> float:
+    """Linear RMS of PCM16 LE mono samples, 0.0 (silence) to 1.0 (full scale)."""
+    samples = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype="<i2")
+    if samples.size == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(np.square(samples, dtype=np.float64)))) / 32768.0
+
+
+def zero_levels(levels: Any, slot: int | None = None) -> None:
+    """Zero the mic-level array (one slot, or both); a no-op without one."""
+    if levels is None:
+        return
+    for s in SLOTS if slot is None else (slot,):
+        try:
+            levels[s] = 0.0
+        except Exception:
+            pass  # cosmetic; a bad array must never stop the voice process
 
 
 def _describe(exc: BaseException) -> str:
@@ -139,6 +164,40 @@ class IncantationTurn:
             self._timer = None
 
 
+class _Health:
+    """What the audio path lost or had to make up, logged at most every HEALTH_LOG_S per slot.
+
+    Muse closes a session with 1008 when its audio arrives slower than real time. This shows
+    where it went: chunks dropped from a full queue, silence the pacer added to keep up, and
+    PortAudio input overflows (`mic.overflows`, set by `serve` once the mic exists).
+    """
+
+    def __init__(self, clock: Callable[[], float]) -> None:
+        self._clock = clock
+        self.mic: Any = None
+        self.dropped = dict.fromkeys(SLOTS, 0)
+        self.padded_s = dict.fromkeys(SLOTS, 0.0)
+        self._mark: dict[int, tuple[float, int, float, int]] = {}
+
+    def _overflows(self) -> int:
+        return int(getattr(self.mic, "overflows", 0) or 0)
+
+    def maybe_log(self, slot: int) -> None:
+        now = self._clock()
+        current = (now, self.dropped[slot], self.padded_s[slot], self._overflows())
+        mark = self._mark.setdefault(slot, current)
+        if now - mark[0] < HEALTH_LOG_S:
+            return
+        self._mark[slot] = current
+        dropped, padded, overflows = (current[i] - mark[i] for i in (1, 2, 3))
+        if dropped or padded > 0 or overflows:
+            log_line(
+                f"slot {slot}: audio path, last {now - mark[0]:.0f} s: {dropped} chunk(s) dropped "
+                f"(queue full), {padded:.2f} s of silence added to keep real-time pace, "
+                f"{overflows} mic input overflow(s)"
+            )
+
+
 class _Sessions:
     """Both slots' Muse sessions plus the shared mode, the per-slot wake-ups and the stop flag.
 
@@ -156,6 +215,7 @@ class _Sessions:
         sleep: Callable[[float], Awaitable[Any]],
         clock: Callable[[], float],
         levels: LevelHistory | None = None,
+        health: _Health | None = None,
     ) -> None:
         v = cfg["voice"]
         self._key = api_key
@@ -173,6 +233,11 @@ class _Sessions:
         self._session_max_s = v["session_max_s"]
         self._silence_after_s = v["silence_after_s"]
         self._silence = bytes(v["sample_rate"] * v["chunk_ms"] // 1000 * 2)
+        self._chunk_s = v["chunk_ms"] / 1000.0
+        self._bytes_per_s = v["sample_rate"] * 2
+        self._pace_slack_s = v.get("pace_slack_s", PACE_SLACK_S)
+        self._pace_max_chunks = max(1, int(PACE_MAX_PAD_S / self._chunk_s))
+        self._health = health or _Health(clock)
         self._levels = levels
         self._crosstalk_margin_db = v["crosstalk_margin_db"]
         self._crosstalk_window_s = v["crosstalk_window_s"]
@@ -320,12 +385,23 @@ class _Sessions:
             queue.get_nowait()
 
     async def _send(self, slot: int, stream: Any) -> None:
-        """Forward this slot's mic chunks; send a chunk of zeros when the mic stays quiet.
+        """Forward this slot's mic chunks, keeping the audio sent at real-time pace.
+
+        A chunk of zeros goes out when the mic stays quiet. Muse closes a session whose audio
+        arrives slower than real time (close 1008), so the sender also keeps a timeline: the
+        audio seconds sent versus the wall-clock seconds since the first send. Real chunks are
+        never delayed, dropped or reordered; but when the timeline trails the clock by more than
+        `pace_slack_s` (a stalled mic, a blocked socket, chunks lost to a full queue), whole
+        chunks of silence are sent first to make it up, at most PACE_MAX_PAD_S per catch-up.
+        Padding only happens while behind, so it never pushes the timeline past the clock; it
+        runs ahead only by real chunks that queued up (at most `audio_queue_chunks`).
 
         Never asyncio.wait_for here: on Python 3.10 it drops a cancel that arrives just as a
         chunk does, and the session could then never be stopped or restarted.
         """
         queue = self._queues[slot]
+        start: float | None = None
+        sent_s = 0.0  # seconds of audio sent in this session
         while True:
             getter = asyncio.ensure_future(queue.get())
             try:
@@ -333,7 +409,20 @@ class _Sessions:
             finally:
                 getter.cancel()  # no-op once done; a chunk taken as we are cancelled is dropped
             pcm = getter.result() if done else self._silence
+            now = self._clock()
+            if start is None:
+                start = now
+            else:
+                behind = (now - start) - sent_s
+                if behind > self._pace_slack_s:
+                    pad = min(int(behind / self._chunk_s), self._pace_max_chunks)
+                    for _ in range(pad):
+                        await stream.send_audio(self._silence)
+                    sent_s += pad * self._chunk_s
+                    self._health.padded_s[slot] += pad * self._chunk_s
             await stream.send_audio(pcm)
+            sent_s += len(pcm) / self._bytes_per_s
+            self._health.maybe_log(slot)
 
     async def _receive(
         self, slot: int, stream: Any, mode: str, incantations: Mapping[str, str]
@@ -420,14 +509,19 @@ async def serve(
     mic_factory: Callable[[Callable[[int, bytes], None]], Any],
     sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
     clock: Callable[[], float] = time.monotonic,
+    mic_levels: Any = None,
 ) -> None:
     """Run both slots' sessions until `should_stop()`; never returns before that.
 
     `stream_factory(slot, api_key)` returns a fresh object with MuseStream's async interface;
     `mic_factory(sink)` returns an object with start()/stop() that calls `sink(slot, pcm)`
     from its audio thread. `sleep` is used only for reconnect backoff delays.
+    `mic_levels` is an optional length-2 array the process writes (the HUD's mic wave): each
+    real chunk sets `mic_levels[slot]` to its linear RMS, 0.0 to 1.0 of full scale; both are
+    zeroed when the mic is not running.
     """
     v = cfg["voice"]
+    zero_levels(mic_levels)
 
     def status_all(text: str) -> None:
         for slot in SLOTS:
@@ -443,6 +537,7 @@ async def serve(
     loop = asyncio.get_running_loop()
     queues = {slot: asyncio.Queue(maxsize=v["audio_queue_chunks"]) for slot in SLOTS}
     levels = LevelHistory(SLOTS, v["chunk_ms"])
+    health = _Health(clock)
 
     def put(slot: int, pcm: bytes, t: float) -> None:
         try:
@@ -452,22 +547,29 @@ async def serve(
         try:
             queues[slot].put_nowait(pcm)
         except asyncio.QueueFull:
-            pass  # the sender is behind; drop this chunk
+            health.dropped[slot] += 1  # the sender is behind; drop this chunk
 
     def sink(slot: int, pcm: bytes) -> None:
         """Runs on the audio thread: hand the chunk to the loop, never raise."""
         if slot not in queues:
             return
+        if mic_levels is not None:
+            try:
+                mic_levels[slot] = chunk_rms(pcm)
+            except Exception:
+                pass  # a level is cosmetic; never raise into the audio thread
         try:
             loop.call_soon_threadsafe(put, slot, pcm, clock())  # level stamped at capture
         except RuntimeError:
             pass  # the loop is closed after stop
 
     mic = mic_factory(sink)
+    health.mic = mic
     try:
         mic.start()
     except MicError as exc:
         log_line(f"no mic: {exc}")
+        zero_levels(mic_levels)
         status_all("no mic")
         await _idle(should_stop)
         return
@@ -475,8 +577,11 @@ async def serve(
     dead = set(getattr(mic, "failed_slots", ()))
     for slot in sorted(dead):
         log_line(f"no mic for slot {slot}; the other player's mic keeps working")
+        zero_levels(mic_levels, slot)
         publish(VoiceEvent(slot, clock(), "status", "no mic", None, 0.0))
-    sessions = _Sessions(cfg, api_key, publish, stream_factory, queues, sleep, clock, levels)
+    sessions = _Sessions(
+        cfg, api_key, publish, stream_factory, queues, sleep, clock, levels, health
+    )
     slot_tasks = [asyncio.ensure_future(sessions.run_slot(s)) for s in SLOTS if s not in dead]
     control = asyncio.ensure_future(sessions.control(drain_control))
     try:
@@ -496,10 +601,21 @@ async def serve(
                     log_line(f"session task failed: {_describe(task.exception())}")
         finally:
             mic.stop()
+            zero_levels(mic_levels)
 
 
-def run(cfg: Config, voice_q: DropOldestQueue, control_q: DropOldestQueue, stop: Event) -> None:
-    """Capture mics, stream to Muse, publish VoiceEvents; read VoiceConfig from control_q."""
+def run(
+    cfg: Config,
+    voice_q: DropOldestQueue,
+    control_q: DropOldestQueue,
+    stop: Event,
+    levels: Any = None,
+) -> None:
+    """Capture mics, stream to Muse, publish VoiceEvents; read VoiceConfig from control_q.
+
+    `levels`: optional length-2 array (a multiprocessing RawArray('d', 2) from the game) that
+    this process fills with each slot's mic level; see `serve(mic_levels=...)`.
+    """
     v = cfg["voice"]
     parent_aware = ParentAwareStop(stop)
     try:
@@ -514,6 +630,7 @@ def run(cfg: Config, voice_q: DropOldestQueue, control_q: DropOldestQueue, stop:
                     v["url"], key, v["model"], v["handshake_timeout_s"]
                 ),
                 mic_factory=lambda sink: MicHub(v["mics"], v["sample_rate"], v["chunk_ms"], sink),
+                mic_levels=levels,
             )
         )
     finally:

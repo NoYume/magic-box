@@ -112,6 +112,8 @@ def run(argv: Sequence[str] | None = None) -> int:
         ai = AiWorker(cfg)
         display = WebDisplay(cfg) if args.web else Window(cfg, headless=args.headless)
         display.debug = args.debug
+        if runtime is not None and runtime.levels is not None:
+            display.mic_levels = lambda: tuple(runtime.levels)  # the on-screen mic wave
         loop = GameLoop(
             cfg,
             sources,
