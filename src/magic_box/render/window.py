@@ -53,8 +53,11 @@ class Window:
         disp = cfg["display"]
         self.width, self.height, self.fps = disp["width"], disp["height"], disp["fps"]
         flags = pygame.FULLSCREEN if disp["fullscreen"] else 0
-        if disp["vsync"]:
-            flags |= pygame.SCALED  # pygame only honors vsync with SCALED or OPENGL
+        if disp["fullscreen"] or disp["vsync"]:
+            # SCALED: fullscreen at the desktop resolution with 1920x1080 scaled to fit, so a
+            # monitor that isn't 1080p doesn't switch modes. pygame also only honors vsync with
+            # SCALED or OPENGL.
+            flags |= pygame.SCALED
         self.screen = pygame.display.set_mode(
             (self.width, self.height), flags, vsync=1 if disp["vsync"] else 0
         )

@@ -1,3 +1,4 @@
+import copy
 import dataclasses
 from pathlib import Path
 
@@ -173,3 +174,28 @@ def test_camera_banner_shows_alone_without_the_step_hint(monkeypatch):
     """While perception restarts nobody is tracked; only CAMERA RECONNECTING should show."""
     assert _hints_drawn("CAMERA RECONNECTING", monkeypatch) == 0
     assert _hints_drawn("FIGHT!", monkeypatch) == 2
+
+
+@pytest.mark.parametrize(
+    ("fullscreen", "vsync", "scaled"),
+    [(True, False, True), (True, True, True), (False, True, True), (False, False, False)],
+)
+def test_fullscreen_always_uses_scaled(monkeypatch, fullscreen, vsync, scaled):
+    """FULLSCREEN without SCALED switches the monitor's mode when it isn't 1920x1080."""
+    import pygame
+
+    seen = []
+    real = pygame.display.set_mode
+
+    def spy(size, flags=0, *args, **kwargs):
+        seen.append((flags, kwargs.get("vsync", 0)))
+        return real(size)
+
+    monkeypatch.setattr(pygame.display, "set_mode", spy)
+    cfg = copy.deepcopy(CFG)
+    cfg["display"].update(fullscreen=fullscreen, vsync=vsync)
+    Window(cfg, headless=True).close()
+    flags, vsync_arg = seen[0]
+    assert bool(flags & pygame.SCALED) is scaled
+    assert bool(flags & pygame.FULLSCREEN) is fullscreen
+    assert vsync_arg == (1 if vsync else 0)

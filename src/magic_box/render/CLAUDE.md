@@ -49,7 +49,7 @@ All config, defaults unchanged. Try them in this order if the Orin Nano drops be
 1. `render.crop_cache: true` (default): one scaled crop is kept per placement (dest rect and mirroring) and reused while the frame surface is the same and the smoothed crop rect moved less than `render.crop_cache_px` (default 2) in every coordinate, so a repeated `frame_idx` costs almost nothing. The image can lag the true crop by under that many pixels.
 2. `render.self_view: false`: skips the mirrored self-view and its skeleton (two scaled crops per frame).
 3. `render.camera_scale_quality: fast` (default, `pygame.transform.scale`) or `smooth` (`smoothscale`, nicer, slower). Keep `fast` on the Jetson.
-4. `display.vsync: true`: uses `SCALED` + vsync. Can fix tearing but caps fps at the monitor rate. Leave off unless tearing shows.
+4. `display.vsync: true`: uses `SCALED` + vsync. Can fix tearing but caps fps at the monitor rate. Leave off unless tearing shows. (Fullscreen always uses `SCALED`, so a monitor that isn't 1080p keeps its mode and the 1920x1080 frame is scaled to fit.)
 5. FX: lower `render.fx.max_particles` (160), `render.projectiles.trail_steps` (6) and `render.projectiles.glow_max_px` (224). The glow cache (all tints prebuilt at startup) is about 21 MB in 177 surfaces with the defaults; raising `glow_max_px` or lowering the step sizes grows it.
 6. Lower `display.fps`, or switch the camera to `BODY_18` with `camera.body_fitting: false` (see the root `CLAUDE.md` risks). SVGA is already the smallest ZED X `camera.resolution`.
 
