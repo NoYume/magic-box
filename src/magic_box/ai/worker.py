@@ -1,10 +1,17 @@
 """Background Spark jobs with deadlines and fallbacks; `poll` never waits.
 
 Owner: Nikhil. See the 2026-10-24 nikhil-pipeline spec, section 10.
+
+Each job runs on its own daemon thread. A Spark call can take up to `ai.timeout_s` (8 s), and
+a `ThreadPoolExecutor` worker is joined at interpreter exit, so an in-flight call used to
+hold the quit for that long. Daemon threads are never joined: `close()` returns at once and
+the process can exit while a call is still in flight. A replaced or timed-out job's thread
+runs to its own end (bounded by the OpenAI client timeout) and its result is dropped.
 """
 
+import threading
 from collections.abc import Callable, Mapping, Sequence
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from dataclasses import dataclass
 
 from magic_box.ai.chronicle import template_chronicle, write_chronicle
@@ -21,14 +28,31 @@ class _Job:
     fallback: Callable[[], object]
 
 
+def _run(future: Future, work: Callable[[], object]) -> None:
+    if not future.set_running_or_notify_cancel():
+        return
+    try:
+        future.set_result(work())
+    except BaseException as exc:  # handed to poll, which falls back
+        future.set_exception(exc)
+
+
 class AiWorker:
-    """One single-thread executor; at most one pending job per kind."""
+    """At most one pending job per kind, each on its own daemon thread.
+
+    Public API for the loop: `start_incantations`, `start_chronicle`, `poll(now)` and
+    `close()`. None of them blocks.
+    """
 
     def __init__(self, cfg: Config, client=None) -> None:
         self._cfg = cfg
         self._client = client if client is not None else SparkClient(cfg)
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="spark")
         self._jobs: dict[str, _Job] = {}
+        self._closed = False
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
 
     def _available(self) -> bool:
         return bool(getattr(self._client, "available", lambda: True)())
@@ -36,10 +60,16 @@ class AiWorker:
     def _start(
         self, kind: str, now: float, work: Callable[[], object], fallback: Callable[[], object]
     ) -> None:
-        old = self._jobs.pop(kind, None)
-        if old is not None and old.future is not None:
-            old.future.cancel()
-        future = self._executor.submit(work) if self._available() else None
+        if self._closed:
+            return
+        self._jobs.pop(kind, None)  # a replaced job's late result is never read
+        future: Future | None = None
+        if self._available():
+            future = Future()
+            thread = threading.Thread(
+                target=_run, args=(future, work), name=f"spark-{kind}", daemon=True
+            )
+            thread.start()
         self._jobs[kind] = _Job(future, now + self._cfg["ai"]["timeout_s"], fallback)
 
     def start_incantations(
@@ -77,12 +107,16 @@ class AiWorker:
                 except Exception:
                     out.append((kind, job.fallback()))
             elif now >= job.deadline:
-                job.future.cancel()  # a late result is never read: the job is dropped
-                out.append((kind, job.fallback()))
+                out.append((kind, job.fallback()))  # the late result is never read
             else:
                 continue
             del self._jobs[kind]
         return out
 
     def close(self) -> None:
-        self._executor.shutdown(wait=False, cancel_futures=True)
+        """Drop every pending job and return at once; never waits for a call in flight.
+
+        Idempotent. After close, `start_*` are no-ops and `poll` returns nothing.
+        """
+        self._closed = True
+        self._jobs.clear()
