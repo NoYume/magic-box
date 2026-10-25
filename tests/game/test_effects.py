@@ -264,6 +264,31 @@ def test_chain_bolts_are_dodged_one_window_at_a_time():
     assert kinds(ms) == ["hit", "hit"]
 
 
+def test_one_dodge_avoids_only_the_earliest_chain_bolt():
+    ms = new(classes=("lightning_mage", "fire_mage"))
+    cast(ms, 0, "chain", push(0))
+    land(ms, 1.15)  # all three bolts are inside their dodge windows now
+    ms.take_events()
+    assert all(p.in_dodge_window for p in ms.projectile_views())
+    ms.apply(Action("dodge", 1, 0.0, dodge="duck"), STATES, 0.0)
+    assert kinds(ms) == ["dodge"] and len(ms.projectiles) == 2
+    ms.apply(Action("dodge", 1, 0.0, dodge="step"), STATES, 0.0)
+    assert kinds(ms) == ["dodge"] and len(ms.projectiles) == 1
+    land(ms, 1.0)
+    assert kinds(ms) == ["hit"] and ms.stats(1)["dodges"] == 2
+
+
+def test_one_dodge_still_avoids_every_other_cast_in_its_window():
+    ms = new()
+    cast(ms, 0, "fireball", push(0))  # 1.6 s
+    land(ms, 0.9)
+    ms.apply(push(0), STATES, 0.0)  # basic, 0.7 s: both land at about 1.6 s
+    land(ms, 0.3)
+    ms.take_events()
+    ms.apply(Action("dodge", 1, 0.0, dodge="step"), STATES, 0.0)
+    assert kinds(ms) == ["dodge", "dodge"] and ms.projectiles == []
+
+
 # -- Stats and views -------------------------------------------------------
 
 

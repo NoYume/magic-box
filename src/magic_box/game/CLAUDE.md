@@ -14,7 +14,7 @@ Pure game rules: classes, spells and their effects, HP and mana, charge and dodg
 - **Lobby:** a final transcript (`speech` Action) with a class keyword (`game.classes.<id>.keywords`: `fire`, `lightning`, `holy`, `knight`; whole words, the last one said wins) picks that class. Otherwise it sets the name (`parse_name`: "my name is X", "call me X", "i am X" and a few more take X; up to `name_max_chars`). Names and classes persist across matches. `PlayerView.heard` is the last transcript. Banner: `SAY NAME · SAY FIRE, LIGHTNING OR HOLY · HANDS UP` (built from the first keyword of each class; fits one line at 96 px on 1920 px).
 - **Hands up** is debounced by `hands_up_hold_s` on both edges (`scenes.Hold`): it counts once held, and a one-frame drop doesn't lower it. `PlayerView.ready` shows the debounced value in lobby and victory. Both ready starts loading. The start is edge-triggered: after a match the players must lower their hands (held down), then raise them again. The first lobby after boot starts armed.
 - **Loading:** waits for the incantations from `ai/` (config fallback fills any gap), `loading_min_s` to `loading_max_s`. Incantations follow the picked class.
-- **Fight:** own match clock (starts at 0; `now` is only the timestamp on `GameEvent.t`). `round_s` round, mana regen, charge (`charge_window_s`), a release (push, two-hand push, arm overhead, hands together) fires the charged spell, a basic attack on an uncharged push. Damage is Appendix A (`combat.py`). The attacker's distance is the releasing Action's `dist` (else the last known). A dodge removes every projectile aimed at the dodger that is inside its `dodge_window_s`.
+- **Fight:** own match clock (starts at 0; `now` is only the timestamp on `GameEvent.t`). `round_s` round, mana regen, charge (`charge_window_s`), a release (push, two-hand push, arm overhead, hands together) fires the charged spell, a basic attack on an uncharged push. Damage is Appendix A (`combat.py`). The attacker's distance is the releasing Action's `dist` (else the last known). A dodge removes the projectiles aimed at the dodger that are inside their `dodge_window_s`, but only the earliest one of each cast, so each Chain bolt needs its own dodge.
 - **Victory:** on KO, time-out or abandon. `winner_slot` (None for a draw). Back to the lobby when both hold hands up after `victory_min_s`, or at `victory_max_s`.
 
 ## Spell effects (config: per spell `effect` + `effect_s`, `heal_hp`, `hits` + `chain_gap_s`; multipliers under `game:`)
@@ -25,7 +25,7 @@ Pure game rules: classes, spells and their effects, HP and mana, charge and dodg
 | Inferno | 35 damage; if it lands the target gets `slow`, 3 s: their next charge window x `slow_charge_mult` (0.6); charging uses it up. |
 | Holy Light | `empowered` on the caster, 6 s: anything they release meanwhile (spells and basic attacks) does x `empowered_mult` (1.5), fixed at release. |
 | Heal | +25 HP on the caster, capped at `hp_max` (`heal` event with the HP actually gained). |
-| Chain | 3 bolts of 7, launched `chain_gap_s` (0.25 s) apart; each has its own dodge window, so an early dodge avoids only the first. |
+| Chain | 3 bolts of 7, launched `chain_gap_s` (0.25 s) apart. Each bolt needs its own dodge: one dodge avoids only the earliest bolt in its window. |
 
 Rules: a spell is a projectile when it does damage or carries a hit effect (`mana_slow`, `slow`); otherwise it is instant and shows a `SPELL NAME!` banner. `shield` and `empowered` go on the caster at release, `mana_slow` and `slow` on the target at impact. Re-applying an effect keeps the longer timer. Effect timers run on the match clock, so a pause freezes them.
 
@@ -62,6 +62,6 @@ uv run python -m magic_box --fake
 In fake mode boot waits up to `boot_max_s` (8 s) unless the loop reports the camera. Then hold hands up (`r` + `y`) to start, charge with the spell keys, push with `f` / `h`, two-hand spells with `v` / `m`, Holy Light with hands up (`r` / `y`), Heal with hands together (`t` / `u`). Transcripts can't come from the keyboard; tests send `Action("speech", ...)`.
 
 ## Open TODOs
-- Open decisions (Adetola): final classes, spells, costs, gestures and numbers; whether Chain bolts should need one dodge each; `heals` as a count vs HP.
+- Open decisions (Adetola): final classes, spells, costs, gestures and numbers; `heals` as a count vs HP. Ruled 2026-10-25: one dodge per Chain bolt.
 - `game.charge_window_s` waits on the partial-latency measurement (Nikhil).
 - Fake-mode damage runs high (fake pushes are 3.0 m/s, so `speed_mult` is 1.5): a Fireball with a perfect incantation does about 34.

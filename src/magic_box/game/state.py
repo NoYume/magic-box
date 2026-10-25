@@ -62,6 +62,7 @@ class Projectile:
     buff_mult: float
     hit_effect: str | None = None
     effect_s: float = 0.0
+    cast_id: int = 0  # Chain's bolts share one; a dodge avoids one projectile per cast
 
     def elapsed(self, clock: float) -> float:
         return clock - self.launched
@@ -98,6 +99,7 @@ class MatchState:
             for slot in (0, 1)
         )
         self.projectiles: list[Projectile] = []
+        self._casts = 0
         self.clock = 0.0
         self.time_left: float = g["round_s"]
         self._events: list[GameEvent] = []
@@ -300,6 +302,7 @@ class MatchState:
             self._set_banner(spell.name.upper() + "!")
             return
         atk_dist = action.dist if action.dist > 0 else p.last_dist
+        self._casts += 1
         for i in range(max(spell.hits, 1)):
             self.projectiles.append(
                 Projectile(
@@ -315,6 +318,7 @@ class MatchState:
                     buff_mult=mult,
                     hit_effect=spell.effect if spell.effect in HIT_EFFECTS else None,
                     effect_s=spell.effect_s,
+                    cast_id=self._casts,
                 )
             )
 
@@ -340,11 +344,15 @@ class MatchState:
         )
 
     def _dodge(self, action: Action, now: float) -> None:
+        """Avoid every cast landing within the dodge window, but only its earliest projectile
+        (each Chain bolt needs its own dodge)."""
         window = self.cfg["game"]["dodge_window_s"]
-        for proj in list(self.projectiles):
-            if proj.target != action.slot:
+        dodged: set[int] = set()
+        for proj in sorted(self.projectiles, key=lambda pr: pr.launched + pr.travel_s):
+            if proj.target != action.slot or proj.cast_id in dodged:
                 continue
             if proj.travel_s - proj.elapsed(self.clock) <= window:
+                dodged.add(proj.cast_id)
                 self.projectiles.remove(proj)
                 self.players[action.slot].stats["dodges"] += 1
                 self._log(now, "dodge", action.slot, spell_id=proj.spell_id, dodge=action.dodge)
