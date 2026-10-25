@@ -214,12 +214,12 @@ class Engine:
             self._pause = None
             self._tracking_pause_since = None
             self._reacquire = set()
-            self._match = MatchState(self.cfg, self._names, now, self._classes)
+            self._match = MatchState(self.cfg, self._names, now, self._classes, self._mic_ok)
             events += self._match.take_events()
         elif scene == "victory":
             assert self._match is not None
             self._result = self._match.result()
-            self._match.projectiles.clear()
+            self._match.clear_in_flight()
             self._pause = None
         elif scene == "lobby":
             self._match = None

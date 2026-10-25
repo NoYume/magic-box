@@ -34,6 +34,12 @@ class Charge:
 
 
 @dataclass
+class HeldPush:
+    action: Action
+    until: float  # match clock
+
+
+@dataclass
 class PlayerMatch:
     slot: int
     name: str
@@ -46,6 +52,7 @@ class PlayerMatch:
     last_dist: float = 0.0
     effects: Effects = field(default_factory=Effects)
     stats: dict[str, float] = field(default_factory=lambda: dict.fromkeys(STAT_KEYS, 0.0))
+    held: HeldPush | None = None  # an uncharged push waiting for a late voice charge
 
 
 @dataclass
@@ -83,9 +90,12 @@ class MatchState:
         names: Mapping[int, str],
         now: float,
         classes: Mapping[int, str] | None = None,
+        mic_ok: Mapping[int, bool] | None = None,
     ) -> None:
         self.cfg = cfg
         g = cfg["game"]
+        # Live view of the engine's mic status: a push is held only while the mic is ok.
+        self.mic_ok: Mapping[int, bool] = mic_ok if mic_ok is not None else {}
         classes = classes if classes is not None else g["default_classes"]
         self.players: tuple[PlayerMatch, PlayerMatch] = tuple(  # type: ignore[assignment]
             PlayerMatch(
@@ -122,7 +132,7 @@ class MatchState:
         if self._result is not None:
             return
         if action.kind == "charge":
-            self._charge(action)
+            self._charge(action, now)
         elif action.kind == "push":
             self._push(action, states, now)
         elif action.kind == "pose":
@@ -145,6 +155,9 @@ class MatchState:
             p.effects.expire(self.clock)
             if p.charge is not None and self.clock >= p.charge.deadline:
                 self._refund(p)
+            if p.held is not None and self.clock >= p.held.until:
+                held, p.held = p.held.action, None
+                self._basic(p, held, now)
         for proj in sorted(self.projectiles, key=lambda pr: pr.launched + pr.travel_s):
             if self._result is not None:
                 break
@@ -221,7 +234,13 @@ class MatchState:
             p.mana = min(p.mana + p.charge.spell.cost, self.cfg["game"]["mana_max"])
             p.charge = None
 
-    def _charge(self, action: Action) -> None:
+    def clear_in_flight(self) -> None:
+        """Drop projectiles and held pushes (the match is over)."""
+        self.projectiles.clear()
+        for p in self.players:
+            p.held = None
+
+    def _charge(self, action: Action, now: float) -> None:
         p = self.players[action.slot]
         spell = next((s for s in p.spells if s.id == action.spell_id), None)
         if spell is None or p.mana < spell.cost:
@@ -233,6 +252,10 @@ class MatchState:
         if p.effects.consume("slow", self.clock):
             window *= g["slow_charge_mult"]
         p.charge = Charge(spell, self.clock + window, action.match_score)
+        if p.held is not None and self._releases(spell, p.held.action):
+            held, p.held, c, p.charge = p.held.action, None, p.charge, None
+            assert held.push is not None
+            self._cast(p, c, held, held.push.origin_px, held.push.speed, now)
 
     def _push(self, action: Action, states: Mapping[int, PlayerState], now: float) -> None:
         p = self.players[action.slot]
@@ -240,15 +263,30 @@ class MatchState:
         p.stats["best_push_mps"] = max(p.stats["best_push_mps"], action.push.speed)
         c = p.charge
         if c is not None:
-            kinds = ("two_hand_push", "push") if action.two_hand else ("push",)
-            if c.spell.release in kinds:
+            if self._releases(c.spell, action):
                 p.charge = None
                 self._cast(p, c, action, action.push.origin_px, action.push.speed, now)
                 return
-        if self.clock >= p.basic_ready_at:
-            p.basic_ready_at = self.clock + self.cfg["game"]["basic_attack_cooldown_s"]
-            basic = Charge(basic_attack(self.cfg), 0.0, 0.0)
-            self._cast(p, basic, action, action.push.origin_px, action.push.speed, now)
+        if self.clock < p.basic_ready_at or p.held is not None:
+            return  # on cooldown, or a push is already held: ignored
+        grace = self.cfg["game"]["release_grace_s"]
+        if c is None and grace > 0 and self.mic_ok.get(p.slot, False):
+            # The voice charge lands ~0.4 s after speech: give it a chance to catch up.
+            p.held = HeldPush(action, self.clock + grace)
+            return
+        self._basic(p, action, now)
+
+    @staticmethod
+    def _releases(spell: SpellDef, push: Action) -> bool:
+        """A two-hand push releases push and two-hand spells; a plain push only push spells."""
+        kinds = ("two_hand_push", "push") if push.two_hand else ("push",)
+        return spell.release in kinds
+
+    def _basic(self, p: PlayerMatch, action: Action, now: float) -> None:
+        assert action.push is not None
+        p.basic_ready_at = self.clock + self.cfg["game"]["basic_attack_cooldown_s"]
+        basic = Charge(basic_attack(self.cfg), 0.0, 0.0)
+        self._cast(p, basic, action, action.push.origin_px, action.push.speed, now)
 
     def _pose(self, action: Action, states: Mapping[int, PlayerState], now: float) -> None:
         p = self.players[action.slot]

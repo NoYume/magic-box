@@ -81,7 +81,9 @@ def test_effect_kind_and_time(effect, effect_s):
     assert any("inferno.effect" in p for p in found)
 
 
-@pytest.mark.parametrize("key", ["boot_min_s", "hands_up_hold_s", "abandon_after_s"])
+@pytest.mark.parametrize(
+    "key", ["boot_min_s", "hands_up_hold_s", "abandon_after_s", "release_grace_s"]
+)
 @pytest.mark.parametrize("value", [-1, True, "2"])
 def test_game_numbers_are_numbers_at_least_0(key, value):
     assert any(f"game.{key}" in p for p in problems(lambda c: c["game"].update({key: value})))

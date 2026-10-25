@@ -125,6 +125,7 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
   empowered_mult: 1.5         # Holy Light: the caster's spells and basic attacks x this while empowered
   mana_slow_mult: 0.25        # Static Field: the target's mana regen x this while slowed
   slow_charge_mult: 0.6       # Inferno: the target's next charge window x this
+  release_grace_s: 0.6        # (guess, Task 5 measured charge landing +0.4 s, worst +0.6 s after speech) mic on: a push with no charge waits this long for one
   combat:
     speed_ref_mps: 2.0
     speed_mult_min: 0.6
