@@ -74,6 +74,17 @@ def test_ko_runs_fx_in_slow_motion(fx):
     assert fx.timescale == 1.0
 
 
+def test_ko_banner_covers_the_engine_ko_hold(fx):
+    """The engine freezes the fight for game.ko_hold_s after a KO. The K.O. banner is what
+    says why, so it lasts until victory (and no longer: FX are cleared when the fight ends)."""
+    hold = CFG["game"]["ko_hold_s"]
+    assert CFG["render"]["fx"]["ko_s"] <= hold
+    fx.update(make_view(events=(GameEvent(0.0, "ko", None, {"winner": 0}),)), 0.0)
+    for _ in range(round(hold * 60) - 1):
+        fx.update(make_view(), 1 / 60)
+    assert fx.ko_left > 0
+
+
 def test_events_with_missing_data_are_ignored_quietly(fx):
     odd = (
         GameEvent(0.0, "hit", None, {}),
