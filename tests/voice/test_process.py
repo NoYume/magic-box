@@ -166,6 +166,9 @@ class ListQueue:
         items, self.items = self.items, []
         return items
 
+    def cancel_join(self):
+        pass
+
 
 class Run:
     """One serve() run: published events, pending control items, recorded backoff delays."""
