@@ -22,7 +22,7 @@ Draws the `GameView` and the latest camera frame as layout C (two 960x1080 halve
 - `camera_view.py`: opponent crop (8:9, padded, EMA-smoothed), mirrored self-view with skeleton, crop math.
 - `hud.py`: placeholder HUD (viewer panel, enemy HP bar).
 - `projectiles.py`: spell projectiles flying wrist → viewer, scaled by progress.
-- `debug_overlay.py`: debug overlay (toggle `F1`); fps only today.
+- `debug_overlay.py`: perception overlay (toggle `F1`). A header with render fps, camera fps and the dropped count. A panel per half for the player shown there: tracked or lost, distance and zone, pose flags, a `wrist_vz` graph with the push threshold line, and a flash on a push. A top-down map in meters below the panels, mirrored like the players' view.
 - `scenes/lobby.py`, `scenes/loading.py`, `scenes/victory.py`: scene placeholders (draw the scene name).
 
 ## Test without the Jetson
@@ -36,4 +36,3 @@ Tests use the SDL dummy drivers set in `tests/conftest.py`.
 ## Open TODOs
 - `TODO(Nikhil)` `projectiles.py`: `draw_projectiles` raises `NotImplementedError` when a projectile targets a viewer. The placeholder engine never emits projectiles, so `--fake` works today.
 - `TODO(Adetola)`: real `hud.py`; real lobby, loading and victory scenes.
-- `TODO(Enoch)` `debug_overlay.py`: top-down meters view and `wrist_vz` graph (M3, the depth proof for judges).

@@ -16,7 +16,7 @@ from magic_box.render.camera_view import (
     draw_selfview,
     frame_to_surface,
 )
-from magic_box.render.debug_overlay import draw_debug_overlay
+from magic_box.render.debug_overlay import DebugOverlay
 from magic_box.render.hud import draw_enemy_bar, draw_hud
 from magic_box.render.layout import Rect, compute_layout
 from magic_box.render.projectiles import draw_projectiles
@@ -57,6 +57,7 @@ class Window:
             CropSmoother(self.render_cfg["crop_smoothing"]),
         )
         self.debug = False
+        self._debug_overlay = DebugOverlay(cfg)
         self._surf_cache: tuple[int, pygame.Surface] | None = None
         self._quit_key = pygame.key.key_code(cfg["keys"]["quit"])
         self._debug_key = pygame.key.key_code(cfg["keys"]["debug_overlay"])
@@ -107,7 +108,7 @@ class Window:
             img = self.banner_font.render(view.banner, True, TEXT_RGB)
             self.screen.blit(img, img.get_rect(center=(self.width // 2, self.height // 2)))
         if self.debug:
-            draw_debug_overlay(self.screen, states, fps, dropped)
+            self._debug_overlay.draw(self.screen, states, fps, dropped)
         pygame.display.flip()
 
     def _draw_fight(
