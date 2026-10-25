@@ -39,9 +39,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def hard_exit(code: int) -> None:
     """Exit now, skipping the join of non-daemon threads.
 
-    A Spark call in flight sits in a ThreadPoolExecutor thread that the interpreter would
-    wait for at exit (up to the API timeout). Everything that needs cleanup is closed by
-    `run()` before this is called.
+    Spark calls run on daemon threads (`ai/worker.py`), so they no longer hold the exit;
+    this guards against any other non-daemon thread (a library's, or a future one) doing
+    so. Everything that needs cleanup is closed by `run()` before this is called.
     """
     sys.stdout.flush()
     sys.stderr.flush()
