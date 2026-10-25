@@ -14,8 +14,9 @@ from magic_box.ai.incantations import (
     generate_incantations,
     validate_incantations,
 )
+from magic_box.ai.spark_client import SparkClient
 from magic_box.core.config import load_config
-from tests.ai.fakes import FakeClient
+from tests.ai.fakes import FakeClient, FakeOpenAI
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
 CLASSES = {0: "fire_mage", 1: "lightning_mage"}
@@ -90,3 +91,31 @@ def test_identical_sets_force_fallback_for_slot_1():
 def test_garbage_or_exception_gives_full_fallback(reply):
     out = generate_incantations(FakeClient(reply), CLASSES, NAMES, CFG)
     assert out == fallback_incantations(CLASSES, CFG)
+
+
+class KeyEchoError(Exception):
+    """Like an openai APIStatusError whose message echoes request details."""
+
+    status_code = 401
+
+
+def test_spark_failure_logs_one_line_without_the_key(capsys):
+    fake = FakeOpenAI(KeyEchoError("Incorrect API key provided: sk-secret-123"))
+    client = SparkClient(CFG, env={"META_MODEL_API_KEY": "sk-secret-123"}, openai_factory=fake)
+    assert generate_incantations(client, CLASSES, NAMES, CFG) == fallback_incantations(CLASSES, CFG)
+    err = capsys.readouterr().err
+    assert err == "spark: incantations fell back: KeyEchoError 401\n"
+    assert "sk-secret" not in err
+    generate_incantations(FakeClient(RuntimeError("down sk-secret-123")), CLASSES, NAMES, CFG)
+    assert capsys.readouterr().err == "spark: incantations fell back: RuntimeError\n"
+
+
+@pytest.mark.parametrize("reply", ["not json", "[]", '{"0": 5}'])
+def test_unusable_reply_is_logged(reply, capsys):
+    generate_incantations(FakeClient(reply), CLASSES, NAMES, CFG)
+    assert capsys.readouterr().err == "spark: incantations reply unusable, using fallback\n"
+
+
+def test_valid_reply_logs_nothing(capsys):
+    generate_incantations(FakeClient(json.dumps(GOOD)), CLASSES, NAMES, CFG)
+    assert capsys.readouterr().err == ""

@@ -7,6 +7,7 @@ import copy
 import json
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from magic_box.ai.chronicle import template_chronicle
@@ -21,15 +22,18 @@ CLASSES, NAMES = {0: "fire_mage", 1: "lightning_mage"}, {0: "Ada", 1: "Bo"}
 
 
 class BlockingClient:
-    """`complete` blocks until `release` is set, then returns the reply."""
+    """`complete` blocks until `release` is set, then returns the reply.
 
-    def __init__(self, reply: str) -> None:
+    A callable reply is called with the user prompt, so a result can show which job made it.
+    """
+
+    def __init__(self, reply: "str | Callable[[str], str]") -> None:
         self.reply = reply
         self.release = threading.Event()
 
     def complete(self, system: str, user: str) -> str:
         self.release.wait(5.0)
-        return self.reply
+        return self.reply(user) if callable(self.reply) else self.reply
 
 
 def wait_poll(w, now, timeout=2.0):
@@ -65,13 +69,13 @@ def test_timeout_returns_fallback_and_drops_late_result():
 
 
 def test_new_job_replaces_pending_of_same_kind():
-    client = BlockingClient("A tale.")
+    client = BlockingClient(lambda user: "A tale of Cy." if "Cy" in user else "A tale of Ada.")
     w = AiWorker(CFG, client=client)
     w.start_chronicle([], NAMES, now=0.0)
     w.start_chronicle([], {0: "Cy", 1: "Di"}, now=1.0)
     client.release.set()
     out = wait_poll(w, 1.5)
-    assert out == [("chronicle", "A tale.")] and w.poll(2.0) == []
+    assert out == [("chronicle", "A tale of Cy.")] and w.poll(2.0) == []
     w.close()
 
 

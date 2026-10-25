@@ -4,6 +4,7 @@ Owner: Nikhil
 """
 
 import os
+import sys
 from collections.abc import Callable, Mapping
 
 from magic_box.core.config import Config
@@ -11,6 +12,20 @@ from magic_box.core.config import Config
 
 class SparkUnavailable(RuntimeError):
     """Spark is disabled or has no API key; callers fall back."""
+
+
+def log_line(msg: str) -> None:
+    print(f"spark: {msg}", file=sys.stderr, flush=True)
+
+
+def log_fallback(job: str, exc: Exception) -> None:
+    """One stderr line: the exception type and HTTP status only.
+
+    Never the message: an openai error can echo request details.
+    """
+    status = getattr(exc, "status_code", None)
+    code = "" if status is None else f" {status}"
+    log_line(f"{job} fell back: {type(exc).__name__}{code}")
 
 
 class SparkClient:

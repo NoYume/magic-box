@@ -10,6 +10,7 @@ from collections.abc import Mapping
 from rapidfuzz import fuzz
 from rapidfuzz.utils import default_process
 
+from magic_box.ai.spark_client import log_fallback, log_line
 from magic_box.core.config import Config
 
 _ALLOWED = re.compile(r"^[A-Za-z' ]+$")
@@ -112,7 +113,14 @@ def generate_incantations(
     """slot -> spell_id -> text. Any failure gives the full config fallback."""
     try:
         reply = client.complete(_SYSTEM, _prompt(classes, names, cfg))
+    except Exception as e:
+        log_fallback("incantations", e)
+        return fallback_incantations(classes, cfg)
+    try:
         raw = json.loads(_strip_fence(reply))
     except Exception:
-        return fallback_incantations(classes, cfg)
-    return validate_incantations(raw, classes, cfg)
+        raw = None
+    out = validate_incantations(raw, classes, cfg)
+    if out == fallback_incantations(classes, cfg):  # not JSON, or no entry survived
+        log_line("incantations reply unusable, using fallback")
+    return out

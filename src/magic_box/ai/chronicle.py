@@ -3,8 +3,10 @@
 Owner: Nikhil
 """
 
+import unicodedata
 from collections.abc import Mapping, Sequence
 
+from magic_box.ai.spark_client import log_fallback
 from magic_box.core.config import Config
 from magic_box.core.contracts import GameEvent
 
@@ -163,13 +165,28 @@ def _user_prompt(s: dict, cfg: Config) -> str:
     return "\n".join(lines)
 
 
+def sanitize_chronicle(text: str, max_words: int) -> str:
+    """One line of printable text, at most `max_words` words ("…" marks a cut).
+
+    Whitespace runs become one space; other control and format characters (a NUL crashes
+    pygame's font.render) are dropped.
+    """
+    kept = "".join(c for c in text if c.isspace() or unicodedata.category(c) not in ("Cc", "Cf"))
+    words = kept.split()
+    if len(words) > max_words:
+        return " ".join(words[:max_words]) + "\u2026"
+    return " ".join(words)
+
+
 def write_chronicle(
     client, events: Sequence[GameEvent], names: Mapping[int, str], cfg: Config
 ) -> str:
-    """Spark-written story; an empty reply or any exception gives the template."""
+    """Spark-written story, sanitized; an empty reply or any exception gives the template."""
     try:
         s = summarize(events, names, cfg)
-        text = client.complete(_SYSTEM, _user_prompt(s, cfg)).strip()
-    except Exception:
+        reply = client.complete(_SYSTEM, _user_prompt(s, cfg))
+        text = sanitize_chronicle(reply, cfg["ai"]["chronicle_max_words"])
+    except Exception as e:
+        log_fallback("chronicle", e)
         return template_chronicle(events, names, cfg)
     return text or template_chronicle(events, names, cfg)

@@ -7,9 +7,10 @@ import re
 from pathlib import Path
 
 from magic_box.ai.chronicle import template_chronicle, write_chronicle
+from magic_box.ai.spark_client import SparkClient
 from magic_box.core.config import load_config
 from magic_box.core.contracts import GameEvent
-from tests.ai.fakes import FakeClient
+from tests.ai.fakes import FakeClient, FakeOpenAI
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
 NAMES = {0: "Ada", 1: "Bo"}
@@ -82,3 +83,38 @@ def test_template_survives_malformed_log():
     text = template_chronicle(log, NAMES, CFG)
     assert isinstance(text, str) and text
     assert "draw" in text.lower()
+
+
+class KeyEchoError(Exception):
+    """Like an openai APIStatusError whose message echoes request details."""
+
+    status_code = 429
+
+
+def test_spark_failure_logs_one_line_without_the_key(capsys):
+    fake = FakeOpenAI(KeyEchoError("rate limited for key sk-secret-123"))
+    client = SparkClient(CFG, env={"META_MODEL_API_KEY": "sk-secret-123"}, openai_factory=fake)
+    assert write_chronicle(client, KO_LOG, NAMES, CFG) == template_chronicle(KO_LOG, NAMES, CFG)
+    err = capsys.readouterr().err
+    assert err == "spark: chronicle fell back: KeyEchoError 429\n"
+    assert "sk-secret" not in err
+    write_chronicle(FakeClient(RuntimeError("down sk-secret-123")), KO_LOG, NAMES, CFG)
+    assert capsys.readouterr().err == "spark: chronicle fell back: RuntimeError\n"
+
+
+def test_chronicle_whitespace_and_control_chars_are_cleaned():
+    reply = "  Ada\x00 struck\n\tBo\u200b down.\r\n "
+    assert write_chronicle(FakeClient(reply), KO_LOG, NAMES, CFG) == "Ada struck Bo down."
+
+
+def test_long_chronicle_is_truncated_to_max_words():
+    n = CFG["ai"]["chronicle_max_words"]
+    exact = " ".join(f"w{i}" for i in range(n))
+    assert write_chronicle(FakeClient(exact), KO_LOG, NAMES, CFG) == exact
+    long = write_chronicle(FakeClient(exact + " w_extra more"), KO_LOG, NAMES, CFG)
+    assert long == exact + "\u2026"
+
+
+def test_chronicle_of_only_control_chars_gives_the_template():
+    text = write_chronicle(FakeClient("\x00\n\u200b\x07 \t"), KO_LOG, NAMES, CFG)
+    assert text == template_chronicle(KO_LOG, NAMES, CFG)
