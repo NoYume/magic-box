@@ -10,6 +10,7 @@ from collections.abc import Mapping
 import pygame
 
 from magic_box.core.contracts import Frame, GameView, PlayerState
+from magic_box.render.audio import Audio
 from magic_box.render.camera_view import (
     CropSmoother,
     crop_rect_for_bbox,
@@ -56,6 +57,7 @@ class Window:
         self.layout = compute_layout(self.width, self.height, self.render_cfg)
         self.background = make_background(self.width, self.height, self.theme)
         self.fx = Fx(cfg, self.theme, self.layout)
+        self.audio = Audio(cfg, enabled=not headless)
         self.opp_smoothers = (
             CropSmoother(self.render_cfg["crop_smoothing"]),
             CropSmoother(self.render_cfg["crop_smoothing"]),
@@ -119,6 +121,7 @@ class Window:
         self._last_draw_t = now
         self.hud.update(view, dt)
         self.fx.update(view, dt)
+        self.audio.update(view)
         if view.scene == "fight":
             self.screen.fill(tuple(self.render_cfg["background_rgb"]))
             self._draw_fight(view, frame, states, now)
