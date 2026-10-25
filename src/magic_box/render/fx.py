@@ -399,17 +399,53 @@ class Fx:
             surface.blit(img, img.get_rect(center=(round(t.x), round(t.y - t.rise * k))))
 
     def draw_overlay(self, surface: pygame.Surface) -> None:
-        """The KO banner: grows slowly while FX time runs in slow motion."""
+        """Draw one cinematic KO banner across the center of the full screen."""
         if self.ko_left <= 0:
             return
         total = float(self.f["ko_s"])
         k = 1.0 - self.ko_left / max(total, 1e-6)
         w, h = surface.get_size()
-        base = self.theme.text(
-            "K.O.!", self.theme.font_px(self.theme.title_px["ko"], display=True), self.ko_rgb
-        )
-        scale = 0.7 + 0.5 * min(1.0, k * 2.0)
-        img = self.theme.scaled(base, scale)
-        img.set_alpha(round(255 * min(1.0, 4.0 * (1.0 - k))))
-        for cx in (w // 4, 3 * w // 4):
-            surface.blit(img, img.get_rect(center=(cx, h // 2)))
+        cx, cy = w // 2, h // 2
+        alpha = round(float(self.f["ko_back_alpha"]) * min(1.0, k * 5.0))
+        veil = pygame.Surface((w, h), pygame.SRCALPHA)
+        veil.fill((*self.theme.c["black"], alpha))
+        surface.blit(veil, (0, 0))
+
+        band_h = round(h * float(self.f["ko_band_h_frac"]))
+        band = pygame.Rect(0, cy - band_h // 2, w, band_h)
+        band_layer = pygame.Surface((w, band_h), pygame.SRCALPHA)
+        band_layer.fill((*self.theme.c["panel"], min(255, alpha + 45)))
+        surface.blit(band_layer, band.topleft)
+        line_px = round(float(self.f["ko_line_px"]))
+        line_alpha = round(255 * min(1.0, k * 12.0))
+        line_layer = pygame.Surface((w, h), pygame.SRCALPHA)
+        for y in (band.top, band.bottom - line_px):
+            pygame.draw.line(line_layer, (*self.ko_rgb, line_alpha), (0, y), (w, y), line_px)
+        ornament_r = band_h // 18
+        for x in (w // 4, 3 * w // 4):
+            points = (
+                (x, band.top - ornament_r),
+                (x + ornament_r, band.top),
+                (x, band.top + ornament_r),
+                (x - ornament_r, band.top),
+            )
+            pygame.draw.polygon(line_layer, (*self.ko_rgb, line_alpha), points)
+            points = (
+                (x, band.bottom - ornament_r),
+                (x + ornament_r, band.bottom),
+                (x, band.bottom + ornament_r),
+                (x - ornament_r, band.bottom),
+            )
+            pygame.draw.polygon(line_layer, (*self.ko_rgb, line_alpha), points)
+        surface.blit(line_layer, (0, 0))
+
+        font = self.theme.font_px(self.theme.title_px["ko"], display=True)
+        glow = self.theme.text("K.O.!", font, self.theme.c["white"])
+        base = self.theme.text("K.O.!", font, self.ko_rgb)
+        scale = 0.72 + 0.48 * min(1.0, k * 2.0)
+        glow_img = self.theme.scaled(glow, scale * 1.04).copy()
+        glow_img.set_alpha(round(90 * min(1.0, k * 12.0)))
+        img = self.theme.scaled(base, scale).copy()
+        img.set_alpha(round(255 * min(1.0, k * 12.0)))
+        surface.blit(glow_img, glow_img.get_rect(center=(cx, cy)))
+        surface.blit(img, img.get_rect(center=(cx, cy)))

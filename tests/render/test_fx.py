@@ -74,6 +74,26 @@ def test_ko_runs_fx_in_slow_motion(fx):
     assert fx.timescale == 1.0
 
 
+def test_ko_title_is_drawn_once_at_screen_center(fx):
+    fx.update(make_view(events=(GameEvent(0.0, "ko", None, {"winner": 0}),)), 0.0)
+    fx.update(make_view(), 0.2)
+    surface = pygame.Surface((1920, 1080))
+    fx.draw_overlay(surface)
+    center = pygame.Rect(720, 390, 480, 300)
+    left = pygame.Rect(240, 390, 480, 300)
+    right = pygame.Rect(1200, 390, 480, 300)
+
+    def warm_pixels(rect):
+        return sum(
+            1
+            for x in range(rect.left, rect.right, 4)
+            for y in range(rect.top, rect.bottom, 4)
+            if (pixel := surface.get_at((x, y))).r > pixel.g * 1.3 and pixel.r > 40
+        )
+
+    assert warm_pixels(center) > warm_pixels(left) + warm_pixels(right)
+
+
 def test_ko_banner_covers_the_engine_ko_hold(fx):
     """The engine freezes the fight for game.ko_hold_s after a KO. The K.O. banner is what
     says why, so it lasts until victory (and no longer: FX are cleared when the fight ends)."""
