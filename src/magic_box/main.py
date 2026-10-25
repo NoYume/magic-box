@@ -36,6 +36,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def preload_openai() -> bool:
+    """Import `openai` once at startup, so the Spark thread doesn't pay for it mid-game."""
+    try:
+        import openai  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def hard_exit(code: int) -> None:
     """Exit now, skipping the join of non-daemon threads.
 
@@ -78,6 +87,8 @@ def run(argv: Sequence[str] | None = None) -> int:
         if args.fullscreen:
             cfg["display"]["fullscreen"] = True
         configure_camera_view(cfg["render"])
+        if cfg["ai"]["enabled"]:
+            preload_openai()
         if args.fake:
             sources = FakeSources(cfg)
         elif args.replay is not None:

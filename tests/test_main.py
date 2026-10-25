@@ -22,3 +22,13 @@ def test_replay_missing_session_exits_2(capsys):
 def test_fake_and_replay_are_exclusive():
     with pytest.raises(SystemExit):
         parse_args(["--fake", "--replay", "x"])
+
+
+def test_preload_openai_is_safe_without_the_package(monkeypatch):
+    import sys
+
+    from magic_box.main import preload_openai
+
+    assert preload_openai() in (True, False)
+    monkeypatch.setitem(sys.modules, "openai", None)  # makes `import openai` raise ImportError
+    assert preload_openai() is False
