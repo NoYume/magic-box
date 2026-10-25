@@ -41,6 +41,13 @@ def test_one_stream_per_device_and_channel_split():
     ]
 
 
+def test_mic_entry_without_device_uses_the_system_default():
+    sd, got = FakeSD(), []
+    hub([{"slot": 0, "channel": 0}, {"slot": 1, "channel": 1}], sd, got).start()
+    [stream] = sd.streams
+    assert stream.kwargs["device"] is None and stream.kwargs["channels"] == 2
+
+
 def test_two_devices_two_streams():
     sd, got = FakeSD(), []
     hub(

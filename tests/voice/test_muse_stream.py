@@ -4,9 +4,11 @@ Owner: Nikhil
 """
 
 import asyncio
+import time
 
 import pytest
 
+from magic_box.voice import muse_stream
 from magic_box.voice.muse_stream import MuseError, MuseStream, handshake
 from tests.voice.fake_muse import FakeMuse
 
@@ -115,5 +117,74 @@ def test_server_close_code_is_exposed():
             ms = MuseStream(srv.url, "k", "m", 1.0)
             await ms.connect([])
             assert [ev async for ev in ms.events()] == [] and ms.close_code == 1011
+
+    arun(go())
+
+
+async def until(cond, period=0.01):
+    while not cond():
+        await asyncio.sleep(period)
+
+
+def test_cancelled_handshake_closes_the_socket_at_once():
+    async def go():
+        async with FakeMuse([]) as srv:  # takes the handshake frame and never replies
+            ms = MuseStream(srv.url, "k", "m", 5.0)
+            task = asyncio.ensure_future(ms.connect([]))
+            await asyncio.wait_for(until(lambda: srv.handshakes), 1.0)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            await asyncio.wait_for(srv.disconnected.wait(), 1.0)
+
+    arun(go())
+
+
+def test_keepalive_and_close_timeouts_reach_connect(monkeypatch):
+    seen = {}
+    real_connect = muse_stream.connect
+
+    def spy(uri, **kwargs):
+        seen.update(kwargs)
+        return real_connect(uri, **kwargs)
+
+    monkeypatch.setattr(muse_stream, "connect", spy)
+
+    async def go():
+        script = [("send", {"sessionId": "s"}), ("wait_text", "endStream"), ("close", 1000)]
+        async with FakeMuse(script) as srv:
+            ms = MuseStream(srv.url, "k", "m", 1.0)
+            await ms.connect([])
+            await ms.close()
+
+    arun(go())
+    names = ("open_timeout", "close_timeout", "ping_interval", "ping_timeout")
+    assert {k: seen.get(k) for k in names} == {
+        "open_timeout": 1.0,
+        "close_timeout": 1.0,
+        "ping_interval": 5.0,
+        "ping_timeout": 5.0,
+    }
+    assert (
+        muse_stream.CLOSE_TIMEOUT_S,
+        muse_stream.PING_INTERVAL_S,
+        muse_stream.PING_TIMEOUT_S,
+    ) == (1.0, 5.0, 5.0)
+
+
+def test_close_is_bounded_when_the_end_stream_send_stalls():
+    async def stalled_send(message):
+        await asyncio.Event().wait()  # a TCP buffer that never drains
+
+    async def go():
+        async with FakeMuse([("send", {"sessionId": "s"})]) as srv:
+            ms = MuseStream(srv.url, "k", "m", 1.0)
+            await ms.connect([])
+            ms._ws.send = stalled_send  # noqa: SLF001
+            started = time.monotonic()
+            await asyncio.wait_for(ms.close(), 3.0)
+            assert time.monotonic() - started < 1.5  # CLOSE_TIMEOUT_S (1.0) plus slack
+            await asyncio.wait_for(srv.disconnected.wait(), 1.0)
+            await ms.close()  # still idempotent
 
     arun(go())

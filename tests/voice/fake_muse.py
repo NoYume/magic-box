@@ -4,6 +4,7 @@ Owner: Nikhil
 
 Runs on 127.0.0.1 only. The script steps run after the handshake frame arrives:
 ("send", dict), ("wait_audio", n), ("wait_text", type), ("close", code), ("sleep", s).
+`disconnected` is set when the server sees the connection end after the handshake.
 """
 
 import asyncio
@@ -20,6 +21,7 @@ class FakeMuse:
         self.handshakes: list[dict] = []
         self.audio: list[bytes] = []
         self.texts: list[dict] = []
+        self.disconnected = asyncio.Event()
         self._server = None
 
     async def __aenter__(self) -> "FakeMuse":
@@ -44,6 +46,7 @@ class FakeMuse:
                     self.texts.append(json.loads(msg))
         except ConnectionClosed:
             pass
+        self.disconnected.set()
 
     async def _wait(self, cond) -> None:
         while not cond():

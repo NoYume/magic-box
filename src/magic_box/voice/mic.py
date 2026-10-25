@@ -61,7 +61,8 @@ class MicHub:
         self._streams: list[Any] = []
         grouped: dict[Any, dict[int, int]] = {}
         for m in mics:
-            grouped.setdefault(m["device"], {})[int(m["slot"])] = int(m["channel"])
+            device = m.get("device")  # missing or None: the system default input
+            grouped.setdefault(device, {})[int(m["slot"])] = int(m["channel"])
         self._devices = [_Device(dev, sc) for dev, sc in grouped.items()]
 
     def start(self) -> None:
