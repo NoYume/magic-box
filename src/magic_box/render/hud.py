@@ -55,6 +55,11 @@ def name_line(me: PlayerView) -> str:
     return f"{me.name} · {me.class_id} · {'MIC OK' if me.mic_ok else 'MIC OFF'}"
 
 
+def charge_label(charge_s: float) -> str:
+    """Whole seconds left on the charge, rounded up (never "0" while still charged)."""
+    return str(math.ceil(charge_s)) if charge_s > 0 else ""
+
+
 def affordable(me: PlayerView, spell: SpellView) -> bool:
     return spell.charged or me.mana + 1e-6 >= spell.cost
 
@@ -297,7 +302,7 @@ class Hud:
             surface.blit(th.panel(row.w, row.h, c["card_hi"], 230, edge), row.topleft)
             ring = frac(me.charge_s, self.charge_window_s) if me.charge_s > 0 else 1.0
             draw_ring(surface, (cx, cy), 24, 7, ring, self.c["charge_rgb"], c["faint"])
-            secs = f"{me.charge_s:.0f}" if me.charge_s > 0 else ""
+            secs = charge_label(me.charge_s)
             if secs:
                 th.blit_text(surface, secs, "tiny", c["text"], "center", (cx, cy))
             name = th.blit_text(

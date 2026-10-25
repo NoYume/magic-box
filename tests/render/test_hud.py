@@ -112,6 +112,13 @@ def test_long_incantation_fits_a_spell_row_without_an_ellipsis():
         pygame.quit()
 
 
+def test_charge_label_rounds_up():
+    from magic_box.render.hud import charge_label
+
+    assert charge_label(0.3) == "1" and charge_label(2.0) == "2" and charge_label(2.01) == "3"
+    assert charge_label(0.0) == ""
+
+
 def test_affordable_and_charged_spell():
     from magic_box.render.hud import affordable, charged_spell
     from tests.factories import make_full_player
