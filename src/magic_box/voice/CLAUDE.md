@@ -35,7 +35,7 @@ Seconds from the end of the speech; negative means while the player is still spe
 | **Charge** (published, with the 1.0 s hold) | **+0.4 s** | **+0.3 to +0.6 s** |
 | `speechComplete` (final) | +3.4 s | +0.4 to +3.8 s (bimodal: about 0.5 s or about 3.3 s) |
 
-- 17/17 matched the right spell, never a wrong one. A 0.8 s hold charged 4/5 at score 100 (one whole phrase came 0.88 s after the prefix), so the hold is 1.0 s; that charged 3/3 at 100. The charge row is from the 1.0 s hold.
+- 17/17 matched the right spell, never a wrong one. A 0.8 s hold charged 4/5 at score 100 (one whole phrase came 0.88 s after the prefix), so the hold is 1.0 s; that charged 4/4 at 100. The charge row is from the 1.0 s hold.
 - `game.charge_window_s` = 0.6 s worst charge latency + 2.0 s reaction, rounded to 0.5 s, minimum 2.5 → **2.5 s**.
 - `keywords=words` was the best format: earliest matches, and it spells "forty" (with no keywords Muse wrote "40", scoring 88). `phrases` gave nothing extra and one handshake failed on the 30-character limit.
 - Lobby names and class picks come from `speechComplete`, so they arrive about 3.3 s after the player stops talking when the endpointer waits for silence.
