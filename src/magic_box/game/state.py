@@ -132,7 +132,7 @@ class MatchState:
         if self._result is not None:
             return
         if action.kind == "charge":
-            self._charge(action, now)
+            self._charge(action, states, now)
         elif action.kind == "push":
             self._push(action, states, now)
         elif action.kind == "pose":
@@ -240,7 +240,7 @@ class MatchState:
         for p in self.players:
             p.held = None
 
-    def _charge(self, action: Action, now: float) -> None:
+    def _charge(self, action: Action, states: Mapping[int, PlayerState], now: float) -> None:
         p = self.players[action.slot]
         spell = next((s for s in p.spells if s.id == action.spell_id), None)
         if spell is None or p.mana < spell.cost:
@@ -256,6 +256,17 @@ class MatchState:
             held, p.held, c, p.charge = p.held.action, None, p.charge, None
             assert held.push is not None
             self._cast(p, c, held, held.push.origin_px, held.push.speed, now)
+            return
+        # The voice charge lands ~0.4 s after speech: a release pose already held (the arm is
+        # up) releases it now, rather than waiting for the player to lower and raise again.
+        st = states.get(p.slot)
+        if st is not None and st.tracking_ok:
+            for flag in sorted(st.pose_flags):
+                if POSE_RELEASES.get(flag) == spell.release:
+                    c, p.charge = p.charge, None
+                    pose = Action("pose", p.slot, action.t, pose=flag, dist=st.root[2])
+                    self._cast(p, c, pose, self._pose_origin(p.slot, states), None, now)
+                    return
 
     def _push(self, action: Action, states: Mapping[int, PlayerState], now: float) -> None:
         p = self.players[action.slot]

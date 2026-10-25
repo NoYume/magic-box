@@ -567,6 +567,28 @@ def test_push_just_before_a_late_charge_releases_the_spell(mic):
         assert [s.id for s in h.player(0).spells if s.charged] == ["fireball"]
 
 
+@pytest.mark.parametrize(
+    ("spell_id", "key"), [("holy_light", "hands_up"), ("heal", "hands_together")]
+)
+def test_a_late_charge_releases_a_pose_already_held(spell_id, key):
+    """A Holy Knight raises the arm while speaking; the voice charge lands after."""
+    cfg = make_cfg()
+
+    def script(h: Harness):
+        h.mic(0, "connected")
+        yield from to_fight(h, [(0, "holy")])
+        out["n"] = len(h.events)
+        yield from hold({KEYS[0][key]}, 0.3)
+        h.incant(0, spell_id, score=92.0)
+        yield from hold({KEYS[0][key]}, 0.3)
+        yield from hold(NONE, 0.2)
+
+    out: dict = {}
+    h = Harness(cfg).run(script)
+    assert [e.data["spell_id"] for e in h.find("cast", slot=0, since=out["n"])] == [spell_id]
+    assert not any(s.charged for s in h.player(0).spells)
+
+
 def test_mic_up_push_without_a_charge_is_a_basic_after_the_grace():
     cfg = make_cfg()
     grace = cfg["game"]["release_grace_s"]

@@ -340,3 +340,36 @@ def test_a_knockout_blow_puts_no_effect_on_the_loser():
     land(ms, 2.4)
     assert kinds(ms) == ["cast", "hit", "ko", "match_end"]
     assert ms.effect_views(1) == ()
+
+
+@pytest.mark.parametrize(
+    ("spell", "flag"), [("holy_light", "hands_up"), ("heal", "hands_together")]
+)
+def test_a_charge_landing_while_its_pose_is_held_releases_it(spell, flag):
+    """The voice charge lands ~0.4 s after speech; an arm already raised (a held pose, not a
+    new edge) must still release the spell instead of waiting for a second raise."""
+    ms = new(classes=("holy_knight", "lightning_mage"))
+    ms.players[0].hp = 50.0
+    held = dict(STATES)
+    held[0] = make_state(0, root=(0.6, 0.0, 2.0), pose_flags=frozenset({flag}))
+    ms.apply(charge(0, spell), held, 0.0)
+    assert ms.players[0].charge is None
+    assert "cast" in kinds(ms)
+
+
+def test_a_held_pose_does_not_release_a_spell_it_does_not_match():
+    ms = new(classes=("holy_knight", "lightning_mage"))
+    held = dict(STATES)
+    held[0] = make_state(0, root=(0.6, 0.0, 2.0), pose_flags=frozenset({"hands_together"}))
+    ms.apply(charge(0, "holy_light"), held, 0.0)
+    assert ms.players[0].charge is not None and kinds(ms) == []
+
+
+def test_a_lost_player_pose_flags_do_not_release_a_charge():
+    ms = new(classes=("holy_knight", "lightning_mage"))
+    held = dict(STATES)
+    held[0] = make_state(
+        0, root=(0.6, 0.0, 2.0), pose_flags=frozenset({"hands_up"}), tracking_ok=False
+    )
+    ms.apply(charge(0, "holy_light"), held, 0.0)
+    assert ms.players[0].charge is not None
