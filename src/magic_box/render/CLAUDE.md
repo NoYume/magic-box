@@ -51,6 +51,6 @@ All config, defaults unchanged. Try them in this order if the Orin Nano drops be
 3. `render.camera_scale_quality: fast` (default, `pygame.transform.scale`) or `smooth` (`smoothscale`, nicer, slower). Keep `fast` on the Jetson.
 4. `display.vsync: true`: uses `SCALED` + vsync. Can fix tearing but caps fps at the monitor rate. Leave off unless tearing shows.
 5. FX: lower `render.fx.max_particles` (160), `render.projectiles.trail_steps` (6) and `render.projectiles.glow_max_px` (224). The glow cache (all tints prebuilt at startup) is about 21 MB in 177 surfaces with the defaults; raising `glow_max_px` or lowering the step sizes grows it.
-6. Lower `display.fps`, or drop the camera to a smaller `camera.resolution` / `BODY_18` (see the root `CLAUDE.md` risks).
+6. Lower `display.fps`, or switch the camera to `BODY_18` with `camera.body_fitting: false` (see the root `CLAUDE.md` risks). SVGA is already the smallest ZED X `camera.resolution`.
 
 `camera_view.configure(cfg["render"])` applies items 1-3 (called from `main.py`).

@@ -44,4 +44,4 @@ uv run python -m magic_box --fake --headless --max-ticks 120
 ## Open TODOs
 - `TODO(Nikhil)`: verify the live path on the Jetson (perception + voice + Spark together), then size `game.charge_window_s` from the measured partial latency.
 - The frame-bus seqlock has no explicit memory fences. Re-run `MAGIC_BOX_STRESS=1 uv run pytest tests/pipeline/test_frame_bus.py` on the Jetson (aarch64; the stress test free-runs 1280x720 writes for ~3 s) before relying on it.
-- On a laptop without pyzed the perception process fails (the supervisor retries a few times) and the window shows "STEP INTO VIEW". Voice runs, but reports `"no api key"` or `"no mic"` when it cannot start.
+- On a laptop without pyzed the perception process fails (the supervisor retries it 5 times). The window shows boot with the camera line at "no frames" until `boot_max_s`, then the lobby with "CAMERA RECONNECTING". Voice runs, but reports `"no api key"` or `"no mic"` when it cannot start.

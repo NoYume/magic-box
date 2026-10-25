@@ -45,7 +45,7 @@ Turns the ZED X stream into `PlayerState`s and camera frames. Runs in its own pr
 uv run pytest tests/perception
 uv run python -m magic_box --fake
 ```
-`--fake` shows the rest of the app with keyboard players. Live mode on a laptop exits the perception process with "pyzed is not installed ... use --fake on a laptop", and the window shows STEP INTO VIEW.
+`--fake` shows the rest of the app with keyboard players. Live mode on a laptop exits the perception process with "pyzed is not installed ... use --fake on a laptop", and the window shows boot, then CAMERA RECONNECTING in the lobby.
 
 On the Jetson:
 - `uv run python scripts/check_env.py` checks `pyzed.sl`, the `zed_camera` and the `zed_x_daemon`.

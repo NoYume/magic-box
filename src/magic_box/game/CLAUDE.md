@@ -61,7 +61,7 @@ Events: `buff` (slot = caster; data `spell_id`, `effect`, `target`, `duration_s`
 uv run pytest tests/game
 uv run python -m magic_box --fake
 ```
-In fake mode boot waits up to `boot_max_s` (8 s) unless the loop reports the camera. Then hold hands up (`r` + `y`) to start, charge with the spell keys, push with `f` / `h`, two-hand spells with `v` / `m`, Holy Light with hands up (`r` / `y`), Heal with hands together (`t` / `u`). Transcripts can't come from the keyboard; tests send `Action("speech", ...)`.
+In fake mode the loop reports the camera at once, so boot leaves after `boot_min_s` (2 s); with no camera report it would wait `boot_max_s` (8 s). Then hold hands up (`r` + `y`) to start, charge with the spell keys, push with `f` / `h`, two-hand spells with `v` / `m`, Holy Light with hands up (`r` / `y`), Heal with hands together (`t` / `u`). Transcripts can't come from the keyboard; tests send `Action("speech", ...)`.
 
 ## Open TODOs
 - Open decisions (Adetola): final classes, spells, costs, gestures and numbers; `heals` as a count vs HP. Ruled 2026-10-25: one dodge per Chain bolt.
