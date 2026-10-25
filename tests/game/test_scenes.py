@@ -177,3 +177,18 @@ def test_victory_hands_up_waits_for_the_chronicle():
     kw = dict(both_ready=True, incantations_ready=False, match_over=True)
     assert not sm.update(t, chronicle_ready=False, **kw)
     assert sm.update(t, chronicle_ready=True, **kw) and sm.scene == "lobby"
+
+
+@pytest.mark.parametrize(
+    ("text", "class_id"),
+    [
+        ("lightening", "lightning_mage"),
+        ("I pick Lightening!", "lightning_mage"),
+        ("good night", None),
+    ],
+)
+def test_asr_spelling_variants_pick_the_class(text, class_id):
+    """Muse may write 'lightening'; 'night' is no knight keyword ("good night")."""
+    from magic_box.game.classes import parse_class
+
+    assert parse_class(text, CFG) == class_id

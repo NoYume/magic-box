@@ -161,7 +161,7 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
            fallback: {0: "let the whole sky catch fire", 1: "summon the sixth street inferno"}}
     lightning_mage:
       name: Lightning Mage
-      keywords: [lightning]
+      keywords: [lightning, lightening]   # an ASR spelling; the first keyword is the one shown
       spells:
         - {id: bolt, name: Bolt, cost: 20, damage: 12, travel_s: 0.9, release: push,
            fallback: {0: "storm of speedway strike", 1: "lightning answer my call"}}
