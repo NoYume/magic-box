@@ -12,12 +12,12 @@ Pure game rules: classes, spells, HP and mana, charge and dodge windows, combat,
 
 ## What the thin engine does
 - Scene flow `lobby → loading → fight → victory → lobby` (it starts in `lobby`; there is no `boot`).
-- Lobby: `speech` Actions set the player's name (`parse_name`, up to `name_max_chars`); both players raising hands starts the match. Names persist across matches.
+- Lobby: `speech` Actions set the player's name (`parse_name`, up to `name_max_chars`); both players raising hands starts the match. The start is edge-triggered: after a match the players must lower their hands, then raise them again (the first lobby at startup starts on the first both-hands-up tick). Names persist across matches.
 - Loading: waits for the incantations from `ai/` (config fallback fills any gap), `loading_min_s` to `loading_max_s`.
 - Fight: own match clock (starts at 0; `now` is only the timestamp on `GameEvent.t`). `round_s` round, mana regen, charge (`charge_window_s`), a release (push, two-hand push, arm overhead, hands together) fires the charged spell, a basic attack on an uncharged push. Damage is Appendix A (`combat.py`). The attacker's distance is the releasing Action's `dist` (else the last known). A dodge inside `dodge_window_s` of impact avoids the hit.
 - Spells with 0 damage (Flame Wall, Static Field, Holy Light, Heal) spend mana, log a `cast` event and show a banner. Nothing more.
 - Pause: if a player has been untracked for `pause_after_s`, everything freezes and the banner reads "STEP INTO VIEW".
-- Victory: ends on KO or time-out. Back to the lobby when both raise hands after `victory_min_s` (a held hands-up then starts the next loading at once), or at `victory_max_s`.
+- Victory: ends on KO or time-out. Back to the lobby when both raise hands after `victory_min_s`, or at `victory_max_s`. Hands still held up then keep the lobby open (names can change); lowering and raising them starts the next loading.
 
 ## Hard rules
 - **Pure Python.** Never import `pygame`, `pyzed` or `cv2` (`tests/test_boundaries.py` fails the build).

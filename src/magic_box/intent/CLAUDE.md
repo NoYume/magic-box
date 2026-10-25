@@ -8,14 +8,14 @@ Signal processing between inputs and rules. Turns `PlayerState` and `VoiceEvent`
 - In: `PlayerState` stream (Enoch) and `VoiceEvent` (Nikhil), both drained by the loop each tick.
 - Out: `Action` (`charge`, `push`, `pose`, `dodge`, `speech`) for `game/` (Adetola).
 - A voice `incantation` becomes `charge`; a `transcript` becomes `speech` (`Action.text`); `PlayerState.push` becomes `push`; a rising edge of a pose flag becomes `pose`; a windowed step or duck becomes `dodge`. `status` events are not intent's business: the loop passes them to the engine.
-- Pose and dodge Actions carry `dist` (root Z).
+- Charge, push, pose and dodge Actions carry `dist` (root Z; a charge uses the slot's last tracked root Z).
 
 ## Hard rules
 - Pure Python on contracts. No `pygame`, `pyzed`, `cv2`, no I/O, no sleeping. Called from the game loop, so it must be fast.
 - Time comes from `t` (`time.monotonic()`) on the contracts, never from the wall clock. Voice and push times are compared on that shared clock.
 - Thresholds (`dodge_step_m`, `dodge_duck_m`, `dodge_lookback_s`, `two_hand_window_s`) come from `cfg.intent`. No game rules (cost, damage, cooldown) here.
 - Skip states with `tracking_ok=False`.
-- **Two-hand push:** every push is held up to `two_hand_window_s` (0.1 s). If the other hand's `wrist_vz <= -push_speed_mps` (inclusive) within the window, the Action has `two_hand=True`; a cross exactly at the deadline counts as single. A push state that arrives after a pending push's deadline releases the pending one first (stall safety).
+- **Two-hand push:** a push is held up to `two_hand_window_s` (0.1 s), unless the other hand already crossed within the window (then it fires at once with `two_hand=True`). If the other hand's `wrist_vz <= -push_speed_mps` (inclusive) during the hold, it fires then with `two_hand=True`; a cross exactly at the deadline counts as single. A push state that arrives after a pending push's deadline releases the pending one first (stall safety).
 - **Dodge:** step = |root.x minus any sample in the lookback window| >= `dodge_step_m`; duck = head.y rise >= `dodge_duck_m`; step wins when both fire.
 
 ## Files
