@@ -51,6 +51,7 @@ class Window:
         pygame.display.set_caption("Magic Box")
         self.clock = pygame.time.Clock()
         self.theme = Theme(self.render_cfg)
+        self.theme.prewarm(int(self.render_cfg["projectiles"]["glow_max_px"]))
         self.hud = Hud(cfg, self.theme)
         self.scene_style = make_style(self.render_cfg["scenes"], self.theme, cfg)
         self.proj_font = pygame.font.Font(None, self.render_cfg["projectiles"]["font_px"])

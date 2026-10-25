@@ -160,29 +160,53 @@ class Theme:
         return surf
 
     def glow(self, radius: int, color: RGB, core: bool = True) -> pygame.Surface:
-        """An additive radial glow (black outside), cached per 8 px radius step."""
-        r = max(4, int(math.ceil(radius / 8.0)) * 8)
+        """An additive radial glow (black outside), cached per 8 px radius step.
+
+        A new color is a cheap tint of the cached gray falloff (copy + multiply), plus the white
+        core added on top, so no numpy work happens on the frame path after `prewarm`.
+        """
+        r = glow_step(radius)
         key = (r, color, core)
         surf = self._glows.get(key)
         if surf is None:
-            surf = make_glow(r, color, core)
-            surf = to_display(surf, alpha=False)
+            surf = self._gray(r, "fall").copy()
+            surf.fill(color, special_flags=pygame.BLEND_RGB_MULT)
+            if core:
+                surf.blit(self._gray(r, "core"), (0, 0), special_flags=pygame.BLEND_RGB_ADD)
             self._glows[key] = surf
         return surf
 
+    def _gray(self, r: int, part: str) -> pygame.Surface:
+        key = (r, part)
+        surf = self._glows.get(key)
+        if surf is None:
+            surf = to_display(make_glow_part(r, part), alpha=False)
+            self._glows[key] = surf
+        return surf
 
-def make_glow(radius: int, color: RGB, core: bool = True) -> pygame.Surface:
-    """Radial glow, with a hot white core if `core`; blit with `BLEND_RGB_ADD`."""
+    def prewarm(self, max_radius: int) -> None:
+        """Build the gray glow parts for every radius step up to `max_radius` (startup only)."""
+        for r in range(8, glow_step(max_radius) + 1, 8):
+            self._gray(r, "fall")
+            self._gray(r, "core")
+
+
+def glow_step(radius: float) -> int:
+    return max(8, int(math.ceil(radius / 8.0)) * 8)
+
+
+def make_glow_part(radius: int, part: str) -> pygame.Surface:
+    """Gray radial falloff (`fall`) or the hot white center (`core`), black outside."""
     size = radius * 2
     axis = np.arange(size, dtype=np.float32) - radius + 0.5
     d = np.sqrt(axis[:, None] ** 2 + axis[None, :] ** 2) / radius
-    fall = np.clip(1.0 - d, 0.0, 1.0) ** 2
-    col = np.array(color, dtype=np.float32)
-    px = fall[:, :, None] * col[None, None, :]
-    if core:
-        px = px + (np.clip(1.0 - d * 3.0, 0.0, 1.0) ** 2)[:, :, None] * 255.0
+    if part == "core":
+        a = np.clip(1.0 - d * 3.0, 0.0, 1.0) ** 2
+    else:
+        a = np.clip(1.0 - d, 0.0, 1.0) ** 2
+    px = np.repeat((a * 255.0).astype(np.uint8)[:, :, None], 3, axis=2)
     surf = pygame.Surface((size, size))
-    pygame.surfarray.blit_array(surf, np.clip(px, 0, 255).astype(np.uint8))
+    pygame.surfarray.blit_array(surf, px)
     return surf
 
 

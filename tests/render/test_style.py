@@ -29,7 +29,13 @@ def test_text_cache_reuses_and_stays_bounded(theme):
 
 def test_glow_is_cached_per_radius_step(theme):
     assert theme.glow(17, (255, 0, 0)) is theme.glow(23, (255, 0, 0))
-    assert theme.glow(17, (255, 0, 0)).get_size() == (48, 48)
+    g = theme.glow(17, (255, 0, 0), core=False)
+    assert g.get_size() == (48, 48)
+    center, edge = g.get_at((24, 24)), g.get_at((0, 0))
+    assert center[0] > 200 and center[1] == 0 and tuple(edge)[:3] == (0, 0, 0)
+    assert theme.glow(17, (255, 0, 0)).get_at((24, 24))[1] > 200  # white core on top
+    theme.prewarm(40)
+    assert (40, "fall") in theme._glows and (8, "core") in theme._glows
 
 
 def test_display_font_resolves_and_falls_back(theme):
