@@ -308,7 +308,7 @@ Run with `-- --debug` so the overlay is one key away. Tick each line, and write 
 **Fight: everything else**
 - [ ] Basic attack: a push with nothing charged. With mics on it lands about 0.6 s late (`release_grace_s`). Out of mana for every spell that push could release, it fires at once.
 - [ ] Say a spell and push on the last word: the spell fires, not a basic attack. This works even right after a basic attack, during its cooldown.
-- [ ] With mics on, spam basic attacks (push, push, push): they keep firing about every 1.4 s (0.6 s hold plus 0.8 s cooldown) and never stall.
+- [ ] With mics on, spam basic attacks (push, push, push): they keep firing every 0.8 s (the cooldown), each up to 0.6 s after the push, and never stall.
 - [ ] Dodge by a 0.3 m sidestep and by a 0.25 m duck during the red ring: DODGE! and no damage.
 - [ ] Damage rises when the players stand closer: the distance multiplier runs from ×1.4 at 1.2 m to ×0.7 at 2.8 m, for the attacker at release and the defender at impact.
 - [ ] One player steps out for more than 2 s: the fight freezes and the banner counts down (`STEP INTO VIEW · 20`, `· 19`, ...); stepping back resumes it.
