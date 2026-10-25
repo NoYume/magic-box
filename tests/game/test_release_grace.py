@@ -186,3 +186,34 @@ def test_engine_holds_a_push_only_while_the_mic_is_ok():
     assert [pr.spell_id for pr in view.projectiles] == ["fireball"]
     view, _ = e.step([Action("push", 1, t, push=p, dist=2.0)], _states(), t + 0.35)
     assert sorted(pr.spell_id for pr in view.projectiles) == ["basic", "fireball"]  # P2 mic off
+
+
+def test_no_hold_when_no_spell_the_push_could_release_is_affordable():
+    """Ruling (QA 2): out of mana, the basic attack fires at once."""
+    ms = new()
+    ms.players[0].mana = 24.0  # fireball 25, inferno 60
+    ms.apply(push(0), STATES, 0.0)
+    assert casts(ms) == ["basic"] and ms.players[0].held is None
+
+
+def test_affordability_follows_the_push_kind():
+    cfg = copy.deepcopy(CFG0)
+    spells = cfg["game"]["classes"]["fire_mage"]["spells"]
+    spells[0]["cost"] = 50  # fireball (push) now dearer than flame wall (two-hand, 30)
+    ms = MatchState(cfg, NAMES, 0.0, {0: "fire_mage", 1: "lightning_mage"}, {0: True, 1: True})
+    ms.take_events()
+    ms.players[0].mana = 35.0
+    ms.apply(push(0), STATES, 0.0)  # plain push: fireball 50, inferno 60: nothing affordable
+    assert casts(ms) == ["basic"]
+    ms.advance(G["basic_attack_cooldown_s"] + 0.05, STATES, 0.0)
+    ms.apply(push(0, two=True), STATES, 0.0)  # two-hand push: flame wall 30 is affordable
+    assert casts(ms) == [] and ms.players[0].held is not None
+
+
+def test_no_spell_only_hold_on_cooldown_when_nothing_is_affordable():
+    ms = new(mic=(False, True))
+    ms.apply(push(0), STATES, 0.0)
+    ms.mic_ok[0] = True
+    ms.players[0].mana = 10.0
+    ms.apply(push(0), STATES, 0.0)
+    assert ms.players[0].held is None and casts(ms) == ["basic"]

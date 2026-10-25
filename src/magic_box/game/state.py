@@ -284,13 +284,22 @@ class MatchState:
             return  # a push is already held: ignored
         on_cooldown = self.clock < p.basic_ready_at
         grace = self.cfg["game"]["release_grace_s"]
-        if c is None and grace > 0 and self.mic_ok.get(p.slot, False):
+        if (
+            c is None
+            and grace > 0
+            and self.mic_ok.get(p.slot, False)
+            and self._can_afford_a_release(p, action)
+        ):
             # The voice charge lands ~0.4 s after speech: give it a chance to catch up. On the
             # basic cooldown the push can still release a late spell, but never a basic.
             p.held = HeldPush(action, self.clock + grace, spell_only=on_cooldown)
             return
         if not on_cooldown:
             self._basic(p, action, now)
+
+    def _can_afford_a_release(self, p: PlayerMatch, push: Action) -> bool:
+        """Some spell this push could release is affordable now (else nothing to wait for)."""
+        return any(self._releases(sp, push) and p.mana >= sp.cost for sp in p.spells)
 
     @staticmethod
     def _releases(spell: SpellDef, push: Action) -> bool:
