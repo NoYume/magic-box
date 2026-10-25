@@ -62,7 +62,7 @@ class Push:
     """One detected thrust toward the camera."""
 
     hand: str  # "L" | "R"
-    speed: float  # m/s toward camera (positive number)
+    speed: float  # m/s toward the camera relative to the torso (positive number)
     origin_px: Px  # wrist pixel when detected (projectile spawn point)
 
 
@@ -71,7 +71,7 @@ class PlayerState:
     """Perception to game, one per slot per camera frame."""
 
     slot: int
-    player_id: int
+    player_id: int  # ZED tracking id (fake mode: slot + 1)
     t: float
     cam_t: float
     frame_idx: int
@@ -79,13 +79,15 @@ class PlayerState:
     root: Vec3
     root_vx: float
     head: Vec3
-    wrists: dict[str, Vec3]
-    wrist_vz: dict[str, float]
+    wrists: dict[str, Vec3]  # "L"/"R" (person's own), valid points only: read with .get()
+    wrist_vz: dict[
+        str, float
+    ]  # m/s relative to the neck, negative toward the camera; both keys always
     zone: str
     push: Push | None
     pose_flags: frozenset[str]
     bbox_px: tuple[int, int, int, int]
-    keypoints_px: dict[str, Px]
+    keypoints_px: dict[str, Px]  # valid points only
     finger_gesture: dict[str, str | None]
 
     def __post_init__(self) -> None:
