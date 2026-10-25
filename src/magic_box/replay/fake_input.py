@@ -6,6 +6,8 @@ with numpy slicing only.
 Owner: Nikhil
 """
 
+from collections.abc import Sequence
+
 import numpy as np
 
 from magic_box.core.config import Config
@@ -24,6 +26,29 @@ _HEAD_RADIUS_M = 0.12
 _HANDS_UP_Y = -0.9  # wrist height when hands are raised
 
 _SLOT_BGR = {0: (40, 140, 255), 1: (255, 140, 40)}  # P1 orange, P2 blue
+
+
+def draw_silhouettes(image: np.ndarray, states: Sequence[PlayerState], focal_px: float) -> None:
+    """Fill each tracked state's bbox and head box in its slot color (clipped to the image)."""
+    for state in states:
+        if not state.tracking_ok:
+            continue
+        bgr = _SLOT_BGR[state.slot]
+        _fill(image, state.bbox_px, bgr)
+        head_px = state.keypoints_px.get("head")
+        z = state.root[2]
+        if head_px is not None and z > 0:
+            r = _HEAD_RADIUS_M * focal_px / z
+            _fill(image, (int(head_px[0] - r), int(head_px[1] - r), int(2 * r), int(2 * r)), bgr)
+
+
+def _fill(image: np.ndarray, box: tuple[int, int, int, int], bgr: tuple) -> None:
+    x, y, w, h = box
+    height, width = image.shape[:2]
+    x0, y0 = max(x, 0), max(y, 0)
+    x1, y1 = min(x + w, width), min(y + h, height)
+    if x1 > x0 and y1 > y0:
+        image[y0:y1, x0:x1, :3] = bgr
 
 
 class FakePlayers:
@@ -48,14 +73,13 @@ class FakePlayers:
         image = np.empty((self._h, self._w, 4), dtype=np.uint8)
         image[:, :, :3] = self._bg_bgr
         image[:, :, 3] = 255
-        states = [self._player(slot, keys, now, dt, image) for slot in (0, 1)]
+        states = [self._player(slot, keys, now, dt) for slot in (0, 1)]
+        draw_silhouettes(image, states, float(self._fake["focal_px"]))
         frame = Frame(frame_idx=self._frame_idx, cam_t=now, image=image)
         self._frame_idx += 1
         return states, frame
 
-    def _player(
-        self, slot: int, keys: frozenset[str], now: float, dt: float, image: np.ndarray
-    ) -> PlayerState:
+    def _player(self, slot: int, keys: frozenset[str], now: float, dt: float) -> PlayerState:
         fake, k = self._fake, self._keys[slot]
         # Player's own left is camera +x, own right is camera -x.
         direction = (k["left"] in keys) - (k["right"] in keys)
@@ -108,10 +132,6 @@ class FakePlayers:
         bx0, by0 = int(min(xs) - head_r), int(px["head"][1] - head_r)
         bx1, by1 = int(max(xs) + head_r), int(max(ys))
         bbox = (bx0, by0, bx1 - bx0, by1 - by0)
-        self._fill(image, bbox, _SLOT_BGR[slot])
-        hx, hy = px["head"]
-        head_box = (int(hx - head_r), int(hy - head_r), int(2 * head_r), int(2 * head_r))
-        self._fill(image, head_box, _SLOT_BGR[slot])
 
         speed = float(fake["push_speed_mps"])
         push = Push("R", speed, px["r_wrist"]) if (pushed or two_hand) else None
@@ -136,10 +156,3 @@ class FakePlayers:
             keypoints_px=px,
             finger_gesture={"L": None, "R": None},
         )
-
-    def _fill(self, image: np.ndarray, box: tuple[int, int, int, int], bgr: tuple) -> None:
-        x, y, w, h = box
-        x0, y0 = max(x, 0), max(y, 0)
-        x1, y1 = min(x + w, self._w), min(y + h, self._h)
-        if x1 > x0 and y1 > y0:
-            image[y0:y1, x0:x1, :3] = bgr

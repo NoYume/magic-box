@@ -7,9 +7,16 @@ def test_fake_mode_runs_headless():
     assert run(["--fake", "--headless", "--max-ticks", "30"]) == 0
 
 
-def test_replay_not_implemented_exits_2(capsys):
+def test_record_then_replay_round_trip(tmp_path):
+    out = tmp_path / "session"
+    assert run(["--fake", "--headless", "--max-ticks", "20", "--record", str(out)]) == 0
+    assert (out / "states.jsonl").read_text().strip()
+    assert run(["--replay", str(out), "--headless", "--max-ticks", "20"]) == 0
+
+
+def test_replay_missing_session_exits_2(capsys):
     assert run(["--replay", "nowhere", "--headless", "--max-ticks", "1"]) == 2
-    assert "not implemented" in capsys.readouterr().err.lower()
+    assert "no session" in capsys.readouterr().err.lower()
 
 
 def test_fake_and_replay_are_exclusive():

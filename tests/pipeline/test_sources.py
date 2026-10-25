@@ -1,11 +1,10 @@
 from pathlib import Path
 
-import pytest
-
 from magic_box.core.config import load_config
 from magic_box.pipeline.frame_bus import FrameBus
 from magic_box.pipeline.sources import FakeSources, KeyboardVoiceSource, LiveSources, ReplaySources
 from magic_box.pipeline.streams import DropOldestQueue
+from magic_box.replay.record import SessionRecorder
 from tests.factories import make_state
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
@@ -49,9 +48,12 @@ def test_live_sources_read_queues_and_bus():
         bus.unlink()
 
 
-def test_replay_sources_not_implemented_yet():
-    with pytest.raises(NotImplementedError, match="TODO\\(Nikhil\\)"):
-        ReplaySources(Path("nowhere"))
+def test_replay_sources_poll_a_recording(tmp_path):
+    rec = SessionRecorder(tmp_path / "s", CFG, "fake")
+    rec.write_state(make_state(0, t=10.0))
+    rec.close()
+    inputs = ReplaySources(tmp_path / "s", CFG).poll(frozenset(), now=1.0, dt=0.0)
+    assert [s.slot for s in inputs.states] == [0] and inputs.frame is not None
 
 
 def test_live_sources_report_dropped_count():

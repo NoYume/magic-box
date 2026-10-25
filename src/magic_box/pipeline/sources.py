@@ -70,8 +70,8 @@ class LiveSources:
 
 
 class ReplaySources:
-    def __init__(self, session_dir: Path) -> None:
-        self._player = SessionPlayer(session_dir)
+    def __init__(self, session_dir: Path, cfg: Config) -> None:
+        self._player = SessionPlayer(session_dir, cfg)
 
     def poll(self, keys: frozenset[str], now: float, dt: float) -> Inputs:
         states, voice, frame = self._player.poll(now)

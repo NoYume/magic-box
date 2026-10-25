@@ -6,13 +6,15 @@ Owner: Nikhil
 import dataclasses
 import time
 from collections.abc import Callable, Mapping, Sequence
-from typing import Protocol
+from typing import Any, Protocol
 
+from magic_box.ai.worker import AiWorker
 from magic_box.core.config import Config
-from magic_box.core.contracts import Frame, PlayerState
+from magic_box.core.contracts import Frame, GameEvent, PlayerState, VoiceConfig
 from magic_box.game.engine import Engine
 from magic_box.intent.fusion import Intent
 from magic_box.pipeline.sources import KeyboardVoiceSource, Sources
+from magic_box.replay.record import SessionRecorder
 
 _FPS_SMOOTHING = 0.1
 
@@ -55,6 +57,11 @@ class GameLoop:
         engine: Engine,
         keyboard_voice: KeyboardVoiceSource,
         on_tick: Callable[[], None] | None = None,
+        *,
+        ai: AiWorker | None = None,
+        voice_control: Any = None,
+        clock: Callable[[], float] = time.monotonic,
+        recorder: SessionRecorder | None = None,
     ) -> None:
         self._stale_s = cfg["pipeline"]["stale_state_s"]
         self._sources = sources
@@ -63,6 +70,23 @@ class GameLoop:
         self._engine = engine
         self._keyboard_voice = keyboard_voice
         self._on_tick = on_tick
+        self._ai = ai
+        self._voice_control = voice_control
+        self._clock = clock
+        self._recorder = recorder
+
+    def _on_scene_entered(self, view, match_events: list[GameEvent], now: float) -> None:
+        names = {p.slot: p.name for p in view.players}
+        if view.scene == "lobby" and self._voice_control is not None:
+            self._voice_control.put(VoiceConfig(mode="transcript", incantations={}))
+        elif view.scene == "loading" and self._ai is not None:
+            classes = {p.slot: p.class_id for p in view.players}
+            self._ai.start_incantations(classes, names, now)
+        elif view.scene == "fight" and self._voice_control is not None:
+            sets = {p.slot: {s.id: s.incantation for s in p.spells} for p in view.players}
+            self._voice_control.put(VoiceConfig(mode="incantation", incantations=sets))
+        elif view.scene == "victory" and self._ai is not None:
+            self._ai.start_chronicle(list(match_events), names, now)
 
     def run(self, max_ticks: int | None = None) -> int:
         """Run until quit or `max_ticks`; returns the number of ticks run."""
@@ -70,22 +94,45 @@ class GameLoop:
         last_frame: Frame | None = None
         fps = 0.0
         ticks = 0
+        prev_scene: str | None = None
+        match_events: list[GameEvent] = []
         while max_ticks is None or ticks < max_ticks:
             keys, quit_requested = self._display.pump()
             if quit_requested:
                 break
             dt = self._display.tick()
-            now = time.monotonic()
+            now = self._clock()
             if dt > 0:
                 inst = 1.0 / dt
                 fps = inst if fps == 0.0 else fps + _FPS_SMOOTHING * (inst - fps)
             inputs = self._sources.poll(keys, now, dt)
             voice = inputs.voice + self._keyboard_voice.poll(keys, now)
             latest = latest_states(latest, inputs.states, now, self._stale_s)
+            for e in voice:
+                if e.kind == "status":
+                    self._engine.provide_mic_status(e.slot, e.text == "connected")
             actions = self._intent.update(inputs.states, voice, now)
-            view, _events = self._engine.step(actions, latest, now)
-            # TODO(Nikhil): submit Spark jobs on loading/victory (spec §6)
-            # TODO(Nikhil): send VoiceConfig on scene changes via runtime.control_q (spec §6)
+            view, events = self._engine.step(actions, latest, now)
+            if self._recorder is not None:
+                for state in inputs.states:
+                    self._recorder.write_state(state)
+                for voice_event in voice:
+                    self._recorder.write_voice(voice_event)
+                for game_event in events:
+                    self._recorder.write_event(game_event)
+            for event in events:
+                if event.kind == "match_start":
+                    match_events = []
+                match_events.append(event)
+            if view.scene != prev_scene:
+                self._on_scene_entered(view, match_events, now)
+                prev_scene = view.scene
+            if self._ai is not None:
+                for kind, result in self._ai.poll(now):
+                    if kind == "incantations":
+                        self._engine.provide_incantations(result)  # type: ignore[arg-type]
+                    else:
+                        self._engine.provide_chronicle(result)  # type: ignore[arg-type]
             self._keyboard_voice.set_spells(
                 {p.slot: [s.id for s in p.spells] for p in view.players}
             )
