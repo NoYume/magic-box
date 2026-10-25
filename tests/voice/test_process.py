@@ -395,6 +395,82 @@ def test_zero_hold_publishes_the_first_match():
     ]
 
 
+def test_speech_complete_publishes_a_held_match_at_once():
+    events = [speech_start(), transcript(PREFIX), speech_complete("embers of the forty")]
+    started = time.monotonic()
+    assert incantations_after(events, fast_cfg(perfect_hold_s=30.0)) == [
+        ("fireball", PREFIX_SCORE, PREFIX)  # the final scores lower: the held best wins
+    ]
+    assert time.monotonic() - started < 5.0
+
+
+@pytest.mark.parametrize(
+    "change", [VoiceConfig("transcript", {}), VoiceConfig("incantation", OTHER)]
+)
+def test_held_match_is_dropped_on_a_mode_or_incantation_change(change):
+    second = FakeStream([speech_start(), transcript(PREFIX)])
+    factory = StreamFactory({0: [FakeStream(), second]})
+
+    async def driver(r):
+        await until(second.drained)
+        r.controls.append(change)  # the scene changes while the match is held (0.1 s polls)
+        await until(lambda: len(factory.connected(0)) == 3)
+        await asyncio.sleep(0.8)  # past the 0.6 s hold: a leaked timer would have fired
+
+    r = run_serve(
+        driver,
+        cfg=fast_cfg(perfect_hold_s=0.6),
+        factory=factory,
+        configs=[VoiceConfig("incantation", INC)],
+    )
+    assert second.closed and r.of_kind("incantation") == []
+
+
+def test_held_match_is_published_when_the_stream_drops():
+    events = [speech_start(), transcript(PREFIX), None]  # None: the server closes the socket
+    second = FakeStream(events, close_code=1011)
+    factory = StreamFactory({0: [FakeStream(), second]})
+
+    async def driver(r):
+        await until(lambda: "reconnecting" in r.statuses(0))
+
+    r = run_serve(
+        driver,
+        cfg=fast_cfg(perfect_hold_s=30.0),
+        factory=factory,
+        configs=[VoiceConfig("incantation", INC)],
+    )
+    inc = r.of_kind("incantation")
+    assert [(e.spell_id, e.match_score, e.text) for e in inc] == [
+        ("fireball", PREFIX_SCORE, PREFIX)
+    ]
+
+
+class SendFailsWhenDrained(FakeStream):
+    """A dropped socket seen by the sender first: sending fails once the events are read."""
+
+    async def send_audio(self, pcm):
+        if self.drained():
+            raise ConnectionError("socket gone")
+        await super().send_audio(pcm)
+
+
+def test_held_match_is_published_when_the_sender_sees_the_drop_first():
+    second = SendFailsWhenDrained([speech_start(), transcript(PREFIX)])
+    factory = StreamFactory({0: [FakeStream(), second]})
+
+    async def driver(r):
+        await until(lambda: "reconnecting" in r.statuses(0))
+
+    r = run_serve(
+        driver,
+        cfg=fast_cfg(perfect_hold_s=30.0),
+        factory=factory,
+        configs=[VoiceConfig("incantation", INC)],
+    )
+    assert [e.spell_id for e in r.of_kind("incantation")] == ["fireball"]
+
+
 def test_only_own_players_set_matches():
     second = FakeStream(
         [

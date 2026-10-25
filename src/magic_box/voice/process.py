@@ -116,7 +116,7 @@ class IncantationTurn:
 
     def flush(self) -> None:
         """Publish the held match now, if any, and disarm until the next speechStart."""
-        self.cancel()
+        self._stop_timer()
         if self._held is not None:
             held, self._held = self._held, None
             self.armed = False
@@ -126,7 +126,11 @@ class IncantationTurn:
                 log_line(f"cannot publish an incantation: {_describe(exc)}")
 
     def cancel(self) -> None:
-        """Stop the hold timer; a held match is dropped with its session."""
+        """Drop the held match unpublished and stop its timer (the session is restarting)."""
+        self._held = None
+        self._stop_timer()
+
+    def _stop_timer(self) -> None:
         if self._timer is not None:
             self._timer.cancel()
             self._timer = None
@@ -347,7 +351,12 @@ class _Sessions:
                             VoiceEvent(slot, self._clock(), "transcript", text, None, 0.0)
                         )
         finally:
-            turn.cancel()
+            if self._wake[slot].is_set():
+                turn.cancel()  # a mode change, a new VoiceConfig or stop: the match is stale
+            else:
+                # The stream ended on its own (server close, Wi-Fi drop seen by either task,
+                # session age): the player did say it, so publish what the turn held.
+                turn.flush()
 
     async def _backoff(self, slot: int, delay: float) -> None:
         """The injected sleep, cut short by stop or a config change."""
