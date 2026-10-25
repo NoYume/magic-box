@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from magic_box.core.config import load_config
+from tests.voice.fake_sd import FakeSD
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "check_muse.py"
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
@@ -157,3 +158,56 @@ def test_load_wav_downmixes_and_resamples(tmp_path):
         w.writeframes(np.array([[1000, 3000]] * 800, dtype="<i2").tobytes())
     pcm = _load().load_wav(path, 16000)
     assert pcm.dtype == np.int16 and len(pcm) == 1600 and int(pcm[100]) == 2000
+
+
+class SpeakingSD(FakeSD):
+    """Fake sounddevice whose stream delivers SPEECH on its last channel once it starts."""
+
+    def InputStream(self, **kwargs):  # noqa: N802
+        stream = super().InputStream(**kwargs)
+        start = stream.start
+
+        def start_and_speak():
+            start()
+            data = np.zeros((len(SPEECH), kwargs["channels"]), np.int16)
+            data[:, kwargs["channels"] - 1] = SPEECH
+            stream.feed(data)
+
+        stream.start = start_and_speak
+        return stream
+
+
+def test_record_captures_the_slot_mic_through_mic_hub():
+    pcm = _load().record(CFG, 1, 0.0, sd=SpeakingSD())  # slot 1 is channel 1 of the default
+    assert pcm.dtype == np.int16 and len(pcm) == len(SPEECH) and int(pcm[0]) == 3000
+
+
+def test_main_record_mode_saves_the_wav_and_charges(tmp_path, monkeypatch, capsys):
+    mod = _load()
+    monkeypatch.setattr(mod, "SCRATCH", tmp_path)
+    phrase = "lightning answer my call"
+    events = [
+        (6, {"type": "speechStart", "turnId": 0}),
+        (11, {"type": "transcript", "transcript": phrase, "final": False}),
+        (12, {"type": "speechComplete", "turnId": 0, "transcript": phrase}),
+    ]
+    argv = ["--record", "0", "--slot", "1", "--keywords", "words", "--phrase", phrase]
+    env = {"META_MODEL_API_KEY": "k"}
+    factory = lambda c, k: ScriptedStream(events)  # noqa: E731
+    assert mod.main(argv, env=env, stream_factory=factory, sd=SpeakingSD()) == 0
+    assert "bolt score 100" in capsys.readouterr().out
+    assert [p.name for p in tmp_path.iterdir()] == ["rec-p2-lightning_answer_my_call.wav"]
+
+
+def test_main_rejects_silent_audio(capsys):
+    env = {"META_MODEL_API_KEY": "k"}
+    silent = lambda p, r: np.zeros(8000, np.int16)  # noqa: E731
+    assert _load().main(["--phrase", PHRASE], env=env, audio=silent) == 1
+    assert "no speech" in capsys.readouterr().out
+
+
+def test_voiced_samples_ignores_a_noisy_floor():
+    rng = np.random.default_rng(0)
+    pcm = rng.normal(0, 500, 32000).astype(np.int16)  # 2 s of hiss above VOICED_RMS
+    pcm[8000:16000] += np.int16(6000)  # 0.5 s of "speech" from 0.5 s
+    assert 16000 <= _load().voiced_samples(pcm, 16000) <= 16000 + 320

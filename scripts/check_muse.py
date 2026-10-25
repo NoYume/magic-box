@@ -22,9 +22,15 @@ suggests `game.charge_window_s` = worst charge latency + 2.0 s of reaction time,
 
     uv run --env-file .env python scripts/check_muse.py
     uv run --env-file .env python scripts/check_muse.py --phrase "lightning answer my call"
-    uv run --env-file .env python scripts/check_muse.py --wav p1.wav --phrase "..."   # Jetson
+    uv run --env-file .env python scripts/check_muse.py --wav p1.wav --phrase "..."
+    uv run --env-file .env python scripts/check_muse.py --record 4 --slot 1 --keywords words \
+        --phrase "lightning answer my call"      # Jetson: speak into P2's real mic
 
-Exit codes: 0 every run matched; 1 a run failed to connect or did not match; 2 no API key.
+`--record` captures from `voice.mics` through `voice/mic.py` (as the game does), saves the
+WAV under `.superpowers/muse/` and then streams it like any other.
+
+Exit codes: 0 every run charged the right spell; 1 a run failed, did not charge or the
+audio had no speech or the mic would not open; 2 no API key or bad arguments.
 
 Owner: Nikhil
 """
@@ -49,7 +55,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRATCH = REPO_ROOT / ".superpowers" / "muse"  # gitignored
 KEYWORD_MODES = ("words", "phrases", "none")
 DEFAULT_PHRASES = ("embers of the forty acres burn", "lightning answer my call")
-VOICED_LEVEL = 600  # int16 amplitude that counts as speech when trimming the TTS tail
+VOICED_RMS = 300  # 20 ms frame RMS (int16) that counts as speech when finding the speech end
 REACTION_S = 2.0  # time a player needs to push after the charge lands (Task 5 brief)
 MIN_WINDOW_S = 2.5
 
@@ -103,10 +109,49 @@ def synthesize(text: str, rate: int, out_dir: Path = SCRATCH) -> Path:
     return path
 
 
-def voiced_samples(pcm: np.ndarray) -> int:
-    """Index just past the last sample louder than VOICED_LEVEL (0 for silence)."""
-    loud = np.flatnonzero(np.abs(pcm.astype(np.int32)) > VOICED_LEVEL)
-    return 0 if len(loud) == 0 else int(loud[-1]) + 1
+def voiced_samples(pcm: np.ndarray, rate: int = 16000) -> int:
+    """Index just past the last voiced 20 ms frame (0 for silence).
+
+    A frame is voiced when its RMS passes VOICED_RMS and 4x the noise floor (the quietest
+    tenth of the frames), so a real mic's hiss does not count as speech. The floor term is
+    capped at a quarter of the loudest frame, for a clip with no pause in it.
+    """
+    n = max(1, rate // 50)
+    frames = len(pcm) // n
+    if frames == 0:
+        return 0
+    x = pcm[: frames * n].astype(np.float64).reshape(frames, n)
+    rms = np.sqrt((x * x).mean(axis=1))
+    floor = min(4.0 * float(np.percentile(rms, 10)), 0.25 * float(rms.max()))
+    level = max(VOICED_RMS, floor)
+    loud = np.flatnonzero(rms > level)
+    return 0 if len(loud) == 0 else (int(loud[-1]) + 1) * n
+
+
+def record(cfg: Mapping, slot: int, seconds: float, sd=None, sleep=time.sleep) -> np.ndarray:
+    """Capture `seconds` from that slot's `voice.mics` entry through MicHub, as the game does."""
+    from magic_box.voice.mic import MicHub
+
+    v = cfg["voice"]
+    mics = [m for m in v["mics"] if int(m["slot"]) == slot]
+    chunks: list[bytes] = []
+    hub = MicHub(mics, v["sample_rate"], v["chunk_ms"], lambda s, pcm: chunks.append(pcm), sd=sd)
+    hub.start()  # MicError if the device cannot open
+    try:
+        sleep(seconds)
+    finally:
+        hub.stop()
+    return np.frombuffer(b"".join(chunks), dtype="<i2").copy()
+
+
+def save_wav(pcm: np.ndarray, rate: int, path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(pcm.astype("<i2").tobytes())
+    return path
 
 
 def incantation_set(phrase: str, cfg: Mapping) -> tuple[dict[str, str], str]:
@@ -168,7 +213,7 @@ async def measure(
     chunk_s = n / rate
     lead = np.zeros(round(lead_s * rate), np.int16)
     audio = np.concatenate((lead, pcm))
-    speech_end = len(lead) + voiced_samples(pcm)
+    speech_end = len(lead) + voiced_samples(pcm, rate)
     trial.speech_s = (speech_end - len(lead)) / rate
     end_chunk = max(0, math.ceil(speech_end / n) - 1)  # the chunk holding the last voiced sample
     silence = bytes(n * 2)
@@ -306,6 +351,13 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     p.add_argument("--config", type=Path, default=REPO_ROOT / "config.yaml")
     p.add_argument("--phrase", action="append", help="test phrase (repeatable)")
     p.add_argument("--wav", action="append", type=Path, help="16-bit WAV per --phrase, in order")
+    p.add_argument(
+        "--record",
+        type=float,
+        metavar="S",
+        help="record each --phrase from the --slot mic for S seconds (Jetson, real mics)",
+    )
+    p.add_argument("--slot", type=int, choices=(0, 1), default=0, help="mic for --record")
     p.add_argument("--keywords", nargs="+", choices=KEYWORD_MODES, default=list(KEYWORD_MODES))
     p.add_argument("--wait", type=float, default=6.0, help="max seconds after speech end")
     p.add_argument("--hold", type=float, help="override voice.perfect_hold_s")
@@ -313,10 +365,13 @@ def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def main(argv: Sequence[str] | None = None, env=None, stream_factory=None, audio=None) -> int:
-    """`stream_factory(cfg, key)` and `audio(phrase, rate)` are test seams."""
+def main(
+    argv: Sequence[str] | None = None, env=None, stream_factory=None, audio=None, sd=None
+) -> int:
+    """`stream_factory(cfg, key)`, `audio(phrase, rate)` and `sd` (sounddevice) are test seams."""
     args = parse_args(argv)
     from magic_box.core.config import load_config
+    from magic_box.voice.mic import MicError
     from magic_box.voice.muse_stream import MuseError, MuseStream
 
     cfg = load_config(args.config)
@@ -330,6 +385,9 @@ def main(argv: Sequence[str] | None = None, env=None, stream_factory=None, audio
     if args.wav and len(args.wav) != len(phrases):
         print("FAIL: give one --phrase per --wav")
         return 2
+    if args.wav and args.record is not None:
+        print("FAIL: --wav and --record are exclusive")
+        return 2
     factory = stream_factory or (
         lambda c, k: MuseStream(v["url"], k, v["model"], v["handshake_timeout_s"])
     )
@@ -342,8 +400,20 @@ def main(argv: Sequence[str] | None = None, env=None, stream_factory=None, audio
     for i, phrase in enumerate(phrases):
         if audio is not None:
             pcm = audio(phrase, rate)
+        elif args.record is not None:
+            print(f'P{args.slot + 1}: say "{phrase}" now ({args.record:g} s)...', flush=True)
+            try:
+                pcm = record(cfg, args.slot, args.record, sd=sd)
+            except MicError as exc:
+                print(f"FAIL: {exc}")
+                return 1
+            name = "_".join(phrase.lower().split())[:50]
+            print(f"  saved {save_wav(pcm, rate, SCRATCH / f'rec-p{args.slot + 1}-{name}.wav')}")
         else:
             pcm = load_wav(args.wav[i] if args.wav else synthesize(phrase, rate), rate)
+        if voiced_samples(pcm, rate) == 0:
+            print(f'FAIL: no speech in the audio for "{phrase}"')
+            return 1
         incantations, expected = incantation_set(phrase, cfg)
         for mode in args.keywords:
             words = keywords_for_mode(mode, incantations, v["min_keyword_chars"])

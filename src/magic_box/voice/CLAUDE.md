@@ -46,7 +46,7 @@ Seconds from the end of the speech; negative means while the player is still spe
 - `mic.py`: `MicHub` per-device capture, channel split, `resample`.
 - `muse_stream.py`: Muse WebSocket client (`handshake`, send audio, events, close).
 - `matcher.py`: rapidfuzz incantation match using `match_threshold`; `keywords_for`.
-- `scripts/check_muse.py`: live latency and matching check. It streams `say` audio (or `--wav` on the Jetson) through `MuseStream` and `IncantationTurn` at real time.
+- `scripts/check_muse.py`: live latency and matching check. It streams `say` audio, a `--wav` file or a `--record S` capture from a real mic (through `MicHub`, saved under `.superpowers/muse/`) through `MuseStream` and `IncantationTurn` at real time.
 
 ## Test without the Jetson
 Tests live in `tests/voice/` (`test_mic.py` uses `fake_sd.py`, `test_check_muse.py` a scripted stream; no real mic, no network). In the app, the spell keys are the fallback and always work:
@@ -59,5 +59,11 @@ uv run --env-file .env python scripts/check_muse.py --keywords words --phrase "l
 Real mics: set `voice.mics` in `config.local.yaml` (see `docs/hardware.md`).
 
 ## Open TODOs
-- `TODO(Nikhil)`: re-measure on the Jetson with the real lav mics and a real voice: record each player saying two incantations to WAV, then `check_muse.py --wav p1.wav --phrase "..."`, and check `game.charge_window_s` (2.5) and `perfect_hold_s` (1.0) against venue noise and crosstalk.
+- `TODO(Nikhil)`: re-measure on the Jetson with the real lav mics and real voices, then check `game.charge_window_s` (2.5) and `perfect_hold_s` (1.0) against venue noise and crosstalk. Set `voice.mics` in `config.local.yaml` first; each run records 4 s, so start speaking at the prompt:
+  ```
+  uv run --env-file .env python scripts/check_muse.py --record 4 --slot 0 --keywords words \
+      --phrase "embers of the forty acres burn" --phrase "rise crimson rampart"
+  uv run --env-file .env python scripts/check_muse.py --record 4 --slot 1 --keywords words \
+      --phrase "lightning answer my call" --phrase "hum of the restless grid"
+  ```
 - Open decision (Daniel): mic hardware model and channel routing.
