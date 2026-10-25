@@ -220,44 +220,64 @@ GAME_TIMING_KEYS: tuple[str, ...] = (
 )
 
 
+def _is_num(value: Any) -> bool:
+    """A real number; YAML booleans (on/off/yes/no) don't count."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def _check_game_effects(cfg: Config, classes: dict, problems: list[str]) -> None:
     """Boot, debounce, abandon and spell-effect keys (Adetola, 2026-10-25)."""
     for key in GAME_TIMING_KEYS:
         value = _get(cfg, "game", key)
-        if not isinstance(value, (int, float)) or value < 0:
+        if not _is_num(value) or value < 0:
             problems.append(f"game.{key}: must be a number >= 0")
     lo, hi = _get(cfg, "game", "boot_min_s"), _get(cfg, "game", "boot_max_s")
-    if isinstance(lo, (int, float)) and isinstance(hi, (int, float)) and lo > hi:
+    if _is_num(lo) and _is_num(hi) and lo > hi:
         problems.append("game.boot_min_s: must be <= game.boot_max_s")
     seen: dict[str, str] = {}
     for cls_name, cls in classes.items():
-        keywords = _get(cls, "keywords")
-        if not isinstance(keywords, list) or not keywords:
-            problems.append(f"game.classes.{cls_name}.keywords: must be a non-empty list")
-            keywords = []
-        for kw in keywords:
-            word = str(kw).lower()
-            if not word.isalpha():
-                problems.append(f"game.classes.{cls_name}.keywords: {kw!r} must be one word")
-            elif word in seen:
-                problems.append(
-                    f"game.classes.{cls_name}.keywords: {kw!r} is also {seen[word]}'s keyword"
-                )
-            seen[word] = cls_name
+        _check_keywords(cls_name, _get(cls, "keywords"), seen, problems)
         for spell in _get(cls, "spells") or []:
-            where = f"game.classes.{cls_name}.spells.{_get(spell, 'id')}"
-            effect = _get(spell, "effect")
-            if effect is not None:
-                if effect not in EFFECT_KINDS:
-                    problems.append(
-                        f"{where}.effect: must be one of {EFFECT_KINDS}, got {effect!r}"
-                    )
-                effect_s = _get(spell, "effect_s")
-                if not isinstance(effect_s, (int, float)) or effect_s <= 0:
-                    problems.append(f"{where}.effect_s: must be a number > 0 with an effect")
-            hits = _get(spell, "hits")
-            if hits is not None and (not isinstance(hits, int) or hits < 1):
-                problems.append(f"{where}.hits: must be an integer >= 1")
+            if isinstance(spell, dict):
+                where = f"game.classes.{cls_name}.spells.{spell.get('id')}"
+                _check_spell_effects(where, spell, problems)
+
+
+def _check_keywords(
+    cls_name: str, keywords: Any, seen: dict[str, str], problems: list[str]
+) -> None:
+    where = f"game.classes.{cls_name}.keywords"
+    if not isinstance(keywords, list) or not keywords:
+        problems.append(f"{where}: must be a non-empty list")
+        return
+    for kw in keywords:
+        if not isinstance(kw, str) or not kw.isalpha():
+            problems.append(f"{where}: {kw!r} must be one word, quoted if YAML reads it as a bool")
+            continue
+        word = kw.lower()
+        if word in seen:
+            problems.append(f"{where}: {kw!r} is already a keyword of {seen[word]}")
+        seen[word] = cls_name
+
+
+def _check_spell_effects(where: str, spell: dict, problems: list[str]) -> None:
+    effect = spell.get("effect")
+    if effect is not None:
+        if effect not in EFFECT_KINDS:
+            problems.append(f"{where}.effect: must be one of {EFFECT_KINDS}, got {effect!r}")
+        effect_s = spell.get("effect_s")
+        if not _is_num(effect_s) or effect_s <= 0:
+            problems.append(f"{where}.effect_s: must be a number > 0 with an effect")
+    if "heal_hp" in spell and (not _is_num(spell["heal_hp"]) or spell["heal_hp"] < 0):
+        problems.append(f"{where}.heal_hp: must be a number >= 0")
+    hits = spell.get("hits", 1)
+    if not isinstance(hits, int) or isinstance(hits, bool) or hits < 1:
+        problems.append(f"{where}.hits: must be an integer >= 1")
+        hits = 1
+    if "chain_gap_s" in spell or hits > 1:
+        gap = spell.get("chain_gap_s")
+        if not _is_num(gap) or gap <= 0:
+            problems.append(f"{where}.chain_gap_s: must be a number > 0 (required when hits > 1)")
 
 
 def _check_pipeline_render(cfg: Config, problems: list[str]) -> None:
