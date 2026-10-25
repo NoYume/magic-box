@@ -10,6 +10,8 @@ from magic_box.game.engine import Engine
 from tests.factories import make_state
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
+# Written against fire vs lightning; config.yaml's own default puts the parry knight in slot 1.
+CFG["game"]["default_classes"] = {0: "fire_mage", 1: "lightning_mage"}
 G = CFG["game"]
 UP = frozenset({"hands_up"})
 HOLD = G["hands_up_hold_s"]

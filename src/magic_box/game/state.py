@@ -3,13 +3,14 @@
 Owner: Adetola
 
 MatchState holds one fight: per-slot HP, mana, charge, basic-attack cooldown,
-timed effects and match stats, the projectiles in flight, the round timer, the
-banner and the event log. All rule timing runs on the match clock (`clock`,
-starts at 0); `now` is only the timestamp written to GameEvent.t.
+timed effects, the knight's guard and riposte, match stats, the projectiles in
+flight, the round timer, the banner and the event log. All rule timing runs on
+the match clock (`clock`, starts at 0); `now` is only the timestamp written to
+GameEvent.t.
 
 Event slots name the actor: `cast`, `hit` and `buff` the caster (`target` in the
 data says who was hit or got the effect), `dodge` and `block` the defender,
-`heal` the healed caster.
+`heal` the healed caster. A parry is a `block` with `parry=True` in the data.
 """
 
 from collections.abc import Mapping
@@ -19,7 +20,14 @@ from magic_box.core.config import Config
 from magic_box.core.contracts import Action, EffectView, GameEvent, PlayerState, ProjectileView
 from magic_box.game.combat import damage
 from magic_box.game.effects import HIT_EFFECTS, SELF_EFFECTS, Effects
-from magic_box.game.spells import BASIC_ATTACK_ID, SpellDef, basic_attack, load_spells
+from magic_box.game.spells import (
+    BASIC_ATTACK_ID,
+    RIPOSTE_ID,
+    SpellDef,
+    basic_attack,
+    load_spells,
+    riposte,
+)
 
 Px = tuple[float, float]
 POSE_RELEASES = {"hands_up": "arm_overhead", "hands_together": "hands_together"}
@@ -56,6 +64,9 @@ class PlayerMatch:
     stats: dict[str, float] = field(default_factory=lambda: dict.fromkeys(STAT_KEYS, 0.0))
     held: HeldPush | None = None  # an uncharged push waiting for a late voice charge
     pose_rise: dict[str, float] = field(default_factory=dict)  # pose flag -> match clock it rose
+    guard_at: float = float("-inf")  # match clock of the last guard raise that counted
+    guard_ready_at: float = 0.0
+    riposte_until: float = 0.0
 
 
 @dataclass
@@ -212,6 +223,16 @@ class MatchState:
     def cooldown_left(self, slot: int) -> float:
         return max(self.players[slot].basic_ready_at - self.clock, 0.0)
 
+    def guard_left(self, slot: int) -> float:
+        p = self.players[slot]
+        return max(p.guard_at + self.cfg["game"]["parry_window_s"] - self.clock, 0.0)
+
+    def guard_cooldown_left(self, slot: int) -> float:
+        return max(self.players[slot].guard_ready_at - self.clock, 0.0)
+
+    def riposte_left(self, slot: int) -> float:
+        return max(self.players[slot].riposte_until - self.clock, 0.0)
+
     def stats(self, slot: int) -> dict[str, float]:
         s = dict(self.players[slot].stats)
         s["damage"] = round(s["damage"], 1)
@@ -287,6 +308,15 @@ class MatchState:
                 p.charge = None
                 self._cast(p, c, action, action.push.origin_px, action.push.speed, now)
                 return
+        if self.clock < p.riposte_until:
+            # After a parry the next push that releases no spell is the riposte: at once, no
+            # release grace, cooldown or mana. A push still held from before is dropped.
+            p.riposte_until = 0.0
+            p.held = None
+            p.basic_ready_at = self.clock + self.cfg["game"]["basic_attack_cooldown_s"]
+            counter = Charge(riposte(self.cfg), 0.0, 0.0)
+            self._cast(p, counter, action, action.push.origin_px, action.push.speed, now)
+            return
         on_cooldown = self.clock < p.basic_ready_at - 1e-9  # float slack: on time is ready
         if p.held is not None and p.held.spell_only and not on_cooldown:
             p.held = None  # the cooldown is over: this push may fire a basic again
@@ -335,6 +365,12 @@ class MatchState:
 
     def _pose(self, action: Action, states: Mapping[int, PlayerState], now: float) -> None:
         p = self.players[action.slot]
+        if action.pose == "guard":
+            g = self.cfg["game"]
+            if p.class_id in g["parry_classes"] and self.clock >= p.guard_ready_at:
+                p.guard_at = self.clock
+                p.guard_ready_at = self.clock + g["parry_cooldown_s"]
+            return
         p.pose_rise[action.pose or ""] = self.clock
         c = p.charge
         if c is None or POSE_RELEASES.get(action.pose or "") != c.spell.release:
@@ -372,7 +408,7 @@ class MatchState:
             release=spell.release,
             two_hand=action.two_hand,
         )
-        if spell.id != BASIC_ATTACK_ID:
+        if spell.id not in (BASIC_ATTACK_ID, RIPOSTE_ID):
             p.stats["casts"] += 1
         # Multipliers are fixed at release: a spell thrown while empowered stays empowered.
         mult = g["perfect_mult"] if charge.score >= self.cfg["voice"]["perfect_threshold"] else 1.0
@@ -444,6 +480,22 @@ class MatchState:
     def _impact(self, proj: Projectile, now: float) -> None:
         target = self.players[proj.target]
         attacker = self.players[proj.attacker]
+        g = self.cfg["game"]
+        if self.clock - g["parry_window_s"] <= target.guard_at:
+            # Parried (only parry classes ever set guard_at): no damage, the guard is spent and
+            # the riposte is armed.
+            target.guard_at = float("-inf")
+            target.riposte_until = self.clock + g["riposte_window_s"]
+            target.stats["blocks"] += 1
+            self._log(
+                now,
+                "block",
+                target.slot,
+                spell_id=proj.spell_id,
+                attacker=proj.attacker,
+                parry=True,
+            )
+            return
         if target.effects.consume("shield", self.clock):
             target.stats["blocks"] += 1
             self._log(now, "block", target.slot, spell_id=proj.spell_id, attacker=proj.attacker)

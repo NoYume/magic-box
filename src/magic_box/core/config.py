@@ -222,6 +222,11 @@ GAME_TIMING_KEYS: tuple[str, ...] = (
     "loading_read_s",
     "pose_grace_s",
     "victory_read_s",
+    "parry_window_s",
+    "parry_cooldown_s",
+    "riposte_window_s",
+    "riposte_damage",
+    "riposte_travel_s",
 )
 
 
@@ -231,7 +236,7 @@ def _is_num(value: Any) -> bool:
 
 
 def _check_game_effects(cfg: Config, classes: dict, problems: list[str]) -> None:
-    """Boot, debounce, abandon and spell-effect keys (Adetola, 2026-10-25)."""
+    """Boot, debounce, abandon, spell-effect and parry keys (Adetola, 2026-10-25)."""
     for key in GAME_TIMING_KEYS:
         value = _get(cfg, "game", key)
         if not _is_num(value) or value < 0:
@@ -250,6 +255,9 @@ def _check_game_effects(cfg: Config, classes: dict, problems: list[str]) -> None
         isinstance(w, str) and w and not any(c.isspace() for c in w) for w in stop
     ):
         problems.append("game.name_stop_words: must be a list of single words, quoted")
+    parry = _get(cfg, "game", "parry_classes")
+    if not isinstance(parry, list) or not all(c in classes for c in parry):
+        problems.append("game.parry_classes: must be a list of class ids from game.classes")
     seen: dict[str, str] = {}
     for cls_name, cls in classes.items():
         _check_keywords(cls_name, _get(cls, "keywords"), seen, problems)

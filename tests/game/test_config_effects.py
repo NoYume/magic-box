@@ -128,3 +128,15 @@ def test_name_max_words_must_be_an_integer_at_least_1(value):
 def test_ko_banner_must_not_outlast_the_ko_hold():
     found = problems(lambda c: c["render"]["fx"].update(ko_s=c["game"]["ko_hold_s"] + 0.5))
     assert any("render.fx.ko_s" in p for p in found)
+
+
+@pytest.mark.parametrize("value", [["paladin"], "holy_knight", None])
+def test_parry_classes_must_name_known_classes(value):
+    found = problems(lambda c: c["game"].update(parry_classes=value))
+    assert any("game.parry_classes" in p for p in found)
+
+
+@pytest.mark.parametrize("key", ["parry_window_s", "riposte_damage"])
+def test_parry_numbers_must_be_at_least_0(key):
+    found = problems(lambda c: c["game"].update({key: -1}))
+    assert any(f"game.{key}" in p for p in found)

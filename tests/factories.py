@@ -128,6 +128,10 @@ def make_full_player(slot: int, **overrides: Any) -> PlayerView:
             "heals": (0.0, 1.0)[slot],
             "best_push_mps": (3.4, 2.6)[slot],
         },
+        "can_parry": slot == 1,
+        "guard_s": (0.0, 0.2)[slot],
+        "guard_cooldown_s": (0.0, 1.1)[slot],
+        "riposte_s": (0.0, 0.9)[slot],
     }
     fields.update(overrides)
     return PlayerView(**fields)

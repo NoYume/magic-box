@@ -9,6 +9,8 @@ from magic_box.game.state import MatchState
 from tests.factories import make_state
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
+# Written against fire vs lightning; config.yaml's own default puts the parry knight in slot 1.
+CFG["game"]["default_classes"] = {0: "fire_mage", 1: "lightning_mage"}
 CFG0 = copy.deepcopy(CFG)
 CFG0["game"]["mana_regen_per_s"] = 0
 

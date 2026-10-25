@@ -33,6 +33,7 @@ perception:         # owner: Enoch
   slot_hold_s: 1.0            # (guess) a lost body keeps its slot this long
   hands_up_margin_m: 0.10     # (guess) wrist above the head by this much
   hands_together_max_m: 0.25  # (guess) wrists closer than this
+  guard_forward_m: 0.35       # (guess) a wrist this far in front of the neck, between head and shoulder height, is the knight's guard
   open_retry_s: 2.0
   max_grab_failures: 30
   stats_every_s: 5.0
@@ -139,6 +140,12 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
   slow_charge_mult: 0.6       # Inferno: the target's next charge window x this
   release_grace_s: 0.6        # (guess, Task 5 measured charge landing +0.4 s, worst +0.6 s after speech) mic on: a push with no charge waits this long for one
   pose_grace_s: 1.0           # (guess) covers the measured ~0.8 s worst charge latency: a charge releases a pose already held only if it rose this recently
+  parry_classes: [holy_knight]  # classes whose guard pose parries
+  parry_window_s: 0.4         # (guess) a guard raised this close before impact parries the projectile
+  parry_cooldown_s: 1.5       # (guess) from a guard raise to the next one that counts
+  riposte_window_s: 1.5       # (guess) after a parry, the next uncharged push fires a riposte
+  riposte_damage: 20          # (guess)
+  riposte_travel_s: 0.5       # (guess)
   combat:
     speed_ref_mps: 2.0
     speed_mult_min: 0.6
@@ -147,7 +154,7 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
     near_mult: 1.4
     far_m: 2.8
     far_mult: 0.7
-  default_classes: {0: fire_mage, 1: lightning_mage}
+  default_classes: {0: fire_mage, 1: holy_knight}
   classes:
     fire_mage:
       name: Fire Mage
@@ -225,9 +232,11 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
     default_rgb: [255, 220, 120]
     dodge_rgb: [230, 50, 50]
     rgb: {basic: [240, 240, 240], fireball: [255, 120, 30], inferno: [255, 60, 0],
-          bolt: [120, 180, 255], chain: [160, 140, 255], judgment: [255, 230, 120]}
+          bolt: [120, 180, 255], chain: [160, 140, 255], judgment: [255, 230, 120],
+          riposte: [190, 230, 255]}
     family: {basic: basic, fireball: fire, inferno: fire, flame_wall: fire, bolt: lightning,
-             chain: lightning, static_field: lightning, judgment: holy, holy_light: holy, heal: holy}
+             chain: lightning, static_field: lightning, judgment: holy, holy_light: holy, heal: holy,
+             riposte: holy}
     glow_scale: 2.4           # glow radius / core radius
     glow_max_px: 224          # largest glow radius (bigger requests are clamped)
     glow_step_px: 8           # glow sprites are cached every 8 px up to glow_big_from_px,
@@ -352,8 +361,8 @@ keys:               # owner: Nikhil. pygame key names
   debug_overlay: f1
   quit: escape
   fake:
-    0: {left: a, right: d, closer: w, farther: s, push: f, duck: c, hands_up: r, hands_together: t, two_hand_push: v}
-    1: {left: j, right: l, closer: i, farther: k, push: h, duck: n, hands_up: y, hands_together: u, two_hand_push: m}
+    0: {left: a, right: d, closer: w, farther: s, push: f, duck: c, hands_up: r, hands_together: t, two_hand_push: v, guard: g}
+    1: {left: j, right: l, closer: i, farther: k, push: h, duck: n, hands_up: y, hands_together: u, two_hand_push: m, guard: o}
 
 fake:               # owner: Nikhil. --fake mode players
   start_x_m: 0.6              # slot 0 at +x (image right), slot 1 at -x
@@ -363,4 +372,5 @@ fake:               # owner: Nikhil. --fake mode players
   move_speed_mps: 1.0
   push_speed_mps: 3.0
   duck_m: 0.4
+  guard_reach_m: 0.45         # the guard key moves the right wrist this far toward the camera
   focal_px: 525

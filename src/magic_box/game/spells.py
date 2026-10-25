@@ -13,6 +13,7 @@ from magic_box.core.config import Config
 from magic_box.game.effects import HIT_EFFECTS
 
 BASIC_ATTACK_ID = "basic"
+RIPOSTE_ID = "riposte"
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,20 @@ def basic_attack(cfg: Config) -> SpellDef:
         0,
         g["basic_attack_damage"],
         g["basic_attack_travel_s"],
+        "push",
+        {},
+    )
+
+
+def riposte(cfg: Config) -> SpellDef:
+    """The knight's free counter: the next uncharged push after a parry."""
+    g = cfg["game"]
+    return SpellDef(
+        RIPOSTE_ID,
+        "Riposte",
+        0,
+        g["riposte_damage"],
+        g["riposte_travel_s"],
         "push",
         {},
     )

@@ -368,6 +368,10 @@ class Engine:
             ready=self._hands[slot].value and scene in ("lobby", "victory"),
             heard=self._heard[slot],
             stats=match.stats(slot) if match is not None else {},
+            can_parry=class_id in g["parry_classes"],
+            guard_s=match.guard_left(slot) if in_fight else 0.0,
+            guard_cooldown_s=match.guard_cooldown_left(slot) if in_fight else 0.0,
+            riposte_s=match.riposte_left(slot) if in_fight else 0.0,
         )
 
     @staticmethod

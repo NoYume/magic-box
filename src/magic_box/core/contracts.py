@@ -213,6 +213,10 @@ class PlayerView:
     ready: bool = False  # lobby and victory: hands up, ready to start
     heard: str = ""  # last final transcript from this player's mic (lobby mic check)
     stats: dict[str, float] = field(default_factory=dict)  # match totals, see root CLAUDE.md
+    can_parry: bool = False  # the class guards and parries (game.parry_classes)
+    guard_s: float = 0.0  # fight only: seconds left on a raised guard's parry window
+    guard_cooldown_s: float = 0.0  # fight only: seconds until a new guard counts
+    riposte_s: float = 0.0  # fight only: seconds left to push a riposte after a parry
 
     def __post_init__(self) -> None:
         _check_in("slot", self.slot, SLOTS)
