@@ -114,6 +114,7 @@ class GameLoop:
 
     def _on_scene_entered(self, view, match_events: list[GameEvent], now: float) -> None:
         names = {p.slot: p.name for p in view.players}
+        self._incantations_delivered = False  # a delivery only counts within its own loading
         if view.scene in ("loading", "victory") and self._ai is not None:
             # Dead Wi-Fi: skip Spark so loading doesn't wait out its timeout.
             set_offline = getattr(self._ai, "set_offline", None)
@@ -206,7 +207,7 @@ class GameLoop:
                 for kind, result in self._ai.poll(now):
                     if kind == "incantations":
                         self._engine.provide_incantations(result)  # type: ignore[arg-type]
-                        self._incantations_delivered = True
+                        self._incantations_delivered = view.scene == "loading"
                     else:
                         self._engine.provide_chronicle(result)  # type: ignore[arg-type]
             self._keyboard_voice.set_spells(

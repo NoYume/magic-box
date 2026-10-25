@@ -4,7 +4,7 @@ from pathlib import Path
 
 from magic_box.ai.worker import AiWorker
 from magic_box.core.config import load_config
-from magic_box.core.contracts import GameEvent, VoiceEvent
+from magic_box.core.contracts import GameEvent, SpellView, VoiceEvent
 from magic_box.game.engine import Engine
 from magic_box.intent.fusion import Intent
 from magic_box.pipeline.loop import GameLoop, latest_states
@@ -298,24 +298,77 @@ def test_recorder_gets_states_voice_and_events():
     assert ("voice", "incantation") in rec.items
 
 
-def test_incantation_config_is_sent_in_loading_once_the_engine_has_them():
+class IncEngine(SceneEngine):
+    """Spells show an empty incantation until provide_incantations is called."""
+
+    def __init__(self, scenes):
+        super().__init__(scenes)
+        self.text = ""
+
+    def provide_incantations(self, incantations):
+        super().provide_incantations(incantations)
+        self.text = "real words"
+
+    def step(self, actions, states, now):
+        view, events = super().step(actions, states, now)
+        if view.scene == "lobby":
+            self.text = ""  # a new match starts without incantations
+        spell = SpellView("fireball", "Fireball", self.text, 10.0, False)
+        players = tuple(replace(p, spells=(spell,)) for p in view.players)
+        return replace(view, players=players), events
+
+
+class QueueDisplay(ScriptedDisplay):
+    """Records, per drawn frame, the scene and how many voice configs were sent so far."""
+
+    def __init__(self, q):
+        super().__init__([])
+        self.q, self.log = q, []
+
+    def draw(self, view, frame, states, fps, dropped=0):
+        super().draw(view, frame, states, fps, dropped)
+        self.log.append((view.scene, len(self.q.items)))
+
+
+def _run_inc(scenes, poll_results, ticks):
     q = ListQueue()
-    ai = FakeAi(poll_results=[[], [("incantations", {0: {}, 1: {}})]])
-    engine = SceneEngine(["lobby", "loading", "loading", "loading", "loading", "fight", "fight"])
+    display = QueueDisplay(q)
+    engine = IncEngine(scenes)
     GameLoop(
         CFG,
         FakeSources(CFG),
-        ScriptedDisplay([]),
+        display,
         Intent(CFG),
         engine,
         KeyboardVoiceSource(CFG),
-        ai=ai,
+        ai=FakeAi(poll_results=poll_results),
         voice_control=q,
-    ).run(max_ticks=7)
-    modes = [c.mode for c in q.items]
-    assert modes == ["transcript", "incantation"]  # sent in loading; fight start does not repeat it
-    # sent on the tick after the incantations were handed over (tick index 2 -> 3)
-    assert engine.provided == [("incantations", {0: {}, 1: {}})]
+    ).run(max_ticks=ticks)
+    return q, display
+
+
+def test_incantation_config_is_sent_in_loading_once_the_engine_has_them():
+    scenes = ["lobby", "loading", "loading", "loading", "loading", "fight", "fight"]
+    q, display = _run_inc(scenes, [[], [("incantations", {0: {}, 1: {}})]], 7)
+    assert [c.mode for c in q.items] == ["transcript", "incantation"]
+    assert q.items[1].incantations[0] == {"fireball": "real words"}
+    sent_at = next(i for i, (_, n) in enumerate(display.log) if n == 2)
+    assert display.log[sent_at][0] == "loading"  # in loading, not at the fight start
+
+
+def test_stale_delivery_flag_does_not_leak_into_the_next_loading():
+    # Loading ends on the tick after the hand-over, so the delivery flag is never consumed
+    # there. The next match's loading must not send a config with empty incantations.
+    scenes = ["lobby", "loading", "fight", "victory", "lobby", "loading", "loading"]
+    q, _ = _run_inc(scenes, [[], [("incantations", {0: {}, 1: {}})]], 7)
+    texts = [
+        text
+        for c in q.items
+        if c.mode == "incantation"
+        for spells in c.incantations.values()
+        for text in spells.values()
+    ]
+    assert texts and all(texts)
 
 
 def test_spark_is_skipped_when_the_network_check_failed():
