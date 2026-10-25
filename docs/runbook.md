@@ -225,7 +225,7 @@ Change values in `config.local.yaml` on the Jetson, then quit (`Esc`) and start 
 | Heal (hands together) won't trigger | `perception.hands_together_max_m` (0.25) | Raise to 0.35. |
 | The fight pauses (STEP INTO VIEW) too often | `game.pause_after_s` (2.0), `perception.slot_hold_s` (1.0) | Raise either. |
 | Bystanders get tracked | `camera.max_range_m` (3.5) | Lower to the back of the play area. |
-| Zone readout disagrees with the floor tape | `perception.zones.danger_max_m` (1.6), `far_min_m` (2.4) | Match the tape, or move the tape. |
+| Zone readout disagrees with the floor tape | `perception.zones.danger_max_m` (1.3), `far_min_m` (1.9); damage scales between `game.combat.near_m` (1.1) and `far_m` (2.2) | Match the tape, or move the tape. |
 | Every hit lands at the same multiplier | `game.combat.speed_ref_mps` (2.0) | `Push.speed` is now the punch's peak. Check `best_push_mps` on the victory screen and set the reference near a typical punch. |
 | Loading card shows the config incantations (Spark fell back) | `ai.timeout_s` (8), `game.loading_max_s` (10) | Check Wi-Fi first (phone hotspot). If Spark times out often, raise `ai.timeout_s` and keep `game.loading_max_s` above it. |
 | Players can't finish reading their incantations before the fight | `game.loading_read_s` (4.0) | Raise to 6. The loading card stays up at least this long after the incantations arrive, with no countdown until they do. Lower it if loading drags. The Muse sessions open as soon as the incantations are known (handshake 0.4-1.1 s), so keep it above about 1.5 s. |
@@ -335,6 +335,6 @@ Run with `-- --debug` so the overlay is one key away. Tick each line, and write 
 
 - [ ] `config.local.yaml` has the real mics and no `svo_path`.
 - [ ] `.env` is present; `check_spark.py` passes on the venue Wi-Fi, or the phone hotspot is connected.
-- [ ] Camera level and centered; floor tape at 1.6 m and 2.4 m (`perception.zones`), far edge at 3.5 m.
+- [ ] Camera level and centered; floor tape at 1.3 m and 1.9 m (`perception.zones`), far edge at about 2.6 m.
 - [ ] Game started with `DISPLAY=:0 scripts/run_demo.sh`. `F1` ready to show the depth overlay.
 - [ ] Spare USB mic and the phone hotspot within reach.
