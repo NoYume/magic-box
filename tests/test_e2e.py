@@ -242,6 +242,28 @@ def wait_for(h: Harness, kind: str, since: int, max_s: float = 4.0, **match):
     yield from until(h, lambda h: h.find(kind, since=since, **match), max_s=max_s)
 
 
+def knock_out(h: Harness, slot: int, max_s: float = 60.0) -> Iterator[frozenset[str]]:
+    """Attack until the opponent is knocked out, whatever the damage numbers: the dearest
+    affordable push spell, else a basic attack. Each attack waits for its hit."""
+    start = len(h.events)
+    for _ in range(int(max_s)):
+        if h.find("ko", since=start):
+            return
+        me = h.player(slot)
+        ready = [sp for sp in me.spells if sp.release == "push" and me.mana >= sp.cost]
+        n = len(h.events)
+        if ready:
+            yield from cast(h, slot, max(ready, key=lambda sp: sp.cost).id)
+        else:
+            yield from tap(KEYS[slot]["push"])
+        yield from until(
+            h,
+            lambda h, n=n: h.find("hit", since=n, slot=slot) or h.find("ko", since=start),
+            max_s=5,
+        )
+    raise AssertionError("no KO")
+
+
 # -- tests --------------------------------------------------------------------
 
 
@@ -272,17 +294,13 @@ def test_full_flow_two_matches_through_the_real_window():
         marks["loading"] = h.now
         assert h.view.timer_s is None  # no countdown before the incantations arrive
         yield NONE
-        assert h.view.timer_s == pytest.approx(max(g["loading_min_s"], g["loading_read_s"]))
+        expected = max(g["loading_min_s"] - DT, g["loading_read_s"])  # one tick into loading
+        assert h.view.timer_s == pytest.approx(expected, abs=1e-6)
         yield from until_scene(h, "fight")
         marks["fight"] = h.now
         incs = {s.id: s.incantation for s in h.player(0).spells}
         assert all(incs.values()), incs
-        # Fireball then Inferno: 34.2 + 66.6 at the fake 3 m/s push is a KO.
-        n = len(h.events)
-        yield from cast(h, 0, "fireball")
-        yield from wait_for(h, "hit", n, spell_id="fireball")
-        yield from cast(h, 0, "inferno")
-        yield from wait_for(h, "ko", n)
+        yield from knock_out(h, 0)
         marks["ko"] = h.now
         assert h.scene == "fight" and h.view.winner_slot == 0
         yield from until_scene(h, "victory")
@@ -290,7 +308,9 @@ def test_full_flow_two_matches_through_the_real_window():
         assert h.view.banner == "ADA WINS" and h.view.winner_slot == 0
         yield NONE  # the chronicle job is started on entering victory and shows a tick later
         assert h.view.chronicle  # template chronicle (AI off)
-        assert h.player(0).stats["casts"] == 2 and h.player(0).stats["hits"] == 2
+        spells_cast = [e for e in h.find("cast", slot=0) if e.data["spell_id"] != "basic"]
+        assert h.player(0).stats["casts"] == len(spells_cast) >= 1
+        assert h.player(0).stats["hits"] == len(h.find("hit", slot=0))
         # Hands up after victory_min_s: back to the lobby; held hands don't start match 2.
         yield from until_scene(h, "lobby", BOTH_HANDS_UP, max_s=g["victory_min_s"] + 2)
         marks["lobby2"] = h.now
@@ -440,8 +460,8 @@ def test_chain_needs_one_dodge_per_bolt(ducks):
         out["n"] = n = len(h.events)
         yield from cast(h, 1, "chain")  # P2 is the lightning mage
         yield from wait_for(h, "cast", n, spell_id="chain", max_s=0.5)
-        # Bolt k lands at travel + k * gap; duck once inside each bolt's window.
-        yield from hold(NONE, travel - 0.15 - 4 * DT)
+        # Bolt k lands at travel + k * gap; duck a quarter window before each one lands.
+        yield from hold(NONE, travel - cfg["game"]["dodge_window_s"] / 4 - 4 * DT)
         for _ in range(ducks):
             yield from tap(KEYS[0]["duck"], ticks=3)
             yield from hold(NONE, gap - 4 * DT)
@@ -463,11 +483,7 @@ def test_ko_holds_the_fight_for_ko_hold_s():
 
     def script(h: Harness):
         yield from to_fight(h, [(0, "my name is Ada")])
-        n = len(h.events)
-        yield from cast(h, 0, "fireball")
-        yield from wait_for(h, "hit", n)
-        yield from cast(h, 0, "inferno")
-        yield from wait_for(h, "ko", n)
+        yield from knock_out(h, 0)
         ko_view = h.view
         assert ko_view.scene == "fight" and {e.kind for e in ko_view.events} >= {"ko", "match_end"}
         frozen = [(p.hp, p.mana) for p in h.view.players]
@@ -570,18 +586,21 @@ def test_push_just_before_a_late_charge_releases_the_spell(mic):
         yield from tap(KEYS[0]["push"])
         yield from hold(NONE, grace / 2)
         h.incant(0, "fireball", score=88.0)
-        yield from hold(NONE, 2.5)
+        yield from hold(NONE, 0.1)
+        out["charged"] = [s.id for s in h.player(0).spells if s.charged]
+        yield from hold(NONE, travel + 0.3)
 
     out: dict = {}
+    travel = cfg["game"]["classes"]["fire_mage"]["spells"][0]["travel_s"]
     h = Harness(cfg).run(script)
     casts = [e.data["spell_id"] for e in h.find("cast", slot=0, since=out["n"])]
     if mic:
         assert casts == ["fireball"]
         assert h.find("hit", slot=0, spell_id="fireball")
-        assert not any(s.charged for s in h.player(0).spells)
+        assert out["charged"] == []
     else:
         assert casts == ["basic"]  # no mic: the push is a basic attack at once
-        assert [s.id for s in h.player(0).spells if s.charged] == ["fireball"]
+        assert out["charged"] == ["fireball"]
 
 
 def test_a_push_on_the_basic_cooldown_still_releases_a_late_charge():
@@ -700,6 +719,8 @@ def test_random_fights_keep_the_view_consistent(seed, classes):
 def test_record_then_replay_plays_to_the_same_result(tmp_path):
     """A recorded fake match replays to the same casts, hits, dodges and ending."""
     cfg = make_cfg()
+    g = cfg["game"]
+    fireball = g["classes"]["fire_mage"]["spells"][0]
     session = tmp_path / "session"
 
     def script(h: Harness):
@@ -707,15 +728,12 @@ def test_record_then_replay_plays_to_the_same_result(tmp_path):
         n = len(h.events)
         yield from cast(h, 0, "fireball")
         yield from wait_for(h, "cast", n, spell_id="fireball", max_s=0.5)
-        yield from hold(NONE, 1.2)
-        yield from tap(KEYS[1]["duck"], ticks=8)  # dodges the fireball
+        yield from hold(NONE, fireball["travel_s"] - g["dodge_window_s"] / 2)
+        yield from tap(KEYS[1]["duck"], ticks=8)  # dodges the fireball, mid-window
         yield from cast(h, 1, "holy_light")
         yield from tap(KEYS[1]["push"])
         yield from hold(NONE, 1.0)
-        yield from cast(h, 0, "fireball")
-        yield from wait_for(h, "hit", n, spell_id="fireball")
-        yield from cast(h, 0, "inferno")
-        yield from wait_for(h, "ko", n, max_s=3)
+        yield from knock_out(h, 0)
         yield from until_scene(h, "victory")
 
     recorder = SessionRecorder(session, cfg, "fake")
