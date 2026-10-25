@@ -185,7 +185,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6" },
     { name = "rapidfuzz", specifier = ">=3" },
     { name = "sounddevice", specifier = ">=0.4" },
-    { name = "websockets", specifier = ">=12" },
+    { name = "websockets", specifier = ">=14" },
 ]
 provides-extras = ["laptop"]
 

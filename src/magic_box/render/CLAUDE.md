@@ -36,3 +36,14 @@ Tests use the SDL dummy drivers set in `tests/conftest.py`.
 ## Open TODOs
 - `TODO(Adetola)`: real `hud.py`; real lobby, loading and victory scenes (the current ones are plain text), a boot scene, and the class-pick screen.
 - `hud.py` still hard-codes colors; they move to `cfg.render` with the real HUD.
+
+## Jetson fps fallbacks
+All config, defaults unchanged. Try them in this order if the Orin Nano drops below 60 fps (the F1 overlay header shows stage times; `--debug` prints them every `pipeline.perf_window_s`):
+1. `render.crop_cache: true` (default): the scaled crop is reused while the frame surface and the crop rectangle are unchanged, so a repeated `frame_idx` costs nothing once the smoothed crop settles.
+2. `render.self_view: false`: skips the mirrored self-view and its skeleton (two scaled crops per frame).
+3. `render.camera_scale_quality: fast` (default, `pygame.transform.scale`) or `smooth` (`smoothscale`, nicer, slower). Keep `fast` on the Jetson.
+4. `display.vsync: true`: uses `SCALED` + vsync. Can fix tearing but caps fps at the monitor rate. Leave off unless tearing shows.
+5. Lower `display.fps`, or drop the camera to a smaller `camera.resolution` / `BODY_18` (see the root `CLAUDE.md` risks).
+
+`camera_view.configure(cfg["render"])` applies items 1-3 (called from `main.py`).
+

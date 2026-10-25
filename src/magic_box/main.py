@@ -4,6 +4,7 @@ Owner: Nikhil
 """
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -32,6 +33,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument("--max-ticks", type=int, default=None, metavar="N")
     return parser.parse_args(argv)
+
+
+def hard_exit(code: int) -> None:
+    """Exit now, skipping the join of non-daemon threads.
+
+    A Spark call in flight sits in a ThreadPoolExecutor thread that the interpreter would
+    wait for at exit (up to the API timeout). Everything that needs cleanup is closed by
+    `run()` before this is called.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
 
 
 def run(argv: Sequence[str] | None = None) -> int:

@@ -3,7 +3,7 @@
 Owner: Nikhil
 """
 
-from magic_box.main import run
+from magic_box.main import hard_exit, run
 
 if __name__ == "__main__":
-    raise SystemExit(run())
+    hard_exit(run())

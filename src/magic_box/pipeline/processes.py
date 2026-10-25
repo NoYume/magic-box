@@ -89,7 +89,7 @@ class Supervisor:
         for proc in self._procs.values():
             if proc.is_alive():
                 proc.terminate()
-                proc.join(1.0)
+                proc.join(0.3)
 
 
 @dataclass
@@ -100,7 +100,7 @@ class LiveRuntime:
     frame_bus: FrameBus
 
     def close(self) -> None:
-        self.supervisor.stop()
+        self.supervisor.stop(timeout=0.5)  # quit must return within ~1 s
         self.frame_bus.close()
         self.frame_bus.unlink()
 

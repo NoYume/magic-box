@@ -11,6 +11,11 @@ Process plumbing and the game-process loop: supervisor, shared-memory frame bus,
 - With `--record`, the loop passes states, voice events and game events to `SessionRecorder`.
 - `loop.GameLoop.run()` ticks: `window.pump()` → `Sources.poll()` (+ keyboard voice) → `intent` → `engine.step()` → scene-change hooks and `AiWorker.poll()` → `window.draw()`.
 
+- The loop calls `engine.provide_camera_status(ok)` on changes and `engine.provide_check(name, ok, detail)` once per check. Live mode: camera not ok when no new `frame_idx` for `pipeline.camera_stale_s`, when perception is not alive (restarting), or when no first frame arrives within `camera_boot_timeout_s`. Fake and replay are always ok.
+- Perf: per-tick poll/intent/engine/draw times and latency are shown in the F1 header (the loop sets `debug_overlay.perf_text`) and printed to stderr with `--debug`.
+- Quit: `main.hard_exit()` (called by `__main__`) skips the interpreter's join of non-daemon threads, so a Spark call in flight cannot delay exit; `LiveRuntime.close()` stops children within ~0.5 s.
+- `scripts/run_demo.sh` launches the game fullscreen on the Jetson, records each run and restarts on crash (max 5 per 60 s).
+
 ## Hard rules
 - Never block the game loop. The frame bus read and `DropOldestQueue.drain()` return immediately.
 - Streams drop the *oldest* item on overflow and count drops (`dropped`). Do not drop newest.
@@ -24,6 +29,8 @@ Process plumbing and the game-process loop: supervisor, shared-memory frame bus,
 - `streams.py`: `spawn_context()` and `DropOldestQueue` (`put`, `drain`, `dropped`).
 - `processes.py`: `Supervisor` (start, poll, restart with backoff, stop) and `start_live(cfg)`.
 - `sources.py`: `FakeSources`, `LiveSources`, `ReplaySources` (wraps `replay/play.py`), `KeyboardVoiceSource`, `Inputs` (incl. `dropped`, the summed queue drop count shown in the debug overlay).
+- `health.py`: `CameraWatch` (stale-camera logic), `BootChecks` (`camera`, `network`, `api key`; the network probe is a 3 s TCP connect to the `ai.base_url` host on a daemon thread; the key is never logged).
+- `perf.py`: `PerfStats` (stage times and PlayerState-to-draw latency over `pipeline.perf_window_s`).
 - `loop.py`: `GameLoop` (scene-change hooks, mic status, recording, AI polling), `Display` protocol, `latest_states`.
 
 ## Test without the Jetson
