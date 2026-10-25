@@ -54,6 +54,7 @@ class Engine:
         self._pause: str | None = None  # None | "camera" | "tracking"
         self._tracking_pause_since: float | None = None
         self._reacquire: set[int] = set()  # after a camera pause: slots not seen again yet
+        self._ko_at: float | None = None  # when the KO landed (the fight scene holds)
         self._camera_ok: bool | None = None  # None until the loop reports
         self._checks: dict[str, tuple[bool, str]] = {}
 
@@ -84,7 +85,7 @@ class Engine:
             now,
             both_ready=all(ready.values()),
             incantations_ready=self._incantations is not None,
-            match_over=self._match is not None and self._match.result() is not None,
+            match_over=self._match_over(now),
             camera_ok=self._check("camera")[0],
         )
         if changed:
@@ -173,6 +174,10 @@ class Engine:
         match = self._match
         assert match is not None
         g = self._g
+        if match.result() is not None:
+            # KO hold: the match is frozen and decided; no pause, abandon or camera logic.
+            self._pause = None
+            return match.take_events()
         if self._camera_ok is False:
             # Nobody is tracked while perception restarts. Once frames return, anyone not
             # tracked yet pauses the fight at once, and the abandon clock starts then.
@@ -198,6 +203,25 @@ class Engine:
             match.advance(dt, states, now)
         return match.take_events()
 
+    def _match_over(self, now: float) -> bool:
+        """The match ended; after a KO, only once `ko_hold_s` has passed (finishing FX)."""
+        result = self._match.result() if self._match is not None else None
+        if result is None:
+            return False
+        if result[1] != "ko":
+            return True
+        if self._ko_at is None:
+            self._ko_at = now
+        return now - self._ko_at >= self._g["ko_hold_s"]
+
+    def _winner_slot(self, scene: str) -> int | None:
+        """Victory, and the KO hold (the winner is decided at the KO)."""
+        if scene == "victory":
+            return self._result[0] if self._result else None
+        if scene == "fight" and self._match is not None and self._match.result() is not None:
+            return self._match.result()[0]
+        return None
+
     def _fill_fallbacks(self) -> None:
         assert self._incantations is not None
         for s in SLOTS:
@@ -216,6 +240,7 @@ class Engine:
             self._pause = None
             self._tracking_pause_since = None
             self._reacquire = set()
+            self._ko_at = None
             self._match = MatchState(self.cfg, self._names, now, self._classes, self._mic_ok)
             events += self._match.take_events()
         elif scene == "victory":
@@ -270,7 +295,7 @@ class Engine:
             events=tuple(events),
             classes=self._class_views,
             checks=self._check_views(),
-            winner_slot=self._result[0] if scene == "victory" and self._result else None,
+            winner_slot=self._winner_slot(scene),
         )
 
     def _check_views(self) -> tuple[CheckView, ...]:

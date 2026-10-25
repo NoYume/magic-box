@@ -437,6 +437,7 @@ class MatchState:
 
     def _end(self, now: float, winner: int | None, reason: str) -> None:
         self._result = (winner, reason)
+        self.clear_in_flight()  # nothing lands after the end (the KO hold shows a frozen fight)
         self._log(
             now,
             "match_end",

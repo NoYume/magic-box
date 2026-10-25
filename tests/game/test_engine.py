@@ -63,12 +63,26 @@ def to_fight(e, t=None):
 
 
 def ko(e, t):
-    """White-box shortcut to a P1 KO win; returns (view, events, next t)."""
+    """White-box shortcut to a P1 KO win, through the KO hold; returns (view, events, next t)."""
     e._match.players[1].hp = 1  # noqa: SLF001
     e.step([Action("push", 0, t, push=Push("R", 2.0, (480.0, 300.0)), dist=2.0)], states(), t)
-    view, events = run(e, t + DT, t + 1.0, states())
+    end = t + 1.0 + G["ko_hold_s"]
+    view, events = run(e, t + DT, end, states())
     assert view.scene == "victory"
-    return view, events, t + 1.05
+    return view, events, end + DT
+
+
+def ko_tick(e, t, st=None):
+    """Land a KO on P2 with a basic attack; returns (KO tick view, its events, KO time)."""
+    e._match.players[1].hp = 1  # noqa: SLF001
+    push = Push("R", 2.0, (480.0, 300.0))
+    e.step([Action("push", 0, t, push=push, dist=2.0)], st or states(), t)
+    now = t
+    while True:
+        now += DT
+        view, events = e.step([], st or states(), now)
+        if any(ev.kind == "ko" for ev in events):
+            return view, events, now
 
 
 # -- boot ------------------------------------------------------------------
@@ -540,6 +554,70 @@ def test_ko_to_victory_chronicle_and_back_to_lobby():
     view, _ = e.step([], states(up=(True, True)), t2)  # held since t: counts
     assert view.scene == "lobby" and view.players[0].name == "Ada"
     assert view.winner_slot is None and view.players[0].stats == {}
+
+
+def test_ko_holds_the_fight_scene_then_goes_to_victory():
+    e = Engine(CFG)
+    _, _, t = to_fight(e)
+    view, events, t_ko = ko_tick(e, t)
+    assert view.scene == "fight" and view.events == tuple(events)
+    assert [ev.kind for ev in events][-2:] == ["ko", "match_end"]
+    assert view.winner_slot == 0 and view.projectiles == ()
+    hold = G["ko_hold_s"]
+    view, later = run(e, t_ko + DT, t_ko + hold - DT, states())
+    assert view.scene == "fight" and later == []
+    view, later = e.step([], states(), t_ko + hold + 1e-6)  # float slack on the boundary
+    assert view.scene == "victory" and view.banner == "P1 WINS" and view.winner_slot == 0
+    assert [ev.kind for ev in later] == []  # ko and match_end fired once, on the KO tick
+
+
+def test_ko_hold_freezes_the_match():
+    e = Engine(CFG)
+    _, _, t = to_fight(e)
+    e._match.players[0].mana = 40.0  # noqa: SLF001
+    e.step([Action("charge", 1, t, spell_id="bolt", match_score=90.0, dist=2.0)], states(), t)
+    view, _, t_ko = ko_tick(e, t + DT)
+    hp, mana, left = [p.hp for p in view.players], [p.mana for p in view.players], view.timer_s
+    push = Push("R", 3.0, (480.0, 300.0))
+    acts = [
+        Action("push", 1, t_ko, push=push, dist=2.0),
+        Action("charge", 0, t_ko, spell_id="fireball", match_score=90.0, dist=2.0),
+    ]
+    view, events = run(e, t_ko + DT, t_ko + G["ko_hold_s"] - DT, states(), actions=acts)
+    assert view.scene == "fight" and events == [] and view.projectiles == ()
+    assert [p.hp for p in view.players] == hp and [p.mana for p in view.players] == mana
+    assert view.timer_s == left and not view.players[0].spells[0].charged
+
+
+def test_ko_hold_ignores_pause_abandon_and_camera():
+    cfg = copy.deepcopy(CFG)
+    cfg["game"]["ko_hold_s"] = 30.0  # longer than pause_after_s + abandon_after_s
+    e = Engine(cfg)
+    _, _, t = to_fight(e)
+    _, _, t_ko = ko_tick(e, t)
+    e.provide_camera_status(False)
+    view, events = run(e, t_ko + DT, t_ko + 29.0, states(ok=(False, False)), dt=0.25)
+    assert view.scene == "fight" and events == []
+    assert view.banner not in ("STEP INTO VIEW", "CAMERA RECONNECTING")
+    view, _ = e.step([], states(ok=(False, False)), t_ko + 30.0)
+    assert view.scene == "victory" and view.winner_slot == 0
+
+
+def test_time_out_goes_to_victory_without_a_hold():
+    e = Engine(CFG)
+    _, _, t = to_fight(e)
+    e._match.time_left = 0.01  # noqa: SLF001
+    view, events = e.step([], states(), t)
+    assert view.scene == "victory" and "match_end" in [ev.kind for ev in events]
+
+
+def test_ko_hold_0_goes_to_victory_on_the_ko_tick():
+    cfg = copy.deepcopy(CFG)
+    cfg["game"]["ko_hold_s"] = 0.0
+    e = Engine(cfg)
+    _, _, t = to_fight(e)
+    view, events, _ = ko_tick(e, t)
+    assert view.scene == "victory" and [ev.kind for ev in events][-2:] == ["ko", "match_end"]
 
 
 def test_victory_hands_up_must_be_held():

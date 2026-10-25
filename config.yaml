@@ -130,6 +130,7 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
   boot_max_s: 8.0             # boot: go to the lobby at this point whatever the checks say
   hands_up_hold_s: 0.3        # (guess) hands up, or down, must hold this long to count (Jetson flicker)
   abandon_after_s: 20.0       # a pause this long ends the match: the tracked player wins, draw if both gone
+  ko_hold_s: 2.5              # after a KO the fight scene stays (frozen) this long for the finishing FX; render.fx.ko_s should not exceed it. Time-outs don't hold
   empowered_mult: 1.5         # Holy Light: the caster's spells and basic attacks x this while empowered
   mana_slow_mult: 0.25        # Static Field: the target's mana regen x this while slowed
   slow_charge_mult: 0.6       # Inferno: the target's next charge window x this

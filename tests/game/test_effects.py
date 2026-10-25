@@ -320,3 +320,13 @@ def test_abandon_ends_the_match_once():
     assert ms.result() == (1, "abandon")
     [ev] = ms.take_events()
     assert ev.kind == "match_end" and ev.data["reason"] == "abandon"
+
+
+def test_ko_clears_projectiles_still_in_flight():
+    ms = new()
+    ms.players[1].hp = 5
+    cast(ms, 0, "fireball", push(0))  # 1.6 s
+    ms.apply(push(0), STATES, 0.0)  # basic, 0.7 s: lands first and KOs
+    land(ms, 0.75)
+    assert ms.result() == (0, "ko") and ms.projectiles == []
+    assert [e.kind for e in ms.take_events()][-2:] == ["ko", "match_end"]
