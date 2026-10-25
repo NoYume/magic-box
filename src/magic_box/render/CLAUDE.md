@@ -1,29 +1,33 @@
 # render
 
-**Owner:** split. `hud.py` + `scenes/` = Adetola; `camera_view.py` + `projectiles.py` = Nikhil; `debug_overlay.py` = Enoch; `window.py` + `layout.py` = Adetola + Nikhil.
+**Owner:** split. `hud.py`, `scenes/`, `fx.py`, `audio.py`, `style.py` = Adetola; `camera_view.py` + `projectiles.py` = Nikhil (projectile sprites: Adetola); `debug_overlay.py` = Enoch; `window.py` + `layout.py` = Adetola + Nikhil.
 
-Draws the `GameView` and the latest camera frame as layout C (two 960x1080 halves, gold divider).
+Draws the `GameView` and the latest camera frame as layout C (two 960x1080 halves, gold divider), and plays event sounds.
 
 ## Inputs → Outputs
 - In: `GameView` (draw only this, never game state), the latest `Frame`, the newest `PlayerState` per slot, fps and dropped-item count.
-- Out: pixels, and from `Window.pump()` the pressed key names (`frozenset[str]`) plus a quit flag.
+- Out: pixels, sounds on `GameView.events`, and from `Window.pump()` the pressed key names (`frozenset[str]`) plus a quit flag.
 
 ## Hard rules
 - **The only package that may import `pygame`** (pygame-ce). Everything else gets keys as plain data.
-- Never import `game/` internals; use the `GameView` contract only.
-- Never block: 60 fps. If `frame_idx` is unchanged, reuse the last texture.
+- Never import `game/` internals; use the `GameView` contract only. Read `GameEvent.data` with `.get()`: older recordings and the thin engine carry less.
+- Never block: 60 fps. If `frame_idx` is unchanged, reuse the last texture. Pre-render static surfaces and go through `Theme.text` (cached) for text; pulsing colors are quantized (`style.pulse`) so they stay cached.
 - Pixel coordinates are the unmirrored left image; mirror only the self-view, at draw time.
-- Sizes, margins and colors come from `cfg.render`. Placeholders that still hard-code colors (`hud.py`) must move them to config.
+- Sizes, margins, colors, fonts, FX and audio settings come from `cfg.render` (`theme`, `hud`, `fx`, `audio`, `scenes`, `projectiles`). Validation lives in `core/config.py` `_check_render`.
 - Each half shows the *opponent*; the self-view shows the viewer. P1 is the left half.
+- Draw with every new `GameView` field empty too (old recordings replay with defaults).
 
 ## Files
-- `window.py`: `Window` (`pump`, `tick`, `draw`, `close`); picks the scene.
+- `window.py`: `Window` (`pump`, `tick`, `draw`, `close`, and `render(view, frame, states, now)` which draws without flipping, for tests and previews). Picks the scene, draws the banner (per half with a pop in the fight, a bottom ribbon elsewhere, the victory scene uses it as its headline), the round timer, FX and the KO overlay, and plays sounds. Audio is off when headless.
 - `layout.py`: layout C geometry (halves, crop and self-view rects).
+- `style.py`: `Theme` (fonts and colors from `render.theme`, a bounded text cache with drop shadows, cached panels and additive glow sprites) plus widgets: bars, rings, chips, check marks, effect icons, `edge_glow`, the scene background.
+- `hud.py`: `Hud` (stateful). Viewer panel: name, MIC and TRACKED chips, distance with a three-zone meter, basic-attack cooldown bar, eased HP bar with a damage ghost (low HP pulses), mana bar, three spell rows (cost badge, name, release cue, incantation; greyed when unaffordable; the charged one glows with a charge ring and the big cue), effect icons with countdowns above the panel. Opponent bar at the top with their effects and a pulsing "CHARGING <SPELL>!" warning. Round timer at the top center (red under `hud.timer_low_s`). `release_cue` turns `SpellView.release` into text.
+- `projectiles.py`: projectiles flying from the attacker's wrist toward the viewer. Per spell family (`render.projectiles.family`): fire tongues, lightning arcs, holy rays or a basic orb, with an additive glow and a stateless trail. Red pulsing ring and "DODGE!" in the dodge window.
+- `fx.py`: `Fx` driven by `GameView.events`: hit = red flash + shake on the target's half, "-N" by their HP bar and "N" over the opponent on the attacker's half; dodge "DODGE!" / "MISS"; block flash "BLOCKED!"; heal sparkles "+N"; buff edge glow; cast edge pulse; KO banner with slow-motion FX. Particles and texts are capped (`fx.max_particles`, `fx.max_texts`).
+- `audio.py`: `Audio` synthesizes the sounds with numpy at startup (cast, hit, dodge, block, heal, buff, KO, tick, match start) and plays them on events; ticks each second of the loading countdown and the last `audio.tick_last_s` of the fight. Silently off if the mixer cannot open, under the SDL dummy audio driver, headless, or with `audio.enabled: false`.
 - `camera_view.py`: opponent crop (8:9, padded, EMA-smoothed), mirrored self-view with skeleton, crop math.
-- `hud.py`: placeholder HUD (viewer panel with name, MIC OK / MIC OFF, distance and zone, HP and mana bars, spell lines with the incantation or the release cue; enemy HP bar). `release_cue` turns `SpellView.release` into text.
-- `projectiles.py`: spell projectiles from `GameView` flying from the attacker's wrist toward the viewer, scaled by progress.
 - `debug_overlay.py`: perception overlay (toggle `F1`). A header with render fps, camera fps and the dropped count. A panel per half for the player shown there: tracked or lost, distance and zone, pose flags, a `wrist_vz` graph with the push threshold line, and a flash on a push. A top-down map in meters below the panels, mirrored like the players' view.
-- `scenes/`: `__init__.py` (`draw_scene` dispatches on `GameView.scene`; text lines, `wrap_text`, fonts and colors from `render.scenes` config), `lobby.py` (title and each player's TRACKED / STEP INTO VIEW), `loading.py` (a card per player with incantations and release cues, plus the countdown), `victory.py` (the chronicle under the center banner). All plain-text placeholders.
+- `scenes/`: `__init__.py` (`draw_scene` dispatch, `SceneStyle`, `wrap_text`, `headline`, `stat_lines`), `boot.py` (self-check list with marks and an "ALL SYSTEMS GO" / missing note), `lobby.py` (a card per player: name, TRACKED, MIC, the heard transcript, class options from `GameView.classes` with the pick highlighted and the keyword to say, hands-up ready), `loading.py` (a tutorial card per half: each spell's incantation and release, tips, the countdown ring), `victory.py` (winner headline, a stats card per player with the keys present, the wrapped chronicle).
 
 ## Test without the Jetson
 ```
@@ -31,11 +35,14 @@ uv run pytest tests/render
 uv run python -m magic_box --fake
 uv run python -m magic_box --fake --headless --max-ticks 60
 ```
-Tests use the SDL dummy drivers set in `tests/conftest.py`.
+Tests use the SDL dummy drivers set in `tests/conftest.py`. `tests/factories.py` has `make_full_view(scene)` with every optional field populated. To eyeball a scene, render it with `Window.render(make_full_view("lobby"), None, {}, now)` and `pygame.image.save(window.screen, ...)`.
+
+Measured on the dev laptop (Apple M5, SDL dummy video): a populated fight frame renders in about 2.3-2.8 ms, about 3.5 ms with heavy FX. Budget 6 ms.
 
 ## Open TODOs
-- `TODO(Adetola)`: real `hud.py`; real lobby, loading and victory scenes (the current ones are plain text), a boot scene, and the class-pick screen.
-- `hud.py` still hard-codes colors; they move to `cfg.render` with the real HUD.
+- Measure the fight frame on the Jetson with the live camera. If it is slow: lower `fx.max_particles`, `projectiles.trail_steps` and `projectiles.glow_max_px`.
+- The default pygame font is used; an OFL display font under `assets/fonts/` would look better.
+- Sound is synthesized, not designed; real samples could go in `assets/sounds/`.
 
 ## Jetson fps fallbacks
 All config, defaults unchanged. Try them in this order if the Orin Nano drops below 60 fps (the F1 overlay header shows stage times; `--debug` prints them every `pipeline.perf_window_s`):
@@ -43,7 +50,7 @@ All config, defaults unchanged. Try them in this order if the Orin Nano drops be
 2. `render.self_view: false`: skips the mirrored self-view and its skeleton (two scaled crops per frame).
 3. `render.camera_scale_quality: fast` (default, `pygame.transform.scale`) or `smooth` (`smoothscale`, nicer, slower). Keep `fast` on the Jetson.
 4. `display.vsync: true`: uses `SCALED` + vsync. Can fix tearing but caps fps at the monitor rate. Leave off unless tearing shows.
-5. Lower `display.fps`, or drop the camera to a smaller `camera.resolution` / `BODY_18` (see the root `CLAUDE.md` risks).
+5. FX: lower `render.fx.max_particles` (160), `render.projectiles.trail_steps` (6) and `render.projectiles.glow_max_px` (240).
+6. Lower `display.fps`, or drop the camera to a smaller `camera.resolution` / `BODY_18` (see the root `CLAUDE.md` risks).
 
 `camera_view.configure(cfg["render"])` applies items 1-3 (called from `main.py`).
-

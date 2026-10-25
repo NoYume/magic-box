@@ -79,7 +79,7 @@ class Theme:
         surf = self._text.get(key)
         if surf is None:
             if len(self._text) >= self._cache_max:
-                self._text.clear()
+                del self._text[next(iter(self._text))]  # evict the oldest entry
             fg = f.render(text, True, color)
             if shadow and self.shadow_px > 0:
                 off = self.shadow_px
