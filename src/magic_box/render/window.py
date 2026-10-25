@@ -33,6 +33,14 @@ ALL_KEY_CODES = tuple(
 )
 MAX_DT_S = 0.1
 STEP_HINT = "STEP INTO VIEW"
+CAMERA_BANNER = "CAMERA RECONNECTING"  # the engine's camera-pause banner
+
+
+def _banner_says_why(banner: str | None) -> bool:
+    """The banner already explains a missing player: the tracking pause ("STEP INTO VIEW ·
+    12") or the camera outage. The per-half STEP INTO VIEW hint would only overlap it."""
+    text = banner or ""
+    return text.startswith(STEP_HINT) or text == CAMERA_BANNER
 
 
 class Window:
@@ -203,7 +211,7 @@ class Window:
                 )
                 draw_opponent(self.screen, half.half, surf, crop)
             else:
-                if not (view.banner or "").startswith(STEP_HINT):  # "STEP INTO VIEW · 12"
+                if not _banner_says_why(view.banner):
                     self._step_into_view(half.half, now)
             enemy = view.players[half.shows_slot]
             limit_x = half.selfview.x - 10

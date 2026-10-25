@@ -167,3 +167,9 @@ def _hints_drawn(banner, monkeypatch):
 def test_pause_banner_with_its_countdown_replaces_the_step_hint(monkeypatch):
     assert _hints_drawn(None, monkeypatch) == 2
     assert _hints_drawn("STEP INTO VIEW · 12", monkeypatch) == 0
+
+
+def test_camera_banner_shows_alone_without_the_step_hint(monkeypatch):
+    """While perception restarts nobody is tracked; only CAMERA RECONNECTING should show."""
+    assert _hints_drawn("CAMERA RECONNECTING", monkeypatch) == 0
+    assert _hints_drawn("FIGHT!", monkeypatch) == 2
