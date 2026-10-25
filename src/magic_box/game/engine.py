@@ -49,6 +49,7 @@ class Engine:
         self._incantations_at: float | None = None  # first step that saw them (loading)
         self._match: MatchState | None = None
         self._chronicle: str | None = None
+        self._chronicle_at: float | None = None  # first step that saw it (victory)
         self._mic_ok: dict[int, bool] = {s: False for s in SLOTS}
         self._last_now: float | None = None
         self._untracked_since: dict[int, float] = {}
@@ -84,6 +85,8 @@ class Engine:
                 self._incantations_at = now
         elif scene == "fight":
             events += self._fight(actions, states, dt, now)
+        elif scene == "victory" and self._chronicle is not None and self._chronicle_at is None:
+            self._chronicle_at = now
 
         changed = self._scenes.update(
             now,
@@ -91,7 +94,8 @@ class Engine:
             incantations_ready=self._loading_left(now) == 0.0,
             match_over=self._match_over(now),
             camera_ok=self._check("camera")[0],
-            chronicle_ready=self._chronicle is not None,
+            chronicle_ready=self._chronicle_at is not None
+            and now - self._chronicle_at >= self._g["victory_read_s"] - 1e-9,
         )
         if changed:
             events += self._on_enter(now)
@@ -261,6 +265,7 @@ class Engine:
             self._incantations = None
             self._incantations_at = None
             self._chronicle = None
+            self._chronicle_at = None
         elif scene == "fight":
             self._untracked_since.clear()
             self._pause = None

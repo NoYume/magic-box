@@ -91,6 +91,7 @@ def test_effect_kind_and_time(effect, effect_s):
         "ko_hold_s",
         "loading_read_s",
         "pose_grace_s",
+        "victory_read_s",
     ],
 )
 @pytest.mark.parametrize("value", [-1, True, "2"])

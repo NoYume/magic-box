@@ -118,6 +118,7 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
   loading_read_s: 4.0         # loading also lasts this long after the incantations arrive (Spark takes 3.1-3.8 s), so players can read them
   victory_min_s: 5.0
   victory_max_s: 30.0
+  victory_read_s: 4.0         # a hands-up exit from victory also waits this long after the chronicle arrives (Spark: up to ai.timeout_s)
   pause_after_s: 2.0
   name_max_chars: 12
   name_max_words: 2           # a lobby name is at most this many words

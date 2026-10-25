@@ -705,6 +705,24 @@ def test_victory_waits_for_the_chronicle_before_a_hands_up_return():
     assert view.scene == "victory" and view.chronicle is None
     e.provide_chronicle("A tale.")
     view, _ = e.step([], states(up=(True, True)), t2 + DT)
+    assert view.scene == "victory" and view.chronicle == "A tale."  # shown, not skipped
+    read = G["victory_read_s"]
+    view, _ = run(e, t2 + 2 * DT, t2 + DT + read - DT, states(up=(True, True)))
+    assert view.scene == "victory"
+    view, _ = run(e, t2 + DT + read, t2 + 2 * DT + read, states(up=(True, True)))
+    assert view.scene == "lobby"
+
+
+def test_an_early_chronicle_still_leaves_at_victory_min_s():
+    e = Engine(CFG)
+    _, _, t = to_fight(e)
+    _, _, t = ko(e, t)
+    e.provide_chronicle("A tale.")  # the template, at once (AI off)
+    # victory began up to ko_hold_s's rounding before t; the read time is shorter than min
+    assert G["victory_read_s"] < G["victory_min_s"] - 0.5
+    view, _ = run(e, t, t + G["victory_min_s"] - 0.5, states(up=(True, True)))
+    assert view.scene == "victory"
+    view, _ = run(e, t + G["victory_min_s"], t + G["victory_min_s"] + DT, states(up=(True, True)))
     assert view.scene == "lobby"
 
 
