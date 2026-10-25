@@ -70,7 +70,7 @@ More in `docs/hardware.md`.
 
 ## Contracts
 
-All cross-owner types live in `src/magic_box/core/contracts.py`: `Push`, `PlayerState`, `VoiceEvent`, `Action`, `GameEvent`, `GameView`, `PlayerView`, `SpellView`, `ProjectileView`, `VoiceConfig`, `Frame`. They round-trip to JSON lines via `core/serde.py`.
+All cross-owner types live in `src/magic_box/core/contracts.py`: `Push`, `PlayerState`, `VoiceEvent`, `Action`, `GameEvent`, `GameView`, `PlayerView`, `SpellView`, `EffectView`, `ClassView`, `CheckView`, `ProjectileView`, `VoiceConfig`, `Frame`. They round-trip to JSON lines via `core/serde.py`.
 
 **Change rule:** changing a contract needs a heads-up to every owner who produces or consumes it, and an update to this file in the same change.
 
@@ -93,6 +93,11 @@ All cross-owner types live in `src/magic_box/core/contracts.py`: `Push`, `Player
 7. `Action(kind="speech", text=...)` is one final transcript of a speech turn, from a `transcript` `VoiceEvent`. The engine decides what speech means per scene (the lobby takes it as the player's name).
 8. `VoiceEvent(kind="status")` has `text` of `"no api key"`, `"no mic"`, `"connected"` or `"reconnecting"`. The loop passes each one to `Engine.provide_mic_status(slot, ok)`, with `ok` true only for `"connected"` (HUD: MIC OK, else MIC OFF).
 9. `SpellView.release` is `push`, `two_hand_push`, `arm_overhead` or `hands_together`, so the HUD and loading card can say how to cast.
+
+**`GameView` additions, 2026-10-25** (Adetola's engine produces; Adetola's HUD and scenes consume). Every new field has a default, so older recordings still load.
+10. `PlayerView.effects` holds `EffectView(kind, remaining_s)` for `shield` (Flame Wall), `empowered` (Holy Light), `mana_slow` (Static Field) and `slow` (Inferno). `charge_s` and `cooldown_s` are seconds left on the charge window and the basic-attack cooldown. `ready` is hands up in the lobby or victory. `heard` is the last final transcript from that player's mic. `stats` holds match totals keyed `damage`, `hits`, `casts`, `dodges`, `blocks`, `heals` and `best_push_mps`; render shows the keys that are present.
+11. `GameView.events` repeats the `GameEvent`s `step` returned this tick, so render can flash hits and play sounds without reading the match log. `classes` (lobby) lists `ClassView(id, name, spells)`, `checks` (boot) lists `CheckView(name, ok, detail)`, and `winner_slot` (victory) is `None` for a draw.
+12. The loop reports camera health with `Engine.provide_camera_status(ok)` (False while perception restarts: banner "CAMERA RECONNECTING") and boot checks with `Engine.provide_check(name, ok, detail)`.
 
 Heads-up for Adetola (engine, HUD, scenes: the thin engine in `game/` is yours to replace) and Enoch (the two-hand push rule now lives in `intent/`, not in perception).
 

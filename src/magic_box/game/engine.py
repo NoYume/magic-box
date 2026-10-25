@@ -40,6 +40,8 @@ class Engine:
         self._untracked_since: dict[int, float] = {}
         self._result: tuple[int | None, str] | None = None
         self._paused = False
+        self._camera_ok = True
+        self._checks: dict[str, tuple[bool, str]] = {}
 
     # -- public API -------------------------------------------------------
 
@@ -86,6 +88,14 @@ class Engine:
 
     def provide_mic_status(self, slot: int, ok: bool) -> None:
         self._mic_ok[slot] = ok
+
+    def provide_camera_status(self, ok: bool) -> None:
+        """Camera frames arriving (False while perception restarts). Stored only, for now."""
+        self._camera_ok = ok
+
+    def provide_check(self, name: str, ok: bool, detail: str = "") -> None:
+        """One boot self-check result from the loop. Stored only, for now."""
+        self._checks[name] = (ok, detail)
 
     # -- scene work -------------------------------------------------------
 

@@ -3,7 +3,7 @@
 Owner: Nikhil
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -19,6 +19,7 @@ VOICE_MODES = ("transcript", "incantation")
 ACTION_KINDS = ("charge", "push", "pose", "dodge", "speech")
 RELEASE_KINDS = ("push", "two_hand_push", "arm_overhead", "hands_together")
 DODGE_KINDS = ("step", "duck")
+EFFECT_KINDS = ("shield", "empowered", "mana_slow", "slow")
 GAME_EVENT_KINDS = (
     "match_start",
     "cast",
@@ -164,6 +165,35 @@ class SpellView:
 
 
 @dataclass(frozen=True)
+class EffectView:
+    """A timed effect on a player, for a HUD icon and countdown."""
+
+    kind: str  # "shield" | "empowered" | "mana_slow" | "slow"
+    remaining_s: float
+
+    def __post_init__(self) -> None:
+        _check_in("kind", self.kind, EFFECT_KINDS)
+
+
+@dataclass(frozen=True)
+class ClassView:
+    """A class the lobby offers, for the class-pick screen."""
+
+    id: str
+    name: str
+    spells: tuple[str, ...]  # spell display names, in config order
+
+
+@dataclass(frozen=True)
+class CheckView:
+    """One boot self-check line (camera, mics, network, api key)."""
+
+    name: str
+    ok: bool
+    detail: str = ""
+
+
+@dataclass(frozen=True)
 class PlayerView:
     slot: int
     name: str
@@ -177,6 +207,12 @@ class PlayerView:
     dist: float
     mic_ok: bool
     tracking_ok: bool
+    effects: tuple[EffectView, ...] = ()
+    charge_s: float = 0.0  # seconds left on the charge window, 0 when nothing is charged
+    cooldown_s: float = 0.0  # seconds left on the basic-attack cooldown
+    ready: bool = False  # lobby and victory: hands up, ready to start
+    heard: str = ""  # last final transcript from this player's mic (lobby mic check)
+    stats: dict[str, float] = field(default_factory=dict)  # match totals, see root CLAUDE.md
 
     def __post_init__(self) -> None:
         _check_in("slot", self.slot, SLOTS)
@@ -205,9 +241,15 @@ class GameView:
     banner: str | None
     timer_s: float | None
     chronicle: str | None
+    events: tuple[GameEvent, ...] = ()  # GameEvents emitted this tick (render FX and sounds)
+    classes: tuple[ClassView, ...] = ()  # lobby: classes on offer
+    checks: tuple[CheckView, ...] = ()  # boot: self-check results
+    winner_slot: int | None = None  # victory: winner, None for a draw
 
     def __post_init__(self) -> None:
         _check_in("scene", self.scene, SCENES)
+        if self.winner_slot is not None:
+            _check_in("winner_slot", self.winner_slot, SLOTS)
         if len(self.players) != 2 or any(p.slot != i for i, p in enumerate(self.players)):
             raise ValueError("players must be ordered by slot (players[i].slot == i)")
 

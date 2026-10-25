@@ -1,3 +1,4 @@
+import dataclasses
 import json
 
 import pytest
@@ -5,6 +6,9 @@ import pytest
 from magic_box.core.contracts import (
     RELEASE_KINDS,
     Action,
+    CheckView,
+    ClassView,
+    EffectView,
     GameEvent,
     ProjectileView,
     Push,
@@ -35,7 +39,36 @@ ROUND_TRIP = [
     ),
     make_view(),
     make_view(projectiles=(ProjectileView("fireball", 1, (640.0, 300.0), 0.5, False),)),
+    make_view(
+        scene="victory",
+        events=(GameEvent(t=5.0, kind="block", slot=0, data={"spell_id": "bolt"}),),
+        classes=(ClassView("fire_mage", "Fire Mage", ("Fireball", "Flame Wall", "Inferno")),),
+        checks=(CheckView("camera", True), CheckView("network", False, "no route")),
+        winner_slot=1,
+    ),
 ]
+
+
+def test_player_view_extras_round_trip():
+    base = make_view()
+    p0 = dataclasses.replace(
+        base.players[0],
+        effects=(EffectView("shield", 3.5), EffectView("mana_slow", 1.0)),
+        charge_s=2.2,
+        cooldown_s=0.4,
+        ready=True,
+        heard="my name is ada",
+        stats={"damage": 42.0, "hits": 3.0},
+    )
+    view = dataclasses.replace(base, players=(p0, base.players[1]))
+    assert from_json(to_json(view)) == view
+
+
+def test_new_view_fields_validate():
+    with pytest.raises(ValueError):
+        EffectView("frozen", 1.0)
+    with pytest.raises(ValueError):
+        make_view(winner_slot=2)
 
 
 @pytest.mark.parametrize("obj", ROUND_TRIP, ids=lambda o: type(o).__name__)
