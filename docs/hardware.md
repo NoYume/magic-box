@@ -41,7 +41,7 @@ voice:
 - **Set the receiver to stereo.** It can come up in mono, with both transmitters mixed onto both channels (the two channels are then bit-for-bit identical). On the LARK A1 this is a setting in the LarkSound phone app (plug the receiver into the phone). Check on the Jetson: record both channels while only mic 1 talks; P2's channel should be much quieter.
 - **Watch the gain.** The same app has 6 gain levels per transmitter. A transmitter that peaks near 0 dBFS clips; aim for about -6 to -10 dBFS on loud speech, and give both transmitters the same level. The Jetson cannot change it (the receiver exposes no volume control over USB).
 - **Restart the game after changing `.env` or `config.local.yaml`.** The voice process reads the key and opens the mics only at startup, and `run_demo.sh` only passes `--env-file .env` if the file exists when it launches: `docker compose restart`.
-- **Crosstalk.** Both mics hear both players, so in the lobby (where every sentence is a name or class pick) a loud player can rename the other. Keep the clips close to each player's mouth, turn the gain down, and stand apart. Spells are safer: each mic only matches its own player's incantations.
+- **Crosstalk.** Both mics hear both players, so in the lobby (where every sentence is a name or class pick) a loud player can rename the other. Keep the clips close to each player's mouth, turn the gain down, and stand apart. Spells are safer: each mic only matches its own player's incantations. The voice process now drops a lobby (or victory) transcript when the other player's mic was louder during it by `voice.crosstalk_margin_db` (6 dB, a guess), so keep both channels' gain about equal.
 
 ## ZED placement and play area
 

@@ -157,6 +157,13 @@ def _check_voice_and_ai(cfg: Config, problems: list[str]) -> None:
         hold = _get(cfg, "voice", "perfect_hold_s")
         if not isinstance(hold, (int, float)) or isinstance(hold, bool) or hold < 0:
             problems.append(f"voice.perfect_hold_s: must be a number >= 0, got {hold!r}")
+        margin = _get(cfg, "voice", "crosstalk_margin_db")
+        if not isinstance(margin, (int, float)) or isinstance(margin, bool):
+            problems.append(f"voice.crosstalk_margin_db: must be a number, got {margin!r}")
+        window = _get(cfg, "voice", "crosstalk_window_s")
+        # 10 s: the voice process keeps 12 s of mic levels (voice.crosstalk.LEVEL_HISTORY_S)
+        if not isinstance(window, (int, float)) or isinstance(window, bool) or not 0 < window <= 10:
+            problems.append(f"voice.crosstalk_window_s: must be in (0, 10], got {window!r}")
     if "ai" in cfg:
         if _get(cfg, "ai", "api_key_env") is None:
             problems.append("ai.api_key_env: missing")

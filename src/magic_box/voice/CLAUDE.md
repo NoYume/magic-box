@@ -18,6 +18,7 @@ Per-player speech recognition. Runs in its own process, one Muse WebSocket per p
 - **Charge timing vs the engine:** a held sub-perfect match publishes at first match + `perfect_hold_s`, so up to about +0.8 s after speech with 0.5 s. The engine's `game.release_grace_s` (0.6 s, Task 1) makes an uncharged push with a live mic wait that long for a charge, so a push on the last word still casts when the charge lands within the grace.
 - `ENDPOINTING` mode with `CUMULATIVE` partials, in the lobby and in the fight. Keywords are fixed at the handshake, so a mode change restarts the sessions. Match partials as they arrive.
 - **Keywords are single words** (`keywords_for`: distinct words of the set, at least `min_keyword_chars` letters). Muse accepts phrases, but rejects the whole handshake for one keyword over 30 characters, so `muse_stream.handshake` drops those (`MAX_KEYWORD_CHARS`). 120 keywords were accepted.
+- **Crosstalk drop (transcripts only)** (`crosstalk.py`, `_Sessions._is_crosstalk`): both lav mics hear both players, and every lobby or victory final is a name or class pick. `serve` stamps each mic chunk with `clock()` on the audio thread and records its RMS dBFS on the loop thread (`LevelHistory`, 12 s per slot, no lock). On a transcript-mode `speechComplete` for slot s, the window runs from `SPEECH_START_LEAD_S` (1 s) before the turn's `speechStart` arrival to its `speechEnd` arrival (Muse events carry no audio times); with no `speechStart` it is the last `voice.crosstalk_window_s` (6 s) before `speechEnd` or now. At slot s's loudest chunks in the window (at or above its 90th percentile), each is paired with the other mic's nearest chunk (within 2 chunks); if the median (other - s) is at least `voice.crosstalk_margin_db` (6 dB, guess), the transcript is dropped and logged (`voice: P1 transcript dropped as crosstalk (P2 +9.1 dB): "..."`). Both talking at once, or the other player talking at another moment in the window, keeps it. No level data for the other slot (one mic, a dead mic) never drops. `crosstalk_margin_db <= 0` turns it off. Incantation matching is never checked.
 - Starts in transcript mode and connects at once. A session starts armed before its first `speechStart`. The slot's audio queue is cleared on connect. Silence frames are sent after `silence_after_s` of a quiet mic.
 - Reopen before `session_max_s` (3300 s) without a "reconnecting" status. Reconnect backoff doubles from `reconnect_backoff_s` to `reconnect_max_s` and resets after a 30 s session; close code 1008 uses the max. A dropped stream must not crash the process.
 - Stop is bounded (about 1.5 s grace) and always stops the mics.
@@ -47,6 +48,7 @@ Seconds from the end of the speech; negative means while the player is still spe
 ## Files
 - `process.py`: voice process entry point (`run`), the asyncio `serve` loop, per-slot session handling and `IncantationTurn` (match, hold, one event per turn).
 - `mic.py`: `MicHub` per-device capture, channel split, `resample`.
+- `crosstalk.py`: `chunk_dbfs` and `LevelHistory` (per-slot chunk levels, `excess_db` for the crosstalk drop).
 - `muse_stream.py`: Muse WebSocket client (`handshake`, send audio, events, close).
 - `matcher.py`: rapidfuzz incantation match using `match_threshold`; `keywords_for`.
 - `scripts/check_muse.py`: live latency and matching check. It streams `say` audio, a `--wav` file or a `--record S` capture from a real mic (through `MicHub`, saved under `.superpowers/muse/`) through `MuseStream` and `IncantationTurn` at real time.
@@ -69,4 +71,5 @@ Real mics: set `voice.mics` in `config.local.yaml` (see `docs/hardware.md`).
   uv run --env-file .env python scripts/check_muse.py --record 4 --slot 1 --keywords words \
       --phrase "lightning answer my call" --phrase "hum of the restless grid"
   ```
+- `TODO(Nikhil)`: on the Jetson with both lav mics, watch the `dropped as crosstalk` log lines in the lobby: tune `voice.crosstalk_margin_db` (6 dB guess) from the real own-vs-other level gap, and check the two receiver channels' gains match (a hot channel biases the comparison).
 - Open decision (Daniel): mic hardware model and channel routing.

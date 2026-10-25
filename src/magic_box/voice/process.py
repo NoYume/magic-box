@@ -20,6 +20,7 @@ from typing import Any
 from magic_box.core.config import Config
 from magic_box.core.contracts import VoiceConfig, VoiceEvent
 from magic_box.pipeline.streams import DropOldestQueue, ParentAwareStop
+from magic_box.voice.crosstalk import LevelHistory
 from magic_box.voice.matcher import keywords_for, match_incantation
 from magic_box.voice.mic import MicError, MicHub
 from magic_box.voice.muse_stream import MuseStream
@@ -30,6 +31,8 @@ BACKOFF_RESET_S = 30.0  # a session at least this long resets the reconnect back
 STOP_GRACE_S = 1.5  # on stop, sessions get this long to close, then are cancelled and get
 #                     one POLL_S more: under the supervisor's 2 s join before it terminates us
 CLOSE_BAD_REQUEST = 1008  # Muse: bad request or pacing; don't retry unchanged
+SPEECH_START_LEAD_S = 1.0  # Muse's speechStart lands after the speech began (queue, network
+#                            and endpointer latency): the crosstalk window starts this much earlier
 
 _CONNECTED, _FAILED, _WOKEN = "connected", "failed", "woken"
 
@@ -152,6 +155,7 @@ class _Sessions:
         queues: Mapping[int, asyncio.Queue],
         sleep: Callable[[float], Awaitable[Any]],
         clock: Callable[[], float],
+        levels: LevelHistory | None = None,
     ) -> None:
         v = cfg["voice"]
         self._key = api_key
@@ -169,6 +173,9 @@ class _Sessions:
         self._session_max_s = v["session_max_s"]
         self._silence_after_s = v["silence_after_s"]
         self._silence = bytes(v["sample_rate"] * v["chunk_ms"] // 1000 * 2)
+        self._levels = levels
+        self._crosstalk_margin_db = v["crosstalk_margin_db"]
+        self._crosstalk_window_s = v["crosstalk_window_s"]
         self._mode = "transcript"
         self._incantations: dict[int, dict[str, str]] = {}
         self._wake = {slot: asyncio.Event() for slot in SLOTS}
@@ -337,6 +344,8 @@ class _Sessions:
             self._publish(VoiceEvent(slot, self._clock(), "incantation", text, spell_id, score))
 
         turn = IncantationTurn(incantations, self._threshold, self._perfect, self._hold_s, publish)
+        speech_start: float | None = None  # transcript mode: this turn's event arrival times
+        speech_end: float | None = None
         try:
             async for event in stream.events():
                 kind = event.get("type")
@@ -344,12 +353,17 @@ class _Sessions:
                     log_line(f"slot {slot}: Muse error: {event.get('message', '')}")
                 elif mode == "incantation":
                     turn.handle(event)
+                elif kind == "speechStart":
+                    speech_start, speech_end = self._clock(), None
+                elif kind == "speechEnd":
+                    speech_end = self._clock()
                 elif kind == "speechComplete":
                     text = str(event.get("transcript") or "").strip()
-                    if text:
+                    if text and not self._is_crosstalk(slot, text, speech_start, speech_end):
                         self._publish(
                             VoiceEvent(slot, self._clock(), "transcript", text, None, 0.0)
                         )
+                    speech_start = speech_end = None
         finally:
             if self._wake[slot].is_set():
                 turn.cancel()  # a mode change, a new VoiceConfig or stop: the match is stale
@@ -357,6 +371,28 @@ class _Sessions:
                 # The stream ended on its own (server close, Wi-Fi drop seen by either task,
                 # session age): the player did say it, so publish what the turn held.
                 turn.flush()
+
+    def _is_crosstalk(self, slot: int, text: str, start: float | None, end: float | None) -> bool:
+        """True if the other mic was louder by crosstalk_margin_db over this utterance.
+
+        The window runs from SPEECH_START_LEAD_S before this turn's speechStart to its
+        speechEnd. Muse's events carry no audio times, so their arrival times stand in. With
+        no speechStart (the session opened mid-utterance) it is the last crosstalk_window_s
+        before the speechEnd, or before now when no speechEnd came either. Never drops
+        without level data for both slots in the window.
+        """
+        if self._levels is None or self._crosstalk_margin_db <= 0:
+            return False
+        end = self._clock() if end is None else end
+        start = end - self._crosstalk_window_s if start is None else start - SPEECH_START_LEAD_S
+        other = 1 - slot
+        excess = self._levels.excess_db(slot, other, start, end)
+        if excess is None or excess < self._crosstalk_margin_db:
+            return False
+        log_line(
+            f'P{slot + 1} transcript dropped as crosstalk (P{other + 1} {excess:+.1f} dB): "{text}"'
+        )
+        return True
 
     async def _backoff(self, slot: int, delay: float) -> None:
         """The injected sleep, cut short by stop or a config change."""
@@ -406,8 +442,13 @@ async def serve(
 
     loop = asyncio.get_running_loop()
     queues = {slot: asyncio.Queue(maxsize=v["audio_queue_chunks"]) for slot in SLOTS}
+    levels = LevelHistory(SLOTS, v["chunk_ms"])
 
-    def put(slot: int, pcm: bytes) -> None:
+    def put(slot: int, pcm: bytes, t: float) -> None:
+        try:
+            levels.add(slot, t, pcm)  # on the loop thread, so the audio callback never waits
+        except Exception as exc:
+            log_line(f"cannot record a mic level: {_describe(exc)}")
         try:
             queues[slot].put_nowait(pcm)
         except asyncio.QueueFull:
@@ -418,7 +459,7 @@ async def serve(
         if slot not in queues:
             return
         try:
-            loop.call_soon_threadsafe(put, slot, pcm)
+            loop.call_soon_threadsafe(put, slot, pcm, clock())  # level stamped at capture
         except RuntimeError:
             pass  # the loop is closed after stop
 
@@ -435,7 +476,7 @@ async def serve(
     for slot in sorted(dead):
         log_line(f"no mic for slot {slot}; the other player's mic keeps working")
         publish(VoiceEvent(slot, clock(), "status", "no mic", None, 0.0))
-    sessions = _Sessions(cfg, api_key, publish, stream_factory, queues, sleep, clock)
+    sessions = _Sessions(cfg, api_key, publish, stream_factory, queues, sleep, clock, levels)
     slot_tasks = [asyncio.ensure_future(sessions.run_slot(s)) for s in SLOTS if s not in dead]
     control = asyncio.ensure_future(sessions.control(drain_control))
     try:
