@@ -53,6 +53,7 @@ class Engine:
         self._result: tuple[int | None, str] | None = None
         self._pause: str | None = None  # None | "camera" | "tracking"
         self._tracking_pause_since: float | None = None
+        self._reacquire: set[int] = set()  # after a camera pause: slots not seen again yet
         self._camera_ok: bool | None = None  # None until the loop reports
         self._checks: dict[str, tuple[bool, str]] = {}
 
@@ -173,13 +174,16 @@ class Engine:
         assert match is not None
         g = self._g
         if self._camera_ok is False:
-            # Nobody is tracked while perception restarts; presence timers start over after.
+            # Nobody is tracked while perception restarts. Once frames return, anyone not
+            # tracked yet pauses the fight at once, and the abandon clock starts then.
             self._untracked_since.clear()
+            self._reacquire = set(SLOTS)
             self._pause = "camera"
-        elif any(now - t > g["pause_after_s"] for t in self._untracked_since.values()):
-            self._pause = "tracking"
         else:
-            self._pause = None
+            self._reacquire &= set(self._untracked_since)
+            limit = g["pause_after_s"]
+            gone = any(now - t > limit for t in self._untracked_since.values())
+            self._pause = "tracking" if gone or self._reacquire else None
         if self._pause == "tracking":
             if self._tracking_pause_since is None:
                 self._tracking_pause_since = now
@@ -211,6 +215,7 @@ class Engine:
             self._untracked_since.clear()
             self._pause = None
             self._tracking_pause_since = None
+            self._reacquire = set()
             self._match = MatchState(self.cfg, self._names, now, self._classes)
             events += self._match.take_events()
         elif scene == "victory":

@@ -418,6 +418,51 @@ def test_camera_reconnecting_freezes_the_fight_and_never_abandons():
     assert view.banner is None and "hit" in [ev.kind for ev in events]
 
 
+def test_camera_recovery_pauses_whoever_is_still_untracked_at_once():
+    e = Engine(CFG)
+    _, _, t = to_fight(e)
+    e.provide_camera_status(False)
+    run(e, t, t + 5.0, states(ok=(False, False)), dt=0.25)
+    e.provide_camera_status(True)
+    rec = t + 5.25
+    view, _ = e.step([], states(ok=(True, False)), rec)  # P2 not re-acquired yet
+    assert view.banner == "STEP INTO VIEW"
+    left = view.timer_s
+    view, _ = run(
+        e, rec + 0.25, rec + G["abandon_after_s"] - 0.25, states(ok=(True, False)), dt=0.25
+    )
+    assert view.scene == "fight" and view.timer_s == pytest.approx(left)
+    view, events = e.step([], states(ok=(True, False)), rec + G["abandon_after_s"])
+    assert view.scene == "victory" and view.winner_slot == 0  # abandon timed from recovery
+    assert [ev.data["reason"] for ev in events if ev.kind == "match_end"] == ["abandon"]
+
+
+def test_camera_recovery_resumes_once_both_are_tracked_again():
+    e = Engine(CFG)
+    _, _, t = to_fight(e)
+    e.provide_camera_status(False)
+    run(e, t, t + 1.0, states(ok=(False, False)), dt=0.25)
+    e.provide_camera_status(True)
+    view, _ = e.step([], states(ok=(False, False)), t + 1.25)
+    assert view.banner == "STEP INTO VIEW"
+    view, _ = e.step([], states(ok=(True, False)), t + 1.5)
+    assert view.banner == "STEP INTO VIEW"
+    left = view.timer_s
+    view, _ = e.step([], states(), t + 1.75)  # both seen: the clock runs again
+    assert view.banner != "STEP INTO VIEW"
+    assert view.timer_s == pytest.approx(left - 0.25)
+
+
+def test_camera_recovery_with_both_tracked_does_not_pause():
+    e = Engine(CFG)
+    _, _, t = to_fight(e)
+    e.provide_camera_status(False)
+    run(e, t, t + 1.0, states(ok=(False, False)), dt=0.25)
+    e.provide_camera_status(True)
+    view, _ = e.step([], states(), t + 1.25)
+    assert view.banner not in ("STEP INTO VIEW", "CAMERA RECONNECTING")
+
+
 def test_camera_reconnecting_banner_in_lobby():
     e = Engine(CFG)
     t = to_lobby(e)

@@ -36,7 +36,7 @@ Events: `buff` (slot = caster; data `spell_id`, `effect`, `target`, `duration_s`
 
 ## Pauses
 - **Tracking:** a player untracked for `pause_after_s` freezes the fight ("STEP INTO VIEW"). A pause that lasts `abandon_after_s` ends the match: the player still tracked wins, a draw if both are gone (`match_end` reason `abandon`).
-- **Camera:** while `provide_camera_status(False)`, the banner is "CAMERA RECONNECTING" (lobby, loading and fight) and the fight freezes like a pause. It never abandons: presence timers start over when the camera is back. Until the loop reports, the camera counts as fine for this banner (but not for the boot check).
+- **Camera:** while `provide_camera_status(False)`, the banner is "CAMERA RECONNECTING" (lobby, loading and fight) and the fight freezes like a pause. It never abandons. When frames return, anyone not tracked yet pauses the fight at once ("STEP INTO VIEW") until they are seen again, and the abandon clock starts from the recovery. Until the loop reports, the camera counts as fine for this banner (but not for the boot check).
 
 ## Hard rules
 - **Pure Python.** Never import `pygame`, `pyzed` or `cv2` (`tests/test_boundaries.py` fails the build).
