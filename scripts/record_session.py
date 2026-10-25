@@ -27,14 +27,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     out = Path(args.out) if args.out else default_out(datetime.now())
+    out.parent.mkdir(parents=True, exist_ok=True)
     cfg = copy.deepcopy(load_config(REPO_ROOT / "config.yaml"))
     cfg["camera"]["record_svo"] = str(out)
     cfg["camera"]["svo_path"] = None
     source = ZedSource(cfg)
     try:
         source.open()
-    except CameraError as exc:
-        print(exc)
+    except (CameraError, RuntimeError) as exc:  # RuntimeError: pyzed missing
+        print(f"camera error: {exc}")
         return 2
 
     frames = 0
@@ -43,6 +44,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         while time.monotonic() - start < args.seconds:
             if source.grab() is not None:
                 frames += 1
+    except KeyboardInterrupt:
+        print("interrupted, closing the recording")
     finally:
         source.close()
     print(f"recorded {frames} frames to {out}")

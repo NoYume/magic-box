@@ -128,8 +128,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     tracker = PlayerTracker(cfg)
     try:
         source.open()
-    except CameraError as exc:
-        print(exc)
+    except (CameraError, RuntimeError) as exc:  # RuntimeError: pyzed missing
+        print(f"camera error: {exc}")
         return 2
     i = source.info
     print(
@@ -157,10 +157,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     len(states),
                 )
             )
-        elapsed = time.monotonic() - start
+    except KeyboardInterrupt:
+        print("interrupted, summarizing what was measured")
     finally:
         source.close()
 
+    elapsed = time.monotonic() - start
     summary = summarize(samples, elapsed, args.min_fps, args.min_two)
     print(format_summary(summary))
     return 0 if summary.go else 1
