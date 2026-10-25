@@ -113,6 +113,28 @@ def test_zed_x_daemon_check(monkeypatch):
     assert mod._zed_x_daemon() == (True, "active")
 
 
+def test_zed_x_daemon_check_without_systemd_reads_host_processes(monkeypatch, tmp_path):
+    # The Docker image has no systemctl; compose.yaml shares the host pid namespace instead.
+    mod = _load("check_env")
+
+    def no_systemctl(*a, **k):
+        raise FileNotFoundError("systemctl")
+
+    monkeypatch.setattr(subprocess, "run", no_systemctl)
+    monkeypatch.setattr(mod, "PROC", tmp_path)
+    (tmp_path / "1").mkdir()
+    (tmp_path / "1" / "comm").write_text("systemd\n")
+    ok, detail = mod._zed_x_daemon()
+    assert not ok and "ZEDX_Daemon" in detail and "systemctl restart zed_x_daemon" in detail
+    (tmp_path / "1928").mkdir()
+    (tmp_path / "1928" / "comm").write_text("ZEDX_Daemon\n")
+    assert mod._zed_x_daemon() == (True, "ZEDX_Daemon running (pid 1928)")
+    # The image does ship systemctl, but with no systemd to ask it prints nothing.
+    unreachable = subprocess.CompletedProcess([], 1, stdout="", stderr="not booted with systemd")
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: unreachable)
+    assert mod._zed_x_daemon() == (True, "ZEDX_Daemon running (pid 1928)")
+
+
 def _samples(mod, n, bodies=2):
     return [mod.FrameSample(20.0, 2.0, bodies, min(bodies, 2)) for _ in range(n)]
 

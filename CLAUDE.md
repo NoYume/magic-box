@@ -106,6 +106,7 @@ Heads-up for Adetola (engine, HUD and scenes were filled in overnight on 2026-10
 
 ```
 CLAUDE.md, README.md, pyproject.toml, uv.lock, .env.example, .github/, .claude/   Daniel
+docker/, compose.yaml, .dockerignore   Daniel + Enoch (Jetson in Docker: README "Jetson with Docker")
 config.yaml               shared; each section is commented with its owner
 docs/game-design.md       Adetola          docs/hardware.md   Daniel + Enoch
 docs/runbook.md, docs/submission.md   Daniel
@@ -209,8 +210,10 @@ Per-machine overrides go in `config.local.yaml` (gitignored, deep-merged over `c
 | `uv sync --extra laptop` | Install on a laptop (adds `opencv-python`). On the Jetson use plain `uv sync`. |
 | `uv run python -m magic_box --fake` | Run with keyboard players. |
 | `uv run --env-file .env python -m magic_box` | Live mode; `.env` holds `META_MODEL_API_KEY`. |
+| `uv run python -m magic_box --web` | Browser output instead of a window (no monitor at the venue): the game draws off-screen and streams MJPEG on `display.web.port` (8000); keys typed in the page reach the game. `docker compose up` runs the demo this way. |
 | `uv run python -m magic_box --help` | Flags: `--fake`, `--replay DIR`, `--record DIR`, `--debug` (overlay on, perf printed to stderr), `--fullscreen`, `--headless`, `--config PATH`, `--max-ticks N`. |
 | `scripts/run_demo.sh [--fake] [--windowed] [--no-record] [--dry-run] [-- GAME_ARGS...]` | Demo launcher. On the Jetson: fullscreen and `--env-file .env`. Records each run to `recordings/<timestamp>/` with `game.log`, restarts on a crash (at most 5 in 60 s). Exit code 3 means perception gave up (six deaths: the first run plus five restarts, after it had delivered frames): the launcher then starts the game again, with fresh camera and voice processes. A laptop with no `pyzed` never delivers a frame, so it keeps running with CAMERA RECONNECTING instead. `Esc` or Ctrl-C ends it. |
+| `docker compose build` / `docker compose run --rm magic-box <command>` / `DISPLAY=:0 docker compose up` | Jetson without a host ZED SDK: the image has the SDK, the repo is mounted at `/app`. Leave `DISPLAY` unset for headless runs (a refused display breaks the ZED X capture). README "Jetson with Docker". |
 | `uv run pytest` | Run all tests. |
 | `uv run ruff check` / `uv run ruff format --check` | Lint and format check. |
 | `uv run python scripts/check_env.py [--laptop] [--network]` | Environment check (Python, JetPack, RAM, pyzed, ZED camera and `zed_x_daemon`, CUDA, cv2, audio devices, API key; `--network` probes the Meta API). |

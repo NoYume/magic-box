@@ -18,6 +18,7 @@ from magic_box.pipeline.loop import GameLoop
 from magic_box.pipeline.processes import LiveRuntime, start_live
 from magic_box.pipeline.sources import FakeSources, KeyboardVoiceSource, ReplaySources, Sources
 from magic_box.render.camera_view import configure as configure_camera_view
+from magic_box.render.web_display import WebDisplay
 from magic_box.render.window import Window
 from magic_box.replay.record import SessionRecorder
 
@@ -31,6 +32,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--debug", action="store_true", help="show the debug overlay")
     parser.add_argument("--fullscreen", action="store_true", help="fullscreen window")
     parser.add_argument("--headless", action="store_true", help="no visible window")
+    parser.add_argument(
+        "--web", action="store_true", help="stream to a browser instead of a window (display.web)"
+    )
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument("--max-ticks", type=int, default=None, metavar="N")
     return parser.parse_args(argv)
@@ -106,7 +110,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             mode = "fake" if args.fake else "replay" if args.replay is not None else "live"
             recorder = SessionRecorder(args.record, cfg, mode)
         ai = AiWorker(cfg)
-        display = Window(cfg, headless=args.headless)
+        display = WebDisplay(cfg) if args.web else Window(cfg, headless=args.headless)
         display.debug = args.debug
         loop = GameLoop(
             cfg,
