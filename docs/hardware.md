@@ -26,6 +26,23 @@ voice:
 
 For a dual-transmitter wireless kit with one USB receiver, use the same device for both and split by channel (`channel: 0` for P1, `channel: 1` for P2). `device: null` means the system default. Find device names with `uv run python scripts/check_env.py` (it lists the audio devices). Spell keys (P1 `1 2 3`, P2 `8 9 0`) work with no mics at all.
 
+### Hollyland wireless receiver (what we use)
+
+The receiver shows up as `Wireless Microphone` (USB, 48 kHz only; the game resamples to 16 kHz). Map it as one device, P1 on the left channel and P2 on the right:
+
+```yaml
+# config.local.yaml
+voice:
+  mics:
+    - {slot: 0, device: "Wireless Microphone", channel: 0}
+    - {slot: 1, device: "Wireless Microphone", channel: 1}
+```
+
+- **Set the receiver to stereo.** It can come up in mono, with both transmitters mixed onto both channels (the two channels are then bit-for-bit identical). On the LARK A1 this is a setting in the LarkSound phone app (plug the receiver into the phone). Check on the Jetson: record both channels while only mic 1 talks; P2's channel should be much quieter.
+- **Watch the gain.** The same app has 6 gain levels per transmitter. A transmitter that peaks near 0 dBFS clips; aim for about -6 to -10 dBFS on loud speech, and give both transmitters the same level. The Jetson cannot change it (the receiver exposes no volume control over USB).
+- **Restart the game after changing `.env` or `config.local.yaml`.** The voice process reads the key and opens the mics only at startup, and `run_demo.sh` only passes `--env-file .env` if the file exists when it launches: `docker compose restart`.
+- **Crosstalk.** Both mics hear both players, so in the lobby (where every sentence is a name or class pick) a loud player can rename the other. Keep the clips close to each player's mouth, turn the gain down, and stand apart. Spells are safer: each mic only matches its own player's incantations.
+
 ## ZED placement and play area
 
 - Mount the ZED X under or above the monitor, centered, pointing at the players. Keep it level; tilt changes depth readings.
