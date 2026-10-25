@@ -133,6 +133,7 @@ class SceneMachine:
         incantations_ready: bool,
         match_over: bool,
         camera_ok: bool = False,
+        chronicle_ready: bool = True,
     ) -> bool:
         if self.entered_at is None:
             self.entered_at = now
@@ -154,7 +155,10 @@ class SceneMachine:
             if match_over:
                 nxt = "victory"
         elif self.scene == "victory":
-            if el >= g["victory_max_s"] or (el >= g["victory_min_s"] and both_ready):
+            # Hands up leaves only once the chronicle is shown (Spark takes up to ai.timeout_s).
+            if el >= g["victory_max_s"] or (
+                el >= g["victory_min_s"] and both_ready and chronicle_ready
+            ):
                 nxt = "lobby"
         if nxt is None:
             return False

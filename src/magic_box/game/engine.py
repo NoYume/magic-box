@@ -90,6 +90,7 @@ class Engine:
             incantations_ready=self._loading_left(now) == 0.0,
             match_over=self._match_over(now),
             camera_ok=self._check("camera")[0],
+            chronicle_ready=self._chronicle is not None,
         )
         if changed:
             events += self._on_enter(now)

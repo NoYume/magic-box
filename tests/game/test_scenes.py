@@ -168,3 +168,12 @@ def test_stop_words_come_from_config():
     cfg["game"]["name_stop_words"] = ["bob"]
     assert parse_name("Bob", cfg) is None
     assert parse_name("hello", cfg) == "Hello"
+
+
+def test_victory_hands_up_waits_for_the_chronicle():
+    sm = SceneMachine(CFG, now=0.0)
+    sm.scene, sm.entered_at = "victory", 0.0
+    t = G["victory_min_s"] + 1.0
+    kw = dict(both_ready=True, incantations_ready=False, match_over=True)
+    assert not sm.update(t, chronicle_ready=False, **kw)
+    assert sm.update(t, chronicle_ready=True, **kw) and sm.scene == "lobby"

@@ -669,10 +669,34 @@ def test_ko_hold_0_goes_to_victory_on_the_ko_tick():
     assert view.scene == "victory" and [ev.kind for ev in events][-2:] == ["ko", "match_end"]
 
 
+def test_victory_waits_for_the_chronicle_before_a_hands_up_return():
+    """Spark writes the chronicle in up to ai.timeout_s; players shouldn't leave first."""
+    e = Engine(CFG)
+    _, _, t = to_fight(e)
+    _, _, t = ko(e, t)
+    t2 = t + G["victory_min_s"] + 1.0
+    view, _ = run(e, t, t2, states(up=(True, True)))
+    assert view.scene == "victory" and view.chronicle is None
+    e.provide_chronicle("A tale.")
+    view, _ = e.step([], states(up=(True, True)), t2 + DT)
+    assert view.scene == "lobby"
+
+
+def test_victory_max_leaves_without_a_chronicle():
+    e = Engine(CFG)
+    _, _, t = to_fight(e)
+    _, _, t = ko(e, t)
+    view, _ = run(e, t, t + G["victory_max_s"] - 0.5, states(up=(True, True)), dt=0.25)
+    assert view.scene == "victory"
+    view, _ = run(e, t + G["victory_max_s"] - 0.25, t + G["victory_max_s"] + 0.1, states(), dt=0.25)
+    assert view.scene == "lobby"
+
+
 def test_victory_hands_up_must_be_held():
     e = Engine(CFG)
     _, _, t = to_fight(e)
     _, _, t = ko(e, t)
+    e.provide_chronicle("A tale.")
     t2 = t + G["victory_min_s"]
     run(e, t, t2, states())
     view, _ = e.step([], states(up=(True, True)), t2 + DT)  # a one-tick hands up
@@ -685,6 +709,7 @@ def test_hands_held_from_victory_wait_in_lobby_and_names_can_change():
     e = Engine(CFG)
     _, _, t = to_fight(e)
     _, _, t = ko(e, t)
+    e.provide_chronicle("A tale.")
     t2 = t + G["victory_min_s"]
     view, _ = run(e, t, t2 + 2.0, states(up=(True, True)))  # hands held into the lobby
     assert view.scene == "lobby"
