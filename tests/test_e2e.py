@@ -9,6 +9,7 @@ Owner: Daniel
 """
 
 import copy
+import random
 from collections.abc import Callable, Iterator
 from dataclasses import replace
 from pathlib import Path
@@ -611,6 +612,52 @@ def test_mic_up_push_without_a_charge_is_a_basic_after_the_grace():
     assert [e.data["spell_id"] for e in h.find("cast", slot=0, since=out["n"])] == ["basic"]
     two_hand_s = cfg["intent"]["two_hand_window_s"]
     assert out["cast"] - out["push"] == pytest.approx(grace + two_hand_s, abs=3 * DT)
+
+
+def _check_view(h: Harness, problems: list) -> None:
+    g = h.cfg["game"]
+    v = h.view
+    for p in v.players:
+        if not 0 <= p.hp <= g["hp_max"] or not -1e-9 <= p.mana <= g["mana_max"] + 1e-9:
+            problems.append((h.tick, "hp/mana", p.slot, p.hp, p.mana))
+        if p.charge_s < 0 or p.cooldown_s < 0 or sum(s.charged for s in p.spells) > 1:
+            problems.append((h.tick, "charge", p.slot))
+        if any(val < 0 for val in p.stats.values()) or any(e.remaining_s <= 0 for e in p.effects):
+            problems.append((h.tick, "stats/effects", p.slot))
+    if any(not 0 <= pr.progress <= 1 for pr in v.projectiles):
+        problems.append((h.tick, "projectile"))
+
+
+@pytest.mark.parametrize(("seed", "classes"), [(3, ("fire", "holy")), (7, ("lightning", "fire"))])
+def test_random_fights_keep_the_view_consistent(seed, classes):
+    """Random keys, late voice charges, mics and walk-offs; HP, mana, charges, stats, effects
+    and projectiles stay in range every tick, and the match ends."""
+    rng = random.Random(seed)
+    pool = [KEYS[s][k] for s in (0, 1) for k in KEYS[s]] + [
+        k for s in (0, 1) for k in SPELL_KEYS[s]
+    ]
+    problems: list = []
+
+    def script(h: Harness):
+        h.mic(0, "connected")
+        yield from to_fight(h, [(0, classes[0]), (1, classes[1])])
+        held: dict[str, int] = {}
+        while h.scene == "fight":
+            held |= {k: rng.randint(1, 20) for k in pool if rng.random() < 0.02}
+            if rng.random() < 0.005:
+                slot = rng.choice((0, 1))
+                h.incant(slot, rng.choice(h.player(slot).spells).id, rng.uniform(80, 100))
+            if rng.random() < 0.002:
+                h.gone ^= {rng.choice((0, 1))}
+            _check_view(h, problems)
+            keys = frozenset(held)
+            held = {k: n - 1 for k, n in held.items() if n > 1}
+            yield keys
+        _check_view(h, problems)
+
+    h = Harness(make_cfg()).run(script, max_s=200)
+    assert problems == []
+    assert len(h.find("match_end")) == 1
 
 
 def test_record_then_replay_plays_to_the_same_result(tmp_path):
