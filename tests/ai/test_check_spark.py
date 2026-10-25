@@ -7,6 +7,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 from magic_box.ai.spark_client import SparkClient
 from tests.ai.fakes import FakeOpenAI
 from tests.ai.test_incantations import GOOD
@@ -56,6 +58,14 @@ def test_failure_exits_1_with_type_and_status_never_the_key(capsys):
 def test_unusable_reply_exits_1(capsys):
     assert _load().main([], client_factory=_factory(FakeOpenAI("not json"))) == 1
     assert "all fallback" in capsys.readouterr().out
+
+
+def test_unknown_class_is_a_usage_error(capsys):
+    fake = FakeOpenAI(json.dumps(GOOD))
+    with pytest.raises(SystemExit) as err:
+        _load().main(["--classes", "fire_mage", "frost_mage"], client_factory=_factory(fake))
+    assert err.value.code == 2
+    assert "invalid choice: 'frost_mage'" in capsys.readouterr().err and fake.calls == []
 
 
 def test_missing_key_exits_2(capsys):

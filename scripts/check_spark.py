@@ -54,10 +54,20 @@ class TimedClient:
         return reply
 
 
-def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
+def parse_args(
+    argv: Sequence[str] | None, class_ids: Sequence[str] | None = None
+) -> argparse.Namespace:
+    """`class_ids` (the config's `game.classes`) restricts `--classes`; None while the config
+    path itself is being read."""
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--config", type=Path, default=REPO_ROOT / "config.yaml")
-    p.add_argument("--classes", nargs=2, metavar=("P1", "P2"), help="default: game.default_classes")
+    p.add_argument(
+        "--classes",
+        nargs=2,
+        metavar=("P1", "P2"),
+        choices=class_ids,
+        help="class ids from game.classes (default: game.default_classes)",
+    )
     p.add_argument("--names", nargs=2, metavar=("P1", "P2"), default=["Ada", "Bo"])
     p.add_argument("--chronicle", action="store_true", help="also write a Duel Chronicle")
     p.add_argument("--reasoning-effort", choices=EFFORTS, help="override ai.reasoning_effort")
@@ -87,6 +97,7 @@ def main(argv: Sequence[str] | None = None, env=None, client_factory=None) -> in
     from magic_box.core.config import load_config
 
     cfg = load_config(args.config)
+    args = parse_args(argv, sorted(cfg["game"]["classes"]))  # an unknown class: usage error
     if args.reasoning_effort is not None:
         cfg = copy.deepcopy(cfg)
         effort = args.reasoning_effort
