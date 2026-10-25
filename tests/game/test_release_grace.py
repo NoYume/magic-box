@@ -217,3 +217,41 @@ def test_no_spell_only_hold_on_cooldown_when_nothing_is_affordable():
     ms.players[0].mana = 10.0
     ms.apply(push(0), STATES, 0.0)
     assert ms.players[0].held is None and casts(ms) == ["basic"]
+
+
+def _basics_from_spam(period: float, seconds: float = 10.0) -> int:
+    """Basic attacks from a live-mic player pushing every `period` with no voice charge."""
+    ms = new()
+    t, nxt, n = 0.0, 0.0, 0
+    dt = 1 / 60
+    while t < seconds:
+        if t >= nxt - 1e-9:
+            ms.apply(push(0), STATES, t)
+            nxt += period
+        ms.players[0].mana = G["mana_max"]
+        ms.players[1].hp = 1e9
+        ms.advance(dt, STATES, t)
+        n += len(casts(ms))
+        t += dt
+    return n
+
+
+def _expected_basics(period: float, seconds: float = 10.0) -> int:
+    """The no-spell-only-hold cadence: a push with no open normal hold and no cooldown opens
+    a hold whose basic fires `release_grace_s` later; the cooldown runs from that basic."""
+    cd = G["basic_attack_cooldown_s"]
+    hold_until, ready, n, t = -1.0, 0.0, 0, 0.0
+    while t < seconds:
+        if t >= hold_until and t >= ready:
+            hold_until = t + GRACE
+            if hold_until < seconds:
+                n += 1
+            ready = hold_until + cd
+        t += period
+    return n
+
+
+@pytest.mark.parametrize("period", [0.4, 0.5])
+def test_push_spam_keeps_the_basic_cadence(period):
+    """A spell-only hold opened late in the cooldown must not swallow the next push after it."""
+    assert _basics_from_spam(period) == _expected_basics(period)

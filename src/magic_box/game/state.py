@@ -286,9 +286,11 @@ class MatchState:
                 p.charge = None
                 self._cast(p, c, action, action.push.origin_px, action.push.speed, now)
                 return
+        on_cooldown = self.clock < p.basic_ready_at
+        if p.held is not None and p.held.spell_only and not on_cooldown:
+            p.held = None  # the cooldown is over: this push may fire a basic again
         if p.held is not None:
             return  # a push is already held: ignored
-        on_cooldown = self.clock < p.basic_ready_at
         grace = self.cfg["game"]["release_grace_s"]
         if (
             c is None
