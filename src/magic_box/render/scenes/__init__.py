@@ -14,7 +14,9 @@ import pygame
 
 from magic_box.core.contracts import GameView, PlayerView
 from magic_box.render.hud import release_cue
-from magic_box.render.style import Theme, rgb
+from magic_box.render.style import Theme, rgb, wrap_text
+
+__all__ = ["wrap_text"]  # re-exported for the scenes and tests
 
 STAT_LABELS = (
     ("damage", "DAMAGE DEALT", "{:.0f}"),
@@ -94,21 +96,6 @@ def headline(view: GameView) -> str:
     if view.winner_slot is None:
         return "DRAW"
     return f"{view.players[view.winner_slot].name.upper()} WINS"
-
-
-def wrap_text(text: str, font, max_w: int) -> list[str]:
-    lines: list[str] = []
-    current = ""
-    for word in text.split():
-        candidate = f"{current} {word}" if current else word
-        if current and font.size(candidate)[0] > max_w:
-            lines.append(current)
-            current = word
-        else:
-            current = candidate
-    if current:
-        lines.append(current)
-    return lines
 
 
 def family_rgb(style: SceneStyle, spell_id: str) -> tuple[int, int, int]:

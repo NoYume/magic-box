@@ -40,6 +40,22 @@ def to_display(surf: pygame.Surface, alpha: bool) -> pygame.Surface:
     return surf
 
 
+def wrap_text(text: str, font, max_w: int) -> list[str]:
+    """Greedy word wrap to `max_w` pixels (a single over-long word stays on its own line)."""
+    lines: list[str] = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}" if current else word
+        if current and font.size(candidate)[0] > max_w:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines
+
+
 def display_font_path(name: str | None) -> str | None:
     """Resolve `render.theme.display_font` against the repo root; None if unset or missing."""
     if not name:
@@ -154,6 +170,28 @@ class Theme:
         out = pygame.transform.smoothscale(img, size)
         self._scaled[key] = (img, out)
         return out
+
+    def fit_lines(
+        self, text: str, fonts: tuple[str, ...], max_w: int, max_h: int, max_lines: int
+    ) -> tuple[str, list[str]]:
+        """The first (largest) font in `fonts` whose wrapped lines fit `max_w` x `max_h` in at
+        most `max_lines` lines. Only if none fits: the last font, cut with an ellipsis."""
+        for name in fonts:
+            f = self.fonts[name]
+            lines = wrap_text(text, f, max_w)
+            if (
+                len(lines) <= max_lines
+                and len(lines) * f.get_linesize() <= max_h
+                and all(f.size(line)[0] <= max_w for line in lines)
+            ):
+                return name, lines
+        name = fonts[-1]
+        f = self.fonts[name]
+        n = max(1, min(max_lines, max_h // max(1, f.get_linesize())))
+        lines = wrap_text(text, f, max_w)
+        if len(lines) > n:
+            lines = lines[: n - 1] + [" ".join(lines[n - 1 :])]
+        return name, [self.fit_text(line, name, max_w) for line in lines]
 
     def fit_text(self, text: str, font: str, max_w: int) -> str:
         """Clip `text` with an ellipsis so it fits `max_w` pixels."""

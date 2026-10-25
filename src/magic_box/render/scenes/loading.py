@@ -12,11 +12,12 @@ import pygame
 
 from magic_box.core.contracts import GameView, PlayerView
 from magic_box.render.hud import class_label, release_cue
-from magic_box.render.scenes import SceneStyle, card, family_rgb, wrap_text
+from magic_box.render.scenes import SceneStyle, card, family_rgb
 from magic_box.render.style import draw_chip, draw_ring
 
 CARD_TOP = 150
 SPELL_ROW_H = 178
+INCANTATION_FONTS = ("big", "text", "small", "tiny")
 TIPS = (
     "BASIC ATTACK: PUSH WITH NO SPELL CHARGED",
     "DODGE: STEP ASIDE OR DUCK WHEN IT TURNS RED",
@@ -77,12 +78,13 @@ def _draw_card(
         say = th.blit_text(
             surface, "SAY", "small", c["dim"], "topleft", (rect.x + 22, name.bottom + 18)
         )
-        inc = spell.incantation or "…"
-        lines = wrap_text(f"“{inc}”", th.font("big"), rect.right - say.right - 40)[:2]
+        max_w = rect.right - say.right - 40
+        max_h = rect.bottom - 10 - (name.bottom + 8)
+        font, lines = fit_incantation(th, spell.incantation, max_w, max_h)
         ly = name.bottom + 8
         for line in lines:
-            r = th.blit_text(surface, line, "big", c["text"], "topleft", (say.right + 14, ly))
-            ly = r.bottom - 4
+            th.blit_text(surface, line, font, c["text"], "topleft", (say.right + 14, ly))
+            ly += th.font(font).get_linesize()
         y += SPELL_ROW_H
     y += 4
     for tip in TIPS:
@@ -90,6 +92,11 @@ def _draw_card(
             surface, th.fit_text(tip, "small", cw), "small", c["dim"], "topleft", (rx, y)
         )
         y = r.bottom + 8
+
+
+def fit_incantation(th, incantation: str, max_w: int, max_h: int) -> tuple[str, list[str]]:
+    """Big type first; shrink (up to 3 lines) before cutting anything."""
+    return th.fit_lines(f"“{incantation or '…'}”", INCANTATION_FONTS, max_w, max_h, 3)
 
 
 def _countdown(surface, style: SceneStyle, timer_s: float | None, center) -> None:

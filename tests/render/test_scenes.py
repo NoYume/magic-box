@@ -62,6 +62,24 @@ def test_stat_lines_show_only_present_keys():
     assert stat_lines(make_full_player(0, stats={})) == []
 
 
+def test_loading_card_shrinks_long_incantations_instead_of_dropping_lines():
+    from magic_box.core.config import load_config
+    from magic_box.render.scenes.loading import fit_incantation
+    from magic_box.render.style import Theme
+
+    cfg = load_config("config.yaml")
+    pygame.init()
+    try:
+        th = Theme(cfg["render"])
+        text = "summon thunderous crimson stormclouds across austin skylines " * 3  # ~180 chars
+        font, lines = fit_incantation(th, text.strip(), 640, 100)
+        assert "…" not in " ".join(lines) and len(" ".join(lines)) == len(text.strip()) + 2
+        assert len(lines) * th.font(font).get_linesize() <= 100
+        assert fit_incantation(th, "short words", 640, 100) == ("big", ["“short words”"])
+    finally:
+        pygame.quit()
+
+
 def test_class_keyword_is_the_first_word():
     from magic_box.core.contracts import ClassView
     from magic_box.render.scenes.lobby import class_keyword

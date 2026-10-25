@@ -36,6 +36,8 @@ RELEASE_CUES = {
 }
 EFFECT_LABELS = {"shield": "SHIELD", "empowered": "POWER", "mana_slow": "MANA-", "slow": "SLOW"}
 LEFT_COL_W = 300
+SPELL_TEXT_X = 60  # spell row: text starts right of the cost badge
+INCANTATION_FONTS = ("text", "small", "tiny")
 DIST_MIN_M, DIST_MAX_M = 0.8, 3.5  # zone meter span
 
 
@@ -289,8 +291,7 @@ class Hud:
         th, c = self.theme, self.theme.c
         can = affordable(me, spell)
         cx, cy = row.x + 26, row.centery
-        tx = row.x + 60
-        max_w = row.right - tx - 8
+        tx = row.x + SPELL_TEXT_X
         if spell.charged:
             edge = lerp_rgb(self.c["charge_rgb"], c["white"], pulse(t, 8.0) * 0.5)
             surface.blit(th.panel(row.w, row.h, c["card_hi"], 230, edge), row.topleft)
@@ -337,17 +338,21 @@ class Hud:
             "topleft",
             (name.right + 10, row.y),
         )
-        inc = spell.incantation or "…"
-        quoted = f"“{inc}”"
-        font = "text" if th.font("text").size(quoted)[0] <= max_w else "small"
-        th.blit_text(
-            surface,
-            th.fit_text(quoted, font, max_w),
-            font,
-            c["text"] if can else c["faint"],
-            "bottomleft",
-            (tx, row.bottom + 2),
-        )
+        font, lines = self.incantation_lines(spell, row.w, row.h)
+        step = th.font(font).get_linesize()
+        y = row.bottom + 2 - len(lines) * step
+        for line in lines:
+            th.blit_text(surface, line, font, c["text"] if can else c["faint"], "topleft", (tx, y))
+            y += step
+
+    def incantation_lines(self, spell: SpellView, row_w: int, row_h: int) -> tuple[str, list[str]]:
+        """Font and lines for a spell row's incantation: a smaller font first, then two lines,
+        an ellipsis only as a last resort. The name/cue line takes the top of the row."""
+        th = self.theme
+        quoted = f"“{spell.incantation or '…'}”"
+        max_w = row_w - SPELL_TEXT_X - 8
+        max_h = row_h + 2 - th.font("tiny").get_linesize()
+        return th.fit_lines(quoted, INCANTATION_FONTS, max_w, max_h, 2)
 
     # -- effects, enemy bar, timer -----------------------------------------
 

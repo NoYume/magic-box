@@ -85,6 +85,33 @@ def test_zone_meter_position_is_monotonic():
         pygame.quit()
 
 
+LONG_INCANTATION = "summon thunderous crimson stormclouds across austin skylines"  # 60, 7
+
+
+def test_long_incantation_fits_a_spell_row_without_an_ellipsis():
+    import pygame
+
+    from magic_box.render.hud import LEFT_COL_W
+
+    assert len(LONG_INCANTATION) == 60 and len(LONG_INCANTATION.split()) == 7
+    cfg, theme, hud = _hud()
+    try:
+        h = cfg["render"]["hud"]
+        row_w = 928 - LEFT_COL_W - h["pad_px"]  # the HUD rect at 1920x1080
+        row_h = h["spell_row_h_px"] - 4
+        spell = SpellView("bolt", "Bolt", LONG_INCANTATION, 20.0, False)
+        font, lines = hud.incantation_lines(spell, row_w, row_h)
+        text = " ".join(lines)
+        assert "…" not in text and text == f"“{LONG_INCANTATION}”"
+        f = theme.font(font)
+        assert all(f.size(line)[0] <= row_w - 68 for line in lines)
+        assert len(lines) * f.get_linesize() <= row_h + 2 - theme.font("tiny").get_linesize()
+        short = SpellView("bolt", "Bolt", "zap", 20.0, False)
+        assert hud.incantation_lines(short, row_w, row_h) == ("text", ["“zap”"])
+    finally:
+        pygame.quit()
+
+
 def test_affordable_and_charged_spell():
     from magic_box.render.hud import affordable, charged_spell
     from tests.factories import make_full_player
