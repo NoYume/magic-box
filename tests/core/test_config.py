@@ -3,7 +3,13 @@ from pathlib import Path
 import pytest
 import yaml
 
-from magic_box.core.config import REQUIRED_SECTIONS, ConfigError, load_config
+from magic_box.core.config import (
+    BODY_FORMATS,
+    CAMERA_MODES,
+    REQUIRED_SECTIONS,
+    ConfigError,
+    load_config,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -69,3 +75,61 @@ def test_local_override_deep_merges(tmp_path):
     cfg = load_config(tmp_path / "config.yaml")
     assert cfg["display"]["fullscreen"] is True
     assert cfg["display"]["width"] == 1920
+
+
+def test_repo_config_targets_zed_x():
+    cam = load_config(ROOT / "config.yaml")["camera"]
+    assert (cam["model"], cam["resolution"], cam["image_width"], cam["image_height"]) == (
+        "ZED_X",
+        "SVGA",
+        960,
+        600,
+    )
+    assert cam["body_format"] == "BODY_34" and cam["body_fitting"] is True
+    assert cam["svo_path"] is None and cam["record_svo"] is None
+
+
+def test_repo_config_has_perception_tunables():
+    p = load_config(ROOT / "config.yaml")["perception"]
+    for key in (
+        "push_speed_mps",
+        "push_min_travel_m",
+        "push_window_s",
+        "push_rearm_ratio",
+        "push_cooldown_s",
+        "motion_window_s",
+        "slot_hold_s",
+        "hands_up_margin_m",
+        "hands_together_max_m",
+        "open_retry_s",
+        "max_grab_failures",
+        "stats_every_s",
+    ):
+        assert key in p, key
+    assert "wrist_vz_smoothing" not in p
+
+
+def test_camera_tables():
+    assert CAMERA_MODES["SVGA"] == (960, 600) and CAMERA_MODES["HD1200"] == (1920, 1200)
+    assert BODY_FORMATS == ("BODY_18", "BODY_34", "BODY_38")
+
+
+def test_image_size_must_match_resolution(tmp_path):
+    cfg = _base()
+    cfg["camera"]["image_width"] = 1280
+    with pytest.raises(ConfigError, match=r"camera\.image_width.*SVGA"):
+        load_config(_write(tmp_path, cfg))
+
+
+def test_unknown_resolution_rejected(tmp_path):
+    cfg = _base()
+    cfg["camera"]["resolution"] = "HD4K"
+    with pytest.raises(ConfigError, match=r"camera\.resolution"):
+        load_config(_write(tmp_path, cfg))
+
+
+def test_unknown_body_format_rejected(tmp_path):
+    cfg = _base()
+    cfg["camera"]["body_format"] = "BODY_70"
+    with pytest.raises(ConfigError, match=r"camera\.body_format"):
+        load_config(_write(tmp_path, cfg))

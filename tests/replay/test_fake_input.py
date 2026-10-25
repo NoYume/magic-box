@@ -21,7 +21,15 @@ def test_initial_layout_p1_on_image_right():
     p1, p2 = _p1(states), next(s for s in states if s.slot == 1)
     assert p1.root[0] > 0 > p2.root[0]
     assert p1.bbox_px[0] > CFG["camera"]["image_width"] / 2 > p2.bbox_px[0] + p2.bbox_px[2]
-    assert frame.image.shape == (720, 1280, 4) and frame.image.dtype == np.uint8
+    assert (
+        frame.image.shape
+        == (
+            CFG["camera"]["image_height"],
+            CFG["camera"]["image_width"],
+            4,
+        )
+        and frame.image.dtype == np.uint8
+    )
     assert set(p1.keypoints_px) == set(KEYPOINT_NAMES) and p1.tracking_ok
 
 

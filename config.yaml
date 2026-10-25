@@ -8,19 +8,33 @@ display:            # owner: Adetola + Nikhil
   fullscreen: false
 
 camera:             # owner: Enoch
-  resolution: HD720           # HD720 | HD1080
-  image_width: 1280
-  image_height: 720
+  model: ZED_X                # scripts/check_env.py compares the connected camera's model
+  resolution: SVGA            # ZED X: SVGA (960x600) | HD1080 | HD1200; image size must match
+  image_width: 960
+  image_height: 600
   fps: 30
-  depth_mode: PERFORMANCE     # use the fastest mode the installed ZED SDK offers
-  body_format: BODY_18        # BODY_18 | BODY_34 | BODY_38, decide after scripts/bench_tracking.py
+  depth_mode: PERFORMANCE
+  body_format: BODY_34        # BODY_18 | BODY_34 | BODY_38 (34 and 38 need body_fitting)
   body_model: HUMAN_BODY_FAST
-  max_range_m: 3.5            # (guess) ignore bodies farther than this
+  body_fitting: true
+  detection_confidence: 40
+  max_range_m: 3.5            # (guess) depth and bodies beyond this are ignored (bystanders)
+  svo_path: null              # play this .svo2 instead of the live camera (Jetson only)
+  record_svo: null            # record the live camera to this .svo2 path
 
 perception:         # owner: Enoch
-  push_speed_mps: 1.5         # (guess) wrist speed toward camera that counts as a push
+  push_speed_mps: 1.5         # (guess) wrist speed toward the camera, relative to the neck
+  push_min_travel_m: 0.12     # (guess) wrist travel toward the camera within the window
+  push_window_s: 0.15         # (guess)
+  push_rearm_ratio: 0.35      # (guess) re-arm once speed drops below this share of push_speed_mps
   push_cooldown_s: 0.4        # (guess)
-  wrist_vz_smoothing: 0.5     # (guess) EMA alpha
+  motion_window_s: 0.2        # (guess)
+  slot_hold_s: 1.0            # (guess) a lost body keeps its slot this long
+  hands_up_margin_m: 0.10     # (guess) wrist above the head by this much
+  hands_together_max_m: 0.25  # (guess) wrists closer than this
+  open_retry_s: 2.0
+  max_grab_failures: 30
+  stats_every_s: 5.0
   zones:                      # root Z thresholds, meters (guess)
     danger_max_m: 1.6         # z < this -> danger
     far_min_m: 2.4            # z >= this -> far
@@ -104,6 +118,23 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
   divider_px: 4
   divider_rgb: [201, 162, 39]
   background_rgb: [11, 8, 20]
+  debug_overlay:    # owner: Enoch
+    graph_s: 3.0
+    vz_range_mps: 4.0
+    push_flash_s: 0.3
+    topdown_x_m: 2.0
+    topdown_z_m: 4.0
+    font_px: 22
+    panel_w_px: 420
+    graph_h_px: 120
+    map_px: 240
+    pad_px: 6
+    dot_radius_px: 8
+    panel_rgba: [0, 0, 0, 170]
+    text_rgb: [240, 240, 240]
+    slot_rgb: {0: [255, 140, 40], 1: [40, 140, 255]}
+    threshold_rgb: [230, 60, 60]
+    zone_rgb: {danger: [110, 30, 30], neutral: [70, 70, 40], far: [30, 50, 90]}
 
 keys:               # owner: Nikhil. pygame key names
   spells: {0: ["1", "2", "3"], 1: ["8", "9", "0"]}   # keyboard fallback, always active
@@ -121,4 +152,4 @@ fake:               # owner: Nikhil. --fake mode players
   move_speed_mps: 1.0
   push_speed_mps: 3.0
   duck_m: 0.4
-  focal_px: 700
+  focal_px: 525
