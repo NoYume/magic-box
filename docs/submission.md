@@ -94,7 +94,7 @@ Python 3.10, uv, pygame-ce, NumPy, Stereolabs ZED SDK (pyzed), ZED X, ZED Link, 
 | Spark incantations | 3.1-3.8 s, 6/6 valid, `reasoning_effort: minimal` | laptop Wi-Fi, 3 runs |
 | Spark with default effort | timed out at 8 s | laptop Wi-Fi |
 | Spark chronicle | 1.6-1.7 s, 87-88 words | laptop Wi-Fi |
-| Fight frame render time | 1.9-2.6 ms, 2.8-3.4 ms with heavy effects | Apple M5 laptop, SDL dummy video, not the Jetson |
+| Fight frame render time | about 2 ms; about 3 ms with heavy effects (3.9 ms worst) | Apple M5 laptop, SDL dummy video, not the Jetson |
 | Quit with a Spark call in flight | 0.27 s | laptop |
 | Automated tests | 865 passed, 2 skipped | laptop, `dev` at 2026-10-25 04:15 |
 | Tracking fps, two-person share | `[TODO 08:00]` | Jetson, `bench_tracking.py` |

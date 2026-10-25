@@ -49,7 +49,7 @@ If `bench_tracking.py` says NO-GO, fix that before anything else. It decides the
    ```bash
    uv run --env-file .env python scripts/check_env.py --network
    ```
-   If `.env` does not exist yet, do the first-time step in section 2 first, or run it without `--env-file .env --network`. One line per check: `OK`, `FAIL` (required) or `WARN` (optional). Exit 1 means a required check failed. `--network` adds a `meta_api` probe (`GET https://api.meta.ai/v1/models`). The `sounddevice` line lists the audio input devices; you need those names in section 4.
+   If `.env` does not exist yet, do the first-time step in section 2 first, or run `uv run python scripts/check_env.py`. One line per check: `OK`, `FAIL` (required) or `WARN` (optional). Exit 1 means a required check failed. `--network` adds a `meta_api` probe (`GET https://api.meta.ai/v1/models`). The `sounddevice` line lists the audio input devices; you need those names in section 4.
 
    If `pyzed` fails with a numpy ABI error, see the Jetson quickstart in `README.md`.
 
@@ -149,7 +149,7 @@ uv run --env-file .env python scripts/check_spark.py --chronicle
 ```
 It prints the latency, the model id the reply reports, and each incantation marked `[spark]` or `[fallback]`. Exit 0: Spark answered. Exit 1: a call failed (error type and HTTP status only). Exit 2: Spark disabled or no key. On the laptop it took 3.1-3.8 s with `ai.reasoning_effort: minimal`. Anything near 8 s (`ai.timeout_s`) means the game will fall back on this Wi-Fi.
 
-**Muse with the real mics.** Each run records 4 s from one player's mic. Start speaking at the `say "..." now` prompt. On the Jetson always use `--record`, because the default audio comes from macOS `say`.
+**Muse with the real mics.** Each `--phrase` is recorded for 4 s from that player's mic, one after another; speak at each `say "..." now` prompt. A phrase recorded in silence makes the script exit 1 at once (`FAIL: no speech in the audio`), so be ready before you press Enter. On the Jetson always use `--record`, because the default audio comes from macOS `say`.
 
 P1 (slot 0, Fire Mage phrases):
 ```bash
@@ -161,7 +161,7 @@ P2 (slot 1, Lightning Mage phrases):
 uv run --env-file .env python scripts/check_muse.py --record 4 --slot 1 --keywords words --phrase "lightning answer my call" --phrase "hum of the restless grid"
 ```
 
-Each run prints the first partial, first match, perfect and charge times (seconds after the end of speech) and a final line `suggested game.charge_window_s = ...`. Exit 0: every run charged the right spell. Do a few clean readings and a few sloppy ones, so the held sub-perfect path gets measured. The WAVs are saved under `.superpowers/muse/`.
+For each phrase it prints the first partial, first match, perfect and charge times (seconds after the end of speech) and a final line `suggested game.charge_window_s = ...`. Exit 0: every run charged the right spell. Do a few clean readings and a few sloppy ones, so the held sub-perfect path gets measured. The WAVs are saved under `.superpowers/muse/`.
 
 Crosstalk check: run the P2 command with P2 silent while P1 reads P2's phrase out loud from P1's spot. A good result is `FAIL: no speech in the audio` or no charge. If P2's mic charges the spell, move the players apart or turn the receiver gain down.
 
@@ -207,7 +207,7 @@ Change values in `config.local.yaml` on the Jetson, then quit (`Esc`) and start 
 | The ×1.15 perfect bonus almost never fires | `voice.perfect_hold_s` (0.5) | Raise to 0.8. Charges land later. |
 | Correct incantations don't charge | `voice.match_threshold` (80) | Lower to 70. Watch for wrong-spell charges. |
 | Two-hand pushes come out as one-hand pushes | `intent.two_hand_window_s` (0.1) | Raise to 0.15-0.2. Every one-hand push waits this long. |
-| Same, and the other hand crosses early | `perception.push_peak_wait_s` (0.1) | Lower to 0.05. The push is emitted sooner after the crossing, so `Push.speed` is less of a peak. Validation caps it at 0.1. |
+| Two-hand pushes are still missed after raising `two_hand_window_s` | `perception.push_peak_wait_s` (0.1) | Lower to 0.05. Change it only for missed two-hand pushes: the push is emitted sooner after the crossing, so `Push.speed` is less of a peak. Validation caps it at 0.1. |
 | Punches don't fire (`wrist_vz` never crosses the red line) | `perception.push_speed_mps` (1.5) | Lower to 1.2. Also `perception.push_min_travel_m` (0.12) down to 0.08. |
 | Pushes fire on their own (gesturing, talking with hands) | `perception.push_speed_mps` (1.5) | Raise to 1.8, or raise `push_min_travel_m`. |
 | One punch fires twice | `perception.push_cooldown_s` (0.4) | Raise to 0.6. |
@@ -219,7 +219,7 @@ Change values in `config.local.yaml` on the Jetson, then quit (`Esc`) and start 
 | Bystanders get tracked | `camera.max_range_m` (3.5) | Lower to the back of the play area. |
 | Zone readout disagrees with the floor tape | `perception.zones.danger_max_m` (1.6), `far_min_m` (2.4) | Match the tape, or move the tape. |
 | Every hit lands at the same multiplier | `game.combat.speed_ref_mps` (2.0) | `Push.speed` is now the punch's peak. Check `best_push_mps` on the victory screen and set the reference near a typical punch. |
-| Loading card shows the config incantations (Spark fell back) | `ai.timeout_s` (8), `game.loading_max_s` (10) | Check Wi-Fi first (phone hotspot). Raise both together if Spark is just slow. |
+| Loading card shows the config incantations (Spark fell back) | `ai.timeout_s` (8), `game.loading_max_s` (10) | Check Wi-Fi first (phone hotspot). If Spark times out often, raise `ai.timeout_s` and keep `game.loading_max_s` above it. |
 | Sound too loud or too quiet | `render.audio.volume` (0.6) | Adjust. `render.audio.enabled: false` mutes. |
 | K.O. effect gets cut off | `game.ko_hold_s` (2.5), `render.fx.ko_s` (2.0) | Keep `ko_hold_s` at least `fx.ko_s`. |
 
