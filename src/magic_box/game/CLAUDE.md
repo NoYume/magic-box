@@ -2,48 +2,66 @@
 
 **Owner:** Adetola
 
-Pure game rules: classes, spells, HP and mana, charge and dodge windows, combat, scene flow. Draft mechanics: `docs/game-design.md`.
-
-**Thin engine (2026-10-24).** The files here were filled in by Nikhil so the whole pipeline plays end to end. They carry the docstring line `Thin placeholder rules (2026-10-24 phase); replace freely.` They are yours to replace; nothing outside `game/` depends on engine internals beyond the `Engine` facade and the `GameView` contract.
+Pure game rules: classes, spells and their effects, HP and mana, charge and dodge windows, combat, scene flow. Draft mechanics: `docs/game-design.md`. The overnight beta (2026-10-25) filled in every spell effect, the voice class pick, the boot scene and the pause rules; numbers are still yours to tune.
 
 ## Inputs → Outputs
-- In: `Action`s (from `intent/`), the newest `PlayerState` per slot, and `provide_incantations()`, `provide_chronicle()` and `provide_mic_status(slot, ok)` from the loop.
-- Out: `Engine.step(actions, states, now)` returns a `GameView` (what render draws) plus `GameEvent`s (the match log used by the chronicle and recordings).
+- In: `Action`s (from `intent/`), the newest `PlayerState` per slot, and from the loop: `provide_incantations()`, `provide_chronicle()`, `provide_mic_status(slot, ok)`, `provide_camera_status(ok)` and `provide_check(name, ok, detail)`.
+- Out: `Engine.step(actions, states, now)` returns a `GameView` (what render draws) plus `GameEvent`s (the match log used by the chronicle and recordings). `GameView.events` repeats the same events.
 
-## What the thin engine does
-- Scene flow `lobby → loading → fight → victory → lobby` (it starts in `lobby`; there is no `boot`).
-- Lobby: `speech` Actions set the player's name (`parse_name`, up to `name_max_chars`); both players raising hands starts the match. The start is edge-triggered: after a match the players must lower their hands, then raise them again (the first lobby at startup starts on the first both-hands-up tick). Names persist across matches.
-- Loading: waits for the incantations from `ai/` (config fallback fills any gap), `loading_min_s` to `loading_max_s`.
-- Fight: own match clock (starts at 0; `now` is only the timestamp on `GameEvent.t`). `round_s` round, mana regen, charge (`charge_window_s`), a release (push, two-hand push, arm overhead, hands together) fires the charged spell, a basic attack on an uncharged push. Damage is Appendix A (`combat.py`). The attacker's distance is the releasing Action's `dist` (else the last known). A dodge inside `dodge_window_s` of impact avoids the hit.
-- Spells with 0 damage (Flame Wall, Static Field, Holy Light, Heal) spend mana, log a `cast` event and show a banner. Nothing more.
-- Pause: if a player has been untracked for `pause_after_s`, everything freezes and the banner reads "STEP INTO VIEW".
-- Victory: ends on KO or time-out. Back to the lobby when both raise hands after `victory_min_s`, or at `victory_max_s`. Hands still held up then keep the lobby open (names can change); lowering and raising them starts the next loading.
+## Scene flow
+`boot → lobby → loading → fight → victory → lobby`
+- **Boot** (first scene): `GameView.checks` lists `camera`, `mic P1`, `mic P2`, `network`, `api key` (unknown is not ok, detail `"checking"`), then any other names reported. `provide_camera_status` and `provide_mic_status` fill `camera` and the mics; `provide_check(name, ...)` sets any line, and a later status with the same ok keeps its detail. Boot goes to the lobby after `boot_min_s` once the camera is ok, or at `boot_max_s` whatever the checks say. `timer_s` counts down to `boot_max_s`; no banner.
+- **Lobby:** a final transcript (`speech` Action) with a class keyword (`game.classes.<id>.keywords`: `fire`, `lightning`, `holy`, `knight`; whole words, the last one said wins) picks that class. Otherwise it sets the name (`parse_name`: "my name is X", "call me X", "i am X" and a few more take X; up to `name_max_chars`). Names and classes persist across matches. `PlayerView.heard` is the last transcript. Banner: `SAY NAME · SAY FIRE, LIGHTNING OR HOLY · HANDS UP` (built from the first keyword of each class; fits one line at 96 px on 1920 px).
+- **Hands up** is debounced by `hands_up_hold_s` on both edges (`scenes.Hold`): it counts once held, and a one-frame drop doesn't lower it. `PlayerView.ready` shows the debounced value in lobby and victory. Both ready starts loading. The start is edge-triggered: after a match the players must lower their hands (held down), then raise them again. The first lobby after boot starts armed.
+- **Loading:** waits for the incantations from `ai/` (config fallback fills any gap), `loading_min_s` to `loading_max_s`. Incantations follow the picked class.
+- **Fight:** own match clock (starts at 0; `now` is only the timestamp on `GameEvent.t`). `round_s` round, mana regen, charge (`charge_window_s`), a release (push, two-hand push, arm overhead, hands together) fires the charged spell, a basic attack on an uncharged push. Damage is Appendix A (`combat.py`). The attacker's distance is the releasing Action's `dist` (else the last known). A dodge removes every projectile aimed at the dodger that is inside its `dodge_window_s`.
+- **Victory:** on KO, time-out or abandon. `winner_slot` (None for a draw). Back to the lobby when both hold hands up after `victory_min_s`, or at `victory_max_s`.
+
+## Spell effects (config: per spell `effect` + `effect_s`, `heal_hp`, `hits` + `chain_gap_s`; multipliers under `game:`)
+| Spell | Effect |
+|---|---|
+| Flame Wall | `shield` on the caster, 4 s: the next incoming hit (any projectile) is blocked (`block` event, no damage), then the shield ends. |
+| Static Field | A 0-damage projectile; if it lands (not dodged or blocked) the target gets `mana_slow`, 5 s: mana regen x `mana_slow_mult` (0.25). |
+| Inferno | 35 damage; if it lands the target gets `slow`, 3 s: their next charge window x `slow_charge_mult` (0.6); charging uses it up. |
+| Holy Light | `empowered` on the caster, 6 s: anything they release meanwhile (spells and basic attacks) does x `empowered_mult` (1.5), fixed at release. |
+| Heal | +25 HP on the caster, capped at `hp_max` (`heal` event with the HP actually gained). |
+| Chain | 3 bolts of 7, launched `chain_gap_s` (0.25 s) apart; each has its own dodge window, so an early dodge avoids only the first. |
+
+Rules: a spell is a projectile when it does damage or carries a hit effect (`mana_slow`, `slow`); otherwise it is instant and shows a `SPELL NAME!` banner. `shield` and `empowered` go on the caster at release, `mana_slow` and `slow` on the target at impact. Re-applying an effect keeps the longer timer. Effect timers run on the match clock, so a pause freezes them.
+
+Events: `buff` (slot = caster; data `spell_id`, `effect`, `target`, `duration_s`), `heal` (slot = caster; `spell_id`, `amount`, `hp`), `block` (slot = defender; `spell_id`, `attacker`), plus `cast`, `hit` (Static Field hits for 0), `dodge`, `ko`, `match_end` (reason `ko`, `time` or `abandon`).
+
+## View fields
+`PlayerView.effects` (fight only, `EFFECT_KINDS` order), `charge_s` and `cooldown_s` (fight only), `stats` (fight and victory; `{}` elsewhere): `damage` dealt (overkill not counted, 1 dp), `hits` landed, `casts` (charged spells, not basic attacks), `dodges` (projectiles dodged), `blocks`, `heals` (heal casts), `best_push_mps`. `GameView.classes` lists every class in every scene; `checks` is filled in every scene.
+
+## Pauses
+- **Tracking:** a player untracked for `pause_after_s` freezes the fight ("STEP INTO VIEW"). A pause that lasts `abandon_after_s` ends the match: the player still tracked wins, a draw if both are gone (`match_end` reason `abandon`).
+- **Camera:** while `provide_camera_status(False)`, the banner is "CAMERA RECONNECTING" (lobby, loading and fight) and the fight freezes like a pause. It never abandons: presence timers start over when the camera is back. Until the loop reports, the camera counts as fine for this banner (but not for the boot check).
 
 ## Hard rules
 - **Pure Python.** Never import `pygame`, `pyzed` or `cv2` (`tests/test_boundaries.py` fails the build).
 - Never block: no network, no sleeping, no file I/O in `step`. Spark results arrive via `provide_*`.
-- Every number (costs, damage, windows, HP, regen) is read from `cfg.game`; spell data lives in `config.yaml`. No hard-coded balance.
+- Every number (costs, damage, windows, HP, regen, effect times) is read from `cfg.game`; spell data lives in `config.yaml`. New keys get validation in `core/config.py` (`_check_game_effects`).
 - Use `Action.t` and the tick time, not the wall clock. Distances are meters.
 - The `GameView` contract is shared with render. Changing it needs a heads-up to Nikhil and a root `CLAUDE.md` update.
 
 ## Files
-- `engine.py`: `Engine` facade (`step`, `provide_incantations`, `provide_chronicle`, `provide_mic_status`); builds the `GameView`.
-- `scenes.py`: `SceneMachine` for lobby → loading → fight → victory; `parse_name`.
-- `state.py`: `MatchState` (HP, mana, charges, cooldowns, projectiles in flight, round timer, banner, event log).
+- `engine.py`: `Engine` facade (`step`, the `provide_*` calls); boot checks, names and class picks, debounced hands up, pause / abandon / camera, builds the `GameView`.
+- `scenes.py`: `SceneMachine` (boot → lobby → loading → fight → victory), `Hold` (debounce), `parse_name`.
+- `state.py`: `MatchState` (HP, mana, charges, cooldowns, effects, stats, projectiles in flight, round timer, banner, event log).
+- `effects.py`: `Effects` (timed effects per player) and which effects go on the caster vs the target.
 - `combat.py`: `speed_mult`, `dist_mult`, `damage` (spec Appendix A).
-- `spells.py`: `SpellDef` and `load_spells` from config.
-- `classes.py`: `class_ids`, `class_name` from config.
+- `spells.py`: `SpellDef`, `load_spells`, `basic_attack` from config.
+- `classes.py`: `class_ids`, `class_name`, `class_views`, `parse_class`, `class_prompt` from config.
 
 ## Test without the Jetson
 ```
 uv run pytest tests/game
 uv run python -m magic_box --fake
 ```
-In fake mode the whole match plays: raise hands (`r` + `y`), charge with the spell keys, push with `f` / `h`, two-hand spells with `v` / `m`.
+In fake mode boot waits up to `boot_max_s` (8 s) unless the loop reports the camera. Then hold hands up (`r` + `y`) to start, charge with the spell keys, push with `f` / `h`, two-hand spells with `v` / `m`, Holy Light with hands up (`r` / `y`), Heal with hands together (`t` / `u`). Transcripts can't come from the keyboard; tests send `Action("speech", ...)`.
 
 ## Open TODOs
-- `TODO(Adetola)`: spell effects for 0-damage spells (Flame Wall block, Static Field slow, Holy Light buff, Heal; Chain hits once today).
-- `TODO(Adetola)`: class pick (classes are fixed from `game.default_classes`) and the `boot` scene self-check.
-- `TODO(Adetola)`: the "CAMERA RECONNECTING" banner (perception restarting) is not implemented.
-- Open decisions (Adetola): final classes, spells, costs, gestures and numbers; scene flow and lobby interactions; `Push.speed` threshold vs peak (with Enoch).
+- Open decisions (Adetola): final classes, spells, costs, gestures and numbers; whether Chain bolts should need one dodge each; `heals` as a count vs HP.
 - `game.charge_window_s` waits on the partial-latency measurement (Nikhil).
+- Fake-mode damage runs high (fake pushes are 3.0 m/s, so `speed_mult` is 1.5): a Fireball with a perfect incantation does about 34.

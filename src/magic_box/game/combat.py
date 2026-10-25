@@ -1,7 +1,6 @@
 """Combat formula (spec section 8, game/; Appendix A).
 
 Owner: Adetola
-Thin placeholder rules (2026-10-24 phase); replace freely.
 
 Appendix A:
     damage = base x speed_mult x atk_dist_mult x def_dist_mult x buffs
