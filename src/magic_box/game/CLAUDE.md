@@ -20,6 +20,7 @@ Pure game rules: classes, spells, HP and mana, charge and dodge windows, combat,
 - `scenes.py`: scene state machine boot → lobby → loading → fight → victory.
 - `state.py`: mutable match state (HP, mana, charges, buffs, projectiles in flight).
 - `combat.py`: damage formula (spec Appendix A).
+- Parry (`game.parry_classes`): a `guard` pose within `parry_window_s` of impact negates the hit and arms a riposte (next uncharged push launches `spell_id="riposte"`).
 - `spells.py`: spell table loaded from config.
 - `classes.py`: class ids and lookup from config.
 

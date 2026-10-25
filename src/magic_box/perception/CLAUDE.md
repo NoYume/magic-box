@@ -23,7 +23,7 @@ Turns the ZED 2 stream into `PlayerState`s and camera frames. Runs in its own pr
 - `zed_source.py`: opens the camera (live or SVO), grabs frames and bodies.
 - `bodies.py`: assigns tracked bodies to slots 0 and 1.
 - `push.py`: smoothed wrist-Z velocity push detector with cooldown.
-- `poses.py`: pose flags (`hands_up`, `hands_together`) from keypoints.
+- `poses.py`: pose flags (`hands_up`, `hands_together`, `guard`) from keypoints.
 - `motion.py`: `root_vx` and head tracking.
 - `hands.py`: optional finger gestures (MediaPipe; cut first if time is short).
 

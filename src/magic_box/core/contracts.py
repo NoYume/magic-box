@@ -170,6 +170,12 @@ class PlayerView:
     dist: float
     mic_ok: bool
     tracking_ok: bool
+    # Parry (classes in game.parry_classes). Seconds remaining; 0 = inactive.
+    can_parry: bool = False
+    guard_s: float = 0.0  # guard is up: a hit landing now is parried
+    guard_cooldown_s: float = 0.0
+    riposte_s: float = 0.0  # next uncharged push is a riposte
+    parry_flash_s: float = 0.0  # a parry just landed
 
     def __post_init__(self) -> None:
         _check_in("slot", self.slot, SLOTS)

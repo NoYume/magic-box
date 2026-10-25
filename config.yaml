@@ -32,6 +32,7 @@ perception:         # owner: Enoch
   slot_hold_s: 1.0            # (guess) a lost body keeps its slot this long
   hands_up_margin_m: 0.10     # (guess) wrist above the head by this much
   hands_together_max_m: 0.25  # (guess) wrists closer than this
+  guard_forward_m: 0.35       # (guess) guard: a wrist this far in front of the neck, between head and shoulders
   open_retry_s: 2.0
   max_grab_failures: 30
   stats_every_s: 5.0
@@ -100,6 +101,13 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
   chain_hits: 3
   static_field_s: 5.0
   static_field_regen_mult: 0.5
+  parry_classes: [holy_knight]
+  parry_window_s: 0.4         # (guess) guard raised this close before impact parries the hit
+  parry_cooldown_s: 1.5       # (guess) one guard per this many seconds
+  riposte_window_s: 1.5       # (guess) after a parry, the next uncharged push is a riposte
+  riposte_damage: 20          # (guess)
+  riposte_travel_s: 0.5       # (guess)
+  parry_flash_s: 0.6
   loading_s: 1.0
   tracking_pause_s: 2.0
   lobby:
@@ -153,6 +161,10 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
   projectile_rgb: [255, 190, 70]
   projectile_core_rgb: [255, 245, 210]
   dodge_rgb: [255, 50, 50]
+  riposte_rgb: [190, 230, 255]
+  riposte_core_rgb: [255, 255, 255]
+  guard_rgb: [201, 162, 39]
+  parry_flash_rgba: [255, 225, 120, 150]
   projectile_min_px: 12
   projectile_max_px: 180
   debug_overlay:    # owner: Enoch
@@ -178,8 +190,8 @@ keys:               # owner: Nikhil. pygame key names
   debug_overlay: f1
   quit: escape
   fake:
-    0: {left: a, right: d, closer: w, farther: s, push: f, duck: c, hands_up: r, hands_together: t}
-    1: {left: j, right: l, closer: i, farther: k, push: h, duck: n, hands_up: y, hands_together: u}
+    0: {left: a, right: d, closer: w, farther: s, push: f, duck: c, hands_up: r, hands_together: t, guard: g}
+    1: {left: j, right: l, closer: i, farther: k, push: h, duck: n, hands_up: y, hands_together: u, guard: o}
 
 fake:               # owner: Nikhil. --fake mode players
   start_x_m: 0.6              # slot 0 at +x (image right), slot 1 at -x
@@ -189,4 +201,5 @@ fake:               # owner: Nikhil. --fake mode players
   move_speed_mps: 1.0
   push_speed_mps: 3.0
   duck_m: 0.4
+  guard_reach_m: 0.45         # guard key moves the right wrist this far toward the camera
   focal_px: 525

@@ -31,6 +31,10 @@ class PlayerState:
     shield_until: float = 0.0
     regen_slow_until: float = 0.0
     last_dodge_at: float = float("-inf")
+    guard_at: float = float("-inf")
+    guard_ready_at: float = 0.0
+    riposte_until: float = 0.0
+    parried_at: float = float("-inf")
     zone: str = "neutral"
     dist: float = 0.0
     tracking_ok: bool = False

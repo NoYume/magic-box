@@ -20,8 +20,8 @@ Draws the `GameView` and the latest camera frame as layout C (two 960x1080 halve
 - `window.py`: `Window` (`pump`, `tick`, `draw`, `close`); picks the scene.
 - `layout.py`: layout C geometry (halves, crop and self-view rects).
 - `camera_view.py`: opponent crop (8:9, padded, EMA-smoothed), mirrored self-view with skeleton, crop math.
-- `hud.py`: viewer panel, enemy HP bar and charged spell cues.
-- `projectiles.py`: spell projectiles flying wrist → viewer, scaled by progress.
+- `hud.py`: viewer panel, enemy HP bar, charged spell cues, the knight's guard/riposte status and the parry shield flash.
+- `projectiles.py`: spell projectiles flying wrist → viewer, scaled by progress; the riposte is drawn as a blade-wave crescent.
 - `debug_overlay.py`: debug overlay (toggle `F1`); metric top-down view, wrist-vz history, fps and drops.
 - `scenes/lobby.py`, `scenes/loading.py`, `scenes/victory.py`: scene placeholders (draw the scene name).
 

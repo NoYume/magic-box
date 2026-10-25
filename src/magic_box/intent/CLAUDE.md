@@ -24,7 +24,7 @@ There is no `tests/intent/` yet; create it and drive the code with `tests/factor
 ```
 uv run python -m magic_box --fake
 ```
-Fake-mode keys produce pushes (`f`/`h`), ducks (`c`/`n`), poses (`r`,`t` / `y`,`u`) and spells (`1 2 3` / `8 9 0`).
+Fake-mode keys produce pushes (`f`/`h`), ducks (`c`/`n`), poses (`r`,`t`,`g` / `y`,`u`,`o`) and spells (`1 2 3` / `8 9 0`).
 
 ## Open TODOs
 - Tune step and duck thresholds from recordings.

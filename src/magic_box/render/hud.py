@@ -46,6 +46,11 @@ def draw_hud(surface, rect: Rect, me: PlayerView, font, render_cfg: Mapping) -> 
         background,
     )
     y += BAR_H + 8
+    if me.can_parry:
+        surface.blit(
+            font.render(_parry_status(me), True, tuple(render_cfg["guard_rgb"])), (rect.x + PAD, y)
+        )
+        y += font.get_linesize()
     for spell in me.spells:
         cue = "  CHARGED, PUSH!" if spell.charged else ""
         surface.blit(
@@ -53,6 +58,41 @@ def draw_hud(surface, rect: Rect, me: PlayerView, font, render_cfg: Mapping) -> 
             (rect.x + PAD, y),
         )
         y += font.get_linesize()
+
+
+def _parry_status(me: PlayerView) -> str:
+    if me.riposte_s > 0:
+        return f"RIPOSTE! PUSH NOW {me.riposte_s:.1f}s"
+    if me.guard_s > 0:
+        return "GUARD UP"
+    if me.guard_cooldown_s > 0:
+        return f"Guard {me.guard_cooldown_s:.1f}s"
+    return "Guard ready: arm forward to parry"
+
+
+def draw_parry_flash(
+    surface, half: Rect, me: PlayerView, font, render_cfg: Mapping, flash_s: float
+) -> None:
+    """First-person shield flash over the viewer's half when a parry lands."""
+    if me.parry_flash_s <= 0:
+        return
+    fade = min(1.0, me.parry_flash_s / flash_s)
+    r, g, b, a = render_cfg["parry_flash_rgba"]
+    overlay = pygame.Surface((half.w, half.h), pygame.SRCALPHA)
+    cx, w, top = half.w // 2, half.w // 3, half.h // 3
+    shield = [
+        (cx - w // 2, top),
+        (cx + w // 2, top),
+        (cx + w // 2, top + w // 2),
+        (cx, top + w),
+        (cx - w // 2, top + w // 2),
+    ]
+    pygame.draw.polygon(overlay, (r, g, b, round(a * fade)), shield)
+    pygame.draw.polygon(overlay, (r, g, b, round(255 * fade)), shield, width=6)
+    surface.blit(overlay, (half.x, half.y))
+    label = font.render("PARRIED!", True, (r, g, b))
+    label.set_alpha(round(255 * fade))
+    surface.blit(label, label.get_rect(center=(half.x + cx, half.y + top - font.get_linesize())))
 
 
 def draw_enemy_bar(surface, rect: Rect, enemy: PlayerView, font, render_cfg: Mapping) -> None:

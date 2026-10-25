@@ -19,6 +19,7 @@ def draw_projectiles(
     projectiles: Sequence[ProjectileView],
     target_slot: int,
     render_cfg: Mapping,
+    can_parry: bool = False,
 ) -> None:
     """Draw incoming projectiles moving from the attacker's wrist toward the viewer."""
     font = pygame.font.Font(None, 42)
@@ -33,13 +34,32 @@ def draw_projectiles(
         minimum = int(render_cfg["projectile_min_px"])
         maximum = int(render_cfg["projectile_max_px"])
         radius = round(minimum + (maximum - minimum) * progress * progress)
-        color = tuple(
-            render_cfg["dodge_rgb"] if projectile.in_dodge_window else render_cfg["projectile_rgb"]
-        )
-        pygame.draw.circle(surface, color, (x, y), radius)
-        pygame.draw.circle(
-            surface, tuple(render_cfg["projectile_core_rgb"]), (x, y), max(2, radius // 3)
-        )
+        if projectile.spell_id == "riposte":
+            _draw_blade_wave(surface, (x, y), radius, projectile.in_dodge_window, render_cfg)
+        else:
+            color = tuple(
+                render_cfg["dodge_rgb"]
+                if projectile.in_dodge_window
+                else render_cfg["projectile_rgb"]
+            )
+            pygame.draw.circle(surface, color, (x, y), radius)
+            pygame.draw.circle(
+                surface, tuple(render_cfg["projectile_core_rgb"]), (x, y), max(2, radius // 3)
+            )
         if projectile.in_dodge_window:
-            label = font.render("DODGE!", True, tuple(render_cfg["dodge_rgb"]))
+            text = "PARRY / DODGE!" if can_parry else "DODGE!"
+            label = font.render(text, True, tuple(render_cfg["dodge_rgb"]))
             surface.blit(label, label.get_rect(center=(half.x + half.w // 2, half.y + half.h // 2)))
+
+
+def _draw_blade_wave(surface, center, radius: int, in_dodge_window: bool, render_cfg) -> None:
+    """A horizontal crescent: the knight's riposte slash flying toward the viewer."""
+    x, y = center
+    w, h = radius * 3, max(4, radius)
+    outer = pygame.Rect(x - w // 2, y - h, w, 2 * h)
+    color = tuple(render_cfg["dodge_rgb"] if in_dodge_window else render_cfg["riposte_rgb"])
+    pygame.draw.arc(surface, color, outer, 0.15, 2.99, max(3, radius // 2))
+    inner = outer.inflate(-w // 6, -h // 2)
+    pygame.draw.arc(
+        surface, tuple(render_cfg["riposte_core_rgb"]), inner, 0.3, 2.84, max(2, radius // 6)
+    )

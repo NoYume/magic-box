@@ -17,7 +17,7 @@ from magic_box.render.camera_view import (
     frame_to_surface,
 )
 from magic_box.render.debug_overlay import DebugOverlay
-from magic_box.render.hud import draw_enemy_bar, draw_hud
+from magic_box.render.hud import draw_enemy_bar, draw_hud, draw_parry_flash
 from magic_box.render.layout import Rect, compute_layout
 from magic_box.render.projectiles import draw_projectiles
 from magic_box.render.scenes import draw_scene
@@ -158,7 +158,16 @@ class Window:
                     view.projectiles,
                     half.viewer_slot,
                     rc,
+                    view.players[half.viewer_slot].can_parry,
                 )
+            draw_parry_flash(
+                self.screen,
+                half.half,
+                view.players[half.viewer_slot],
+                self.banner_font,
+                rc,
+                float(self.cfg["game"]["parry_flash_s"]),
+            )
         div = rc["divider_px"]
         pygame.draw.rect(
             self.screen,

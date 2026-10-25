@@ -177,6 +177,18 @@ class Engine:
                 ):
                     self._release(player.slot, spell.id, action, charge.match_score, emitted)
                 return
+            if action.t < player.riposte_until:
+                player.riposte_until = 0.0
+                player.basic_ready_at = now + float(self.cfg["game"]["basic_attack_cooldown_s"])
+                self._launch(
+                    action,
+                    "riposte",
+                    float(self.cfg["game"]["riposte_damage"]),
+                    float(self.cfg["game"]["riposte_travel_s"]),
+                    1.0,
+                    emitted,
+                )
+                return
             if now < player.basic_ready_at:
                 return
             player.basic_ready_at = now + float(self.cfg["game"]["basic_attack_cooldown_s"])
@@ -189,6 +201,11 @@ class Engine:
                 emitted,
             )
             return
+        if action.kind == "pose" and action.pose == "guard":
+            if self._can_parry(player.class_id) and action.t >= player.guard_ready_at:
+                player.guard_at = action.t
+                player.guard_ready_at = action.t + float(self.cfg["game"]["parry_cooldown_s"])
+            return
         if action.kind == "pose" and player.charge is not None:
             spell = player.spells[player.charge.spell_id]
             required = {"arm_overhead": "hands_up", "hands_together": "hands_together"}.get(
@@ -196,6 +213,9 @@ class Engine:
             )
             if action.pose == required:
                 self._release(player.slot, spell.id, action, player.charge.match_score, emitted)
+
+    def _can_parry(self, class_id: str) -> bool:
+        return class_id in self.cfg["game"]["parry_classes"]
 
     def _release(
         self, slot: int, spell_id: str, action: Action, match_score: float, emitted: list[GameEvent]
@@ -270,6 +290,19 @@ class Engine:
             dodge_start = projectile.impacts_at - float(self.cfg["game"]["dodge_window_s"])
             if dodge_start <= target.last_dodge_at <= projectile.impacts_at:
                 continue
+            parry_start = projectile.impacts_at - float(self.cfg["game"]["parry_window_s"])
+            if parry_start <= target.guard_at <= projectile.impacts_at:
+                target.riposte_until = now + float(self.cfg["game"]["riposte_window_s"])
+                target.parried_at = now
+                emitted.append(
+                    self._event(
+                        now,
+                        "block",
+                        projectile.target_slot,
+                        {"spell_id": projectile.spell_id, "parry": True},
+                    )
+                )
+                continue
             if projectile.spell_id == "static_field":
                 target.regen_slow_until = now + float(self.cfg["game"]["static_field_s"])
                 emitted.append(
@@ -326,7 +359,7 @@ class Engine:
         emitted.append(self._event(now, "match_end", self.state.winner, {"hp": hp}))
 
     def _view(self, scene: str, states: Mapping[int, PlayerState], now: float) -> GameView:
-        players = tuple(self._player_view(slot, states.get(slot)) for slot in (0, 1))
+        players = tuple(self._player_view(slot, states.get(slot), now) for slot in (0, 1))
         projectiles = tuple(self._projectile_view(item, now) for item in self.state.projectiles)
         banner = None
         if scene == "lobby":
@@ -346,7 +379,7 @@ class Engine:
             chronicle=self._chronicle if scene == "victory" else None,
         )
 
-    def _player_view(self, slot: int, state: PlayerState | None) -> PlayerView:
+    def _player_view(self, slot: int, state: PlayerState | None, now: float) -> PlayerView:
         game = self.cfg["game"]
         player = self.state.players[slot]
         class_row = game["classes"][player.class_id]
@@ -376,6 +409,11 @@ class Engine:
             dist=state.root[2] if state else player.dist,
             mic_ok=player.mic_ok,
             tracking_ok=bool(state and state.tracking_ok),
+            can_parry=self._can_parry(player.class_id),
+            guard_s=max(0.0, player.guard_at + float(game["parry_window_s"]) - now),
+            guard_cooldown_s=max(0.0, player.guard_ready_at - now),
+            riposte_s=max(0.0, player.riposte_until - now),
+            parry_flash_s=max(0.0, player.parried_at + float(game["parry_flash_s"]) - now),
         )
 
     def _projectile_view(self, projectile: ProjectileState, now: float) -> ProjectileView:

@@ -70,6 +70,8 @@ More in `docs/hardware.md`.
 
 All cross-owner types live in `src/magic_box/core/contracts.py`: `Push`, `PlayerState`, `VoiceEvent`, `Action`, `GameEvent`, `GameView`, `PlayerView`, `SpellView`, `ProjectileView`, `VoiceConfig`, `Frame`. They round-trip to JSON lines via `core/serde.py`.
 
+`PlayerView` carries the knight's parry state (`can_parry`, `guard_s`, `guard_cooldown_s`, `riposte_s`, `parry_flash_s`); a parry is logged as a `block` event with `data["parry"]`, and the riposte is a projectile with `spell_id="riposte"`. Pose flags are `hands_up`, `hands_together` and `guard`.
+
 **Change rule:** changing a contract needs a heads-up to every owner who produces or consumes it, and an update to this file in the same change.
 
 | Boundary | Contract | From → To |
@@ -156,6 +158,7 @@ These are team rules. `tests/test_boundaries.py` enforces the import ones.
 | Push | `f` | `h` |
 | Duck | `c` | `n` |
 | Hands up / together | `r` / `t` | `y` / `u` |
+| Guard (knight parry) | `g` | `o` |
 | Spells | `1` `2` `3` | `8` `9` `0` |
 
 `F1` toggles the debug overlay. `Esc` quits.

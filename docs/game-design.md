@@ -13,6 +13,8 @@
 
 **Basic attack:** a push with no charged spell. Free, 0.8 s cooldown, fast. The knight's main source of damage.
 
+**Parry (Holy Knight).** Hold a guard: one wrist at least 0.35 m in front of your neck, between head and shoulder height. If the guard goes up within 0.4 s of a projectile's impact, the hit is parried (no damage). One guard per 1.5 s, so it cannot be spammed. A parry arms a **riposte**: your next uncharged push within 1.5 s throws a 20-damage blade wave (0.5 s travel) that ignores the basic-attack cooldown. Parry classes live in `game.parry_classes`.
+
 ## Damage
 
 `base × speed_mult × atk_dist_mult × def_dist_mult × buffs`

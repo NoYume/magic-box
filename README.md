@@ -25,6 +25,7 @@ Fake-mode keys (from `config.yaml`):
 | Duck | `c` | `n` |
 | Hands up | `r` | `y` |
 | Hands together | `t` | `u` |
+| Guard (Holy Knight parry) | `g` | `o` |
 | Spells (voice fallback, always on) | `1` `2` `3` | `8` `9` `0` |
 
 Both players raise their hands to leave the lobby. `F1` toggles the debug overlay and `Esc` quits.
