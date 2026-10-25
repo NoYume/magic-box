@@ -10,7 +10,9 @@ import { CaptureSync } from './capture-sync.js';
 const RECONNECT_MS = 1000;
 const DEFAULT_SIZE = [960, 600];
 
-export async function createZedSource(url, onStatus) {
+// Unmirrored by default: two players side by side each see the opponent across from them (the
+// left player looks at the right player). mirror: true shows the room like a mirror instead.
+export async function createZedSource(url, onStatus, { mirror = false } = {}) {
   const canvas = document.createElement('canvas');
   [canvas.width, canvas.height] = DEFAULT_SIZE;
   const ctx = canvas.getContext('2d');
@@ -20,6 +22,7 @@ export async function createZedSource(url, onStatus) {
   let detectedSeq = -1;
   let bodiesSeq = -1;
   let isDecoding = false;
+  let socket = null;
 
   async function onFrame({ seq, jpeg }) {
     if (isDecoding) return; // drop frames rather than fall behind (its depth and bodies go too)
@@ -61,6 +64,7 @@ export async function createZedSource(url, onStatus) {
 
   const connect = () => {
     const ws = new WebSocket(url);
+    socket = ws;
     ws.binaryType = 'arraybuffer';
     ws.onopen = () => {
       stats.connected = true;
@@ -93,14 +97,22 @@ export async function createZedSource(url, onStatus) {
     return observations;
   }
 
-  // Returns { observations?, bodies? } or null when there is nothing new.
+  // Debug telemetry back to the tracker (game/src/debug/telemetry.js). False while disconnected.
+  function send(message) {
+    if (socket?.readyState !== WebSocket.OPEN) return false;
+    socket.send(JSON.stringify(message));
+    return true;
+  }
+
+  // Returns { observations?, bodies?, seq } or null when there is nothing new. seq is the capture
+  // the hands and bodies came from.
   function poll(tMs) {
     let bodies;
     if (frame.seq !== bodiesSeq && frame.bodies) bodies = frame.bodies;
     bodiesSeq = frame.seq;
     const observations = detectHands(tMs);
-    return observations || bodies ? { observations, bodies } : null;
+    return observations || bodies ? { observations, bodies, seq: frame.seq } : null;
   }
 
-  return { kind: 'zed', canvas, mirror: true, poll, stats, getDepthMap: () => frame.depth };
+  return { kind: 'zed', canvas, mirror, poll, send, stats, getDepthMap: () => frame.depth };
 }

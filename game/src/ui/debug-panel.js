@@ -44,12 +44,13 @@ export class DebugPanel {
     return lines;
   }
 
-  update({ renderFps, source, view, flow }) {
+  update({ renderFps, source, view, flow, telemetry }) {
     if (!this.visible) return;
     const hands = source.stats.hands ?? {};
     const lines = [
       `render ${fmt(renderFps, 0)} fps   hands ${fmt(hands.fps, 0)} Hz (${hands.delegate ?? '-'}, ${fmt(hands.inferMs, 1)} ms)   source ${source.kind}`,
       source.kind === 'zed' ? `zed ${source.stats.connected ? 'connected' : 'offline'}  frames ${source.stats.frames}  depth ${source.stats.depthMaps} (${source.stats.depthSize ?? '-'})  tracker ${fmt(source.stats.trackerFps, 1)} fps` : '',
+      telemetry?.available ? `log ${telemetry.enabled ? 'ON' : 'off'} [L]  records sent ${telemetry.sent}  marks ${telemetry.marks} [B]` : '',
       `phase ${flow.phase}  round ${flow.round}  wins ${flow.wins.join('-')}`,
       '',
       ...this.#bodies(view),
@@ -59,7 +60,7 @@ export class DebugPanel {
       `thrust  >= ${THRUST.MIN_SPEED} m/s and >= ${THRUST.MIN_TRAVEL} m in ${THRUST.WINDOW_MS} ms   bolt cooldown ${BOLT.COOLDOWN_MS} ms`,
       `sign min score ${SIGN.MIN_SCORE}  facing >= ${SIGN.FACING_MIN}  play depth ${DEPTH.PLAY_NEAR_M}-${DEPTH.PLAY_FAR_M} m`,
       `body  lean in <= -${BODY.LEAN_IN_FRAC * 100}% z  lean back >= ${BODY.LEAN_BACK_FRAC * 100}% z  hold ${BODY.STANCE_HOLD_MS} ms  dodge >= ${BODY.DODGE_SHIFT} sh in ${BODY.DODGE_WINDOW_MS} ms`,
-      'keys: D/H debug + hitboxes   M mute   R reset (dev)',
+      'keys: D/H debug + hitboxes   L log   B mark   M mute   R reset (dev)',
     ].filter((line) => line !== null);
     this.text.textContent = lines.join('\n');
     this.#drawDepth(source.getDepthMap());

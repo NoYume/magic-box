@@ -4,10 +4,13 @@
 //   ?src=zed&ws=ws://<jetson>:8765   ZED X box (frames + depth from jetson/tracker.py)
 //   ?src=webcam                       laptop webcam, depth estimated from palm size (default)
 //   ?src=demo                         two scripted players, no camera needed
-// Keys: D debug overlay, H hitboxes, M mute, R reset to the lobby (dev shortcut).
-// URL flag: ?debug=1 starts the debug overlay and hitboxes.
+// Keys: D debug overlay, H hitboxes, M mute, R reset to the lobby (dev shortcut),
+//       L debug log on/off, B mark a bad detection (ZED only, see game/src/debug/telemetry.js).
+// URL flags: ?debug=1 starts the debug overlay and hitboxes, ?log=1 starts the debug log,
+//            ?mirror=1 shows the ZED view as a mirror (default: each player faces the opponent).
 
 import { Sfx } from './audio/sfx.js';
+import { Telemetry } from './debug/telemetry.js';
 import { Match } from './game/match.js';
 import { PHASE } from './game/rounds.js';
 import { DebugLayer } from './render/debug-layer.js';
@@ -50,7 +53,10 @@ async function loadFonts() {
 
 function createSource(kind, onStatus) {
   if (kind === 'demo') return createDemoSource();
-  if (kind === 'zed') return createZedSource(params.get('ws') ?? `ws://${location.hostname || 'localhost'}:8765`, onStatus);
+  if (kind === 'zed') {
+    const url = params.get('ws') ?? `ws://${location.hostname || 'localhost'}:8765`;
+    return createZedSource(url, onStatus, { mirror: isFlagOn('mirror') });
+  }
   return createWebcamSource(onStatus);
 }
 
@@ -78,7 +84,9 @@ function spellbookMode(phase) {
   return 'hidden';
 }
 
-function bindKeys({ debugLayer, debugPanel, sfx }) {
+const isFlagOn = (name) => params.get(name) === '1' || params.get(name) === 'true';
+
+function bindKeys({ debugLayer, debugPanel, sfx, telemetry, lastSeq }) {
   const setDebug = (isOn) => {
     debugLayer.setVisible(isOn);
     debugLayer.setHitboxes(isOn);
@@ -89,7 +97,7 @@ function bindKeys({ debugLayer, debugPanel, sfx }) {
       button.setAttribute('aria-pressed', String(isOn));
     }
   };
-  setDebug(params.get('debug') === '1' || params.get('debug') === 'true');
+  setDebug(isFlagOn('debug'));
   $('debug-toggle')?.addEventListener('click', () => setDebug(!debugLayer.visible));
 
   window.addEventListener('keydown', (e) => {
@@ -97,6 +105,8 @@ function bindKeys({ debugLayer, debugPanel, sfx }) {
     const key = e.key.toLowerCase();
     if (key === 'd' || key === 'h') setDebug(!debugLayer.visible);
     if (key === 'm') sfx.toggleMute();
+    if (key === 'l') telemetry.toggle();
+    if (key === 'b') telemetry.mark(lastSeq(), performance.now());
     if (key === 'r') match = new Match({ mirror: match.roster.mirror });
   });
 }
@@ -116,7 +126,9 @@ async function start() {
   const sfx = new Sfx();
   match = new Match({ mirror: source.mirror });
   window.arena = { castIncantation, get match() { return match; } };
-  bindKeys({ debugLayer, debugPanel, sfx });
+  const telemetry = new Telemetry(source.send, { enabled: isFlagOn('log') });
+  let lastSeq = -1;
+  bindKeys({ debugLayer, debugPanel, sfx, telemetry, lastSeq: () => lastSeq });
 
   let renderFps = 60;
   stage.app.ticker.add((ticker) => {
@@ -125,7 +137,13 @@ async function start() {
     renderFps += (1000 / Math.max(ticker.deltaMS, 1) - renderFps) * FPS_SMOOTHING;
     const input = source.poll(now, { phase: match.flow.phase, phaseMs: match.flow.phaseMs, combat: match.combat });
     if (input?.bodies) pendingFx.push(...match.ingestBodies(input.bodies, now));
-    if (input?.observations) pendingFx.push(...match.ingest(input.observations, now));
+    if (input?.seq !== undefined) lastSeq = input.seq;
+    if (input?.observations) {
+      pendingFx.push(...match.ingest(input.observations, now));
+      const hands = source.stats.hands;
+      const stats = { render: renderFps, hands: hands?.fps, inferMs: hands?.inferMs, tracker: source.stats.trackerFps };
+      telemetry.record({ seq: input.seq, tMs: now, view: match.view, flow: match.flow, stats, mirror: source.mirror });
+    }
     pendingFx.push(...match.step(dtMs));
     for (const ev of pendingFx) {
       effects.onFx(ev);
@@ -146,7 +164,7 @@ async function start() {
       book.setCaster(match.view.casters[slot]);
       book.setBody(match.combat.players[slot], match.combat.clockMs);
     });
-    debugPanel.update({ renderFps, source, view: match.view, flow: match.flow });
+    debugPanel.update({ renderFps, source, view: match.view, flow: match.flow, telemetry });
   });
 }
 
