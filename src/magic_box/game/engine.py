@@ -105,9 +105,14 @@ class Engine:
         self._derived_check(f"mic P{slot + 1}", ok, "connected" if ok else "off")
 
     def provide_camera_status(self, ok: bool) -> None:
-        """Camera frames arriving; False while perception restarts (CAMERA RECONNECTING)."""
+        """Camera frames arriving; False while perception restarts (CAMERA RECONNECTING).
+
+        An ok status never creates the boot `camera` line: the loop reports ok before the
+        first frame, and only `provide_check("camera", True)` (a frame seen) passes boot.
+        """
         self._camera_ok = ok
-        self._derived_check("camera", ok, "ok" if ok else "no frames")
+        if not ok or "camera" in self._checks:
+            self._derived_check("camera", ok, "ok" if ok else "no frames")
 
     def provide_check(self, name: str, ok: bool, detail: str = "") -> None:
         """One boot self-check result (`camera`, `mic P1`, `mic P2`, `network`, `api key`)."""

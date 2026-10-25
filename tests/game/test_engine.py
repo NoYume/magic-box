@@ -33,8 +33,9 @@ def run(engine, t0, t1, st, actions=(), dt=DT):
 
 
 def boot(e, t=0.0):
-    """Report the camera ok and step through boot; returns the next free tick time."""
+    """Report a camera frame (as BootChecks does) and step through boot; returns the next t."""
     e.provide_camera_status(True)
+    e.provide_check("camera", True)
     view, _ = run(e, t, t + G["boot_min_s"], states())
     assert view.scene == "lobby"
     return t + G["boot_min_s"] + DT
@@ -87,13 +88,24 @@ def test_boot_leaves_at_min_time_once_the_camera_is_ok():
     e = Engine(CFG)
     view, _ = run(e, 100.0, 100.0 + G["boot_min_s"] + 1.0, states())
     assert view.scene == "boot"  # no camera report yet
-    e.provide_camera_status(True)
+    e.provide_check("camera", True)
     assert e.step([], states(), 101.0 + G["boot_min_s"] + 0.05)[0].scene == "lobby"
+
+
+def test_camera_status_alone_does_not_pass_boot():
+    """The loop reports status ok before the first frame (CameraWatch's boot timeout)."""
+    e = Engine(CFG)
+    e.provide_camera_status(True)
+    view, _ = run(e, 0.0, G["boot_max_s"] - 0.1, states(), dt=0.25)
+    assert view.scene == "boot"
+    assert view.checks[0] == CheckView("camera", False, "checking")
+    e.provide_check("camera", True)  # BootChecks: a frame arrived
+    assert e.step([], states(), G["boot_max_s"] - 0.05)[0].scene == "lobby"
 
 
 def test_boot_does_not_leave_before_min_time():
     e = Engine(CFG)
-    e.provide_camera_status(True)
+    e.provide_check("camera", True)
     view, _ = run(e, 0.0, G["boot_min_s"] - 0.1, states())
     assert view.scene == "boot"
 
