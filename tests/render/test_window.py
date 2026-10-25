@@ -116,6 +116,34 @@ def test_ko_overlay_and_fx_stop_when_victory_starts():
         w.close()
 
 
+def test_glow_tints_are_built_at_startup_and_stay_bounded():
+    from magic_box.core.contracts import GameEvent
+    from tests.factories import make_full_events
+
+    w = Window(CFG, headless=True)
+    try:
+        built = len(w.theme._glows)
+        assert w.theme.glow_bytes() < 40 * 1024 * 1024
+        states, frame = FakePlayers(CFG).step(frozenset(), 0.0, 0.0)
+        smap = {s.slot: s for s in states}
+        spells = [*CFG["render"]["projectiles"]["family"], "mystery"]
+        n = 0
+        for spell in spells:
+            for i in range(0, 61, 3):
+                p = ProjectileView(spell, i % 2, (480.0, 300.0), i / 60, i > 45)
+                hit = GameEvent(0.0, "hit", 0, {"target": 1, "damage": 9, "spell_id": spell})
+                events = (hit, *make_full_events()) if i == 60 else ()
+                view = make_full_view("fight", projectiles=(p,), events=events)
+                w.render(view, frame, smap, 10 + n / 60)
+                n += 1
+        for scene in ("victory", "lobby", "loading", "boot"):
+            w.render(make_full_view(scene, events=()), None, {}, 20 + n / 60)
+            n += 1
+        assert len(w.theme._glows) == built  # nothing new built on the frame path
+    finally:
+        w.close()
+
+
 def test_victory_draws_a_draw_without_banner():
     w = Window(CFG, headless=True)
     try:

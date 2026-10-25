@@ -6,8 +6,9 @@ Everything here is built once and cached, so the 60 fps path allocates little: t
 keyed by (text, font, color), panels by size and color, glow sprites by radius step and color.
 """
 
+import bisect
 import math
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 import numpy as np
@@ -76,6 +77,7 @@ class Theme:
         self._sized_fonts: dict[tuple, pygame.font.Font] = {}
         self.display_path = display_font_path(t.get("display_font"))
         self.title_px: dict[str, int] = {k: int(v) for k, v in t["title_px"].items()}
+        self.glow_steps = glow_steps(render_cfg["projectiles"])
 
     def slot_rgb(self, slot: int | None) -> RGB:
         if slot is None:
@@ -159,13 +161,19 @@ class Theme:
             self._panels[key] = surf
         return surf
 
-    def glow(self, radius: int, color: RGB, core: bool = True) -> pygame.Surface:
-        """An additive radial glow (black outside), cached per 8 px radius step.
+    def glow_step(self, radius: float) -> int:
+        """The cached radius for `radius`: the next step up, clamped to `glow_max_px`."""
+        i = bisect.bisect_left(self.glow_steps, radius)
+        return self.glow_steps[min(i, len(self.glow_steps) - 1)]
 
-        A new color is a cheap tint of the cached gray falloff (copy + multiply), plus the white
-        core added on top, so no numpy work happens on the frame path after `prewarm`.
+    def glow(self, radius: float, color: RGB, core: bool = True) -> pygame.Surface:
+        """An additive radial glow (black outside), cached per radius step (`glow_steps`).
+
+        A color is a tint of the cached gray falloff (copy + multiply) with the white core added
+        on top. `prewarm` builds every tint the game uses at startup, so the frame path only
+        reads the cache.
         """
-        r = glow_step(radius)
+        r = self.glow_step(radius)
         key = (r, color, core)
         surf = self._glows.get(key)
         if surf is None:
@@ -184,15 +192,42 @@ class Theme:
             self._glows[key] = surf
         return surf
 
-    def prewarm(self, max_radius: int) -> None:
-        """Build the gray glow parts for every radius step up to `max_radius` (startup only)."""
-        for r in range(8, glow_step(max_radius) + 1, 8):
+    def prewarm(self, tints: Iterable[tuple[RGB, bool, float]] = ()) -> None:
+        """Build the gray parts for every step, then each (color, core) tint up to its radius."""
+        for r in self.glow_steps:
             self._gray(r, "fall")
             self._gray(r, "core")
+        for color, core, max_radius in tints:
+            top = self.glow_step(max_radius)
+            for r in self.glow_steps:
+                if r > top:
+                    break
+                self.glow(r, color, core)
+
+    def glow_bytes(self) -> int:
+        return sum(s.get_width() * s.get_height() * s.get_bytesize() for s in self._glows.values())
 
 
-def glow_step(radius: float) -> int:
-    return max(8, int(math.ceil(radius / 8.0)) * 8)
+def glow_steps(proj_cfg: Mapping) -> list[int]:
+    """Glow radius steps: every `glow_step_px` up to `glow_big_from_px`, then every
+    `glow_big_step_px`, ending at `glow_max_px`."""
+    small, big = int(proj_cfg["glow_step_px"]), int(proj_cfg["glow_big_step_px"])
+    big_from, top = int(proj_cfg["glow_big_from_px"]), int(proj_cfg["glow_max_px"])
+    steps = list(range(small, min(big_from, top) + 1, small))
+    r = steps[-1] if steps else 0
+    while r + big < top:
+        r += big
+        steps.append(r)
+    if not steps or steps[-1] < top:
+        steps.append(top)
+    return steps
+
+
+HEADLINE_GLOW_DIM = 0.55  # victory headline glow: the winner's color, darkened
+
+
+def headline_glow_rgb(theme: Theme, color: RGB) -> RGB:
+    return lerp_rgb(color, theme.c["black"], HEADLINE_GLOW_DIM)
 
 
 def make_glow_part(radius: int, part: str) -> pygame.Surface:
@@ -215,7 +250,7 @@ def blit_glow(
 ) -> None:
     if radius < 2:
         return
-    g = theme.glow(int(radius), color, core)
+    g = theme.glow(radius, color, core)
     surface.blit(
         g,
         g.get_rect(center=(round(center[0]), round(center[1]))),

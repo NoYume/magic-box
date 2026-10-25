@@ -34,8 +34,16 @@ def test_glow_is_cached_per_radius_step(theme):
     center, edge = g.get_at((24, 24)), g.get_at((0, 0))
     assert center[0] > 200 and center[1] == 0 and tuple(edge)[:3] == (0, 0, 0)
     assert theme.glow(17, (255, 0, 0)).get_at((24, 24))[1] > 200  # white core on top
-    theme.prewarm(40)
-    assert (40, "fall") in theme._glows and (8, "core") in theme._glows
+    theme.prewarm([((0, 255, 0), False, 30)])
+    assert (theme.glow_steps[-1], "fall") in theme._glows and (8, "core") in theme._glows
+    assert (32, (0, 255, 0), False) in theme._glows and (40, (0, 255, 0), False) not in theme._glows
+
+
+def test_glow_steps_are_bounded_by_glow_max(theme):
+    steps = theme.glow_steps
+    assert steps == sorted(steps) and steps[-1] == CFG["render"]["projectiles"]["glow_max_px"]
+    assert theme.glow_step(10_000) == steps[-1] and theme.glow_step(1) == steps[0]
+    assert all(theme.glow_step(r) >= min(r, steps[-1]) for r in range(1, 400))
 
 
 def test_display_font_resolves_and_falls_back(theme):

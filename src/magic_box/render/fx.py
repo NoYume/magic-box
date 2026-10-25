@@ -89,6 +89,9 @@ def event_target(e: GameEvent) -> int | None:
     return None
 
 
+PARTICLE_SIZE_MAX = 14.0  # largest particle radius at spawn; drawn up to 1.6x that
+
+
 class Fx:
     def __init__(
         self, cfg: Mapping, theme: Theme, layout: Sequence[HalfLayout], seed: int = 3
@@ -241,6 +244,15 @@ class Fx:
         elif kind == "match_start":
             for slot in (0, 1):
                 self._glow(slot, c["gold"], 0.8)
+
+    def glow_tints(self) -> list[tuple[RGB, bool, float]]:
+        """Every particle glow tint (both core styles), for `Theme.prewarm`."""
+        c, f = self.theme.c, self.f
+        colors = {self._spell_rgb(s) for s in self.family} | {self._spell_rgb(None), c["gold"]}
+        colors |= {rgb(f[k]) for k in ("dodge_rgb", "block_rgb", "heal_rgb", "buff_rgb")}
+        colors |= set(self.effect_rgb.values())
+        top = PARTICLE_SIZE_MAX * 1.6
+        return [(col, core, top) for col in sorted(colors) for core in (True, False)]
 
     # -- spawners ---------------------------------------------------------------
 

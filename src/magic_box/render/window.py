@@ -23,7 +23,9 @@ from magic_box.render.fx import Fx
 from magic_box.render.hud import Hud
 from magic_box.render.layout import Rect, compute_layout
 from magic_box.render.projectiles import draw_projectiles
+from magic_box.render.projectiles import glow_tints as projectile_glow_tints
 from magic_box.render.scenes import draw_scene, make_style
+from magic_box.render.scenes.victory import glow_tints as victory_glow_tints
 from magic_box.render.style import Theme, lerp_rgb, make_background, pulse
 
 ALL_KEY_CODES = tuple(
@@ -51,13 +53,17 @@ class Window:
         pygame.display.set_caption("Magic Box")
         self.clock = pygame.time.Clock()
         self.theme = Theme(self.render_cfg)
-        self.theme.prewarm(int(self.render_cfg["projectiles"]["glow_max_px"]))
         self.hud = Hud(cfg, self.theme)
         self.scene_style = make_style(self.render_cfg["scenes"], self.theme, cfg)
         self.proj_font = pygame.font.Font(None, self.render_cfg["projectiles"]["font_px"])
         self.layout = compute_layout(self.width, self.height, self.render_cfg)
         self.background = make_background(self.width, self.height, self.theme)
         self.fx = Fx(cfg, self.theme, self.layout)
+        self.theme.prewarm(
+            projectile_glow_tints(self.theme, self.render_cfg["projectiles"])
+            + self.fx.glow_tints()
+            + victory_glow_tints(self.theme)
+        )
         self.audio = Audio(cfg, enabled=not headless)
         self.opp_smoothers = (
             CropSmoother(self.render_cfg["crop_smoothing"]),

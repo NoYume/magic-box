@@ -225,7 +225,10 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
     family: {basic: basic, fireball: fire, inferno: fire, flame_wall: fire, bolt: lightning,
              chain: lightning, static_field: lightning, judgment: holy, holy_light: holy, heal: holy}
     glow_scale: 2.4           # glow radius / core radius
-    glow_max_px: 240          # glow sprites are cached per 8 px step up to this radius
+    glow_max_px: 224          # largest glow radius (bigger requests are clamped)
+    glow_step_px: 8           # glow sprites are cached every 8 px up to glow_big_from_px,
+    glow_big_from_px: 64      #   then every glow_big_step_px up to glow_max_px
+    glow_big_step_px: 32
     trail_steps: 6            # ghost copies behind the projectile
     trail_spacing: 0.04       # progress between trail copies
     dodge_ring_px: 10

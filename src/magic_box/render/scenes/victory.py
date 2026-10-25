@@ -10,12 +10,18 @@ import pygame
 
 from magic_box.core.contracts import GameView, PlayerView
 from magic_box.render.scenes import SceneStyle, card, headline, stat_lines, wrap_text
-from magic_box.render.style import blit_glow, draw_chip, lerp_rgb, pulse
+from magic_box.render.style import Theme, blit_glow, draw_chip, headline_glow_rgb, lerp_rgb, pulse
 
 CARD_TOP = 230
 CARD_H = 420
 STAT_ROW_H = 38
 CHRONICLE_TOP = 676
+
+
+def glow_tints(theme: Theme) -> list:
+    """The headline glow tints (P1, P2, draw), for `Theme.prewarm`."""
+    top = float(theme.glow_steps[-1])
+    return [(headline_glow_rgb(theme, theme.slot_rgb(s)), False, top) for s in (0, 1, None)]
 
 
 def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
@@ -25,7 +31,7 @@ def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
     w, h = surface.get_size()
     win = view.winner_slot
     col = th.slot_rgb(win) if win is not None else c["gold"]
-    blit_glow(surface, th, (w // 2, 120), 240, lerp_rgb(col, c["black"], 0.55), core=False)
+    blit_glow(surface, th, (w // 2, 120), th.glow_steps[-1], headline_glow_rgb(th, col), core=False)
     text = headline(view)
     px = th.title_px["headline"]
     font = th.font_px(px, display=True)

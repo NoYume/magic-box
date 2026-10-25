@@ -55,6 +55,18 @@ def spell_family(spell_id: str, cfg_proj: Mapping) -> str:
     return cfg_proj.get("family", {}).get(spell_id, "basic")
 
 
+def glow_tints(theme: Theme, cfg_proj: Mapping) -> list[tuple[tuple[int, int, int], bool, float]]:
+    """Every glow tint projectiles use (one per family), for `Theme.prewarm`."""
+    families = set(cfg_proj.get("family", {}).values()) | {"basic"}
+    colors = {theme.c[f] for f in families if f in theme.c}
+    return [(c, True, float(cfg_proj["glow_max_px"])) for c in sorted(colors)]
+
+
+def _glow_rgb(family: str, theme: Theme):
+    """Glows are tinted per family (a bounded set the cache prebuilds), cores per spell."""
+    return theme.c.get(family, theme.c["basic"])
+
+
 def _spell_rgb(p: ProjectileView, cfg_proj: Mapping) -> tuple[int, int, int]:
     return rgb(cfg_proj["rgb"].get(p.spell_id, cfg_proj["default_rgb"]))
 
@@ -132,6 +144,7 @@ def _draw_styled(
 ) -> tuple[tuple[float, float], float]:
     family = spell_family(p.spell_id, cfg_proj)
     color = _spell_rgb(p, cfg_proj)
+    glow_rgb = _glow_rgb(family, theme)
     glow_scale = float(cfg_proj["glow_scale"])
     glow_max = float(cfg_proj["glow_max_px"])
     steps, spacing = int(cfg_proj["trail_steps"]), float(cfg_proj["trail_spacing"])
@@ -143,10 +156,10 @@ def _draw_styled(
             continue
         c_k, r_k = _screen_at(p, prog, half, crop, cfg_proj)
         fade = 1.0 - k / (steps + 1)
-        blit_glow(surface, theme, c_k, min(glow_max, r_k * glow_scale * 0.6 * fade), color)
+        blit_glow(surface, theme, c_k, min(glow_max, r_k * glow_scale * 0.6 * fade), glow_rgb)
         if tail is None:
             tail = c_k
-    blit_glow(surface, theme, center, min(glow_max, radius * glow_scale), color)
+    blit_glow(surface, theme, center, min(glow_max, radius * glow_scale), glow_rgb)
     rng = random.Random(int(t * 30) * 7919 + sum(map(ord, p.spell_id)) + round(p.origin_px[0]))
     if family == "fire":
         _draw_fire(surface, center, radius, color, rng, theme)
