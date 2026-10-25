@@ -208,7 +208,7 @@ Per-machine overrides go in `config.local.yaml` (gitignored, deep-merged over `c
 | `uv run python -m magic_box --fake` | Run with keyboard players. |
 | `uv run --env-file .env python -m magic_box` | Live mode; `.env` holds `META_MODEL_API_KEY`. |
 | `uv run python -m magic_box --help` | Flags: `--fake`, `--replay DIR`, `--record DIR`, `--debug` (overlay on, perf printed to stderr), `--fullscreen`, `--headless`, `--config PATH`, `--max-ticks N`. |
-| `scripts/run_demo.sh [--fake] [--windowed] [--no-record] [--dry-run] [-- GAME_ARGS...]` | Demo launcher. On the Jetson: fullscreen and `--env-file .env`. Records each run to `recordings/<timestamp>/` with `game.log`, restarts on a crash (at most 5 in 60 s). `Esc` or Ctrl-C ends it. |
+| `scripts/run_demo.sh [--fake] [--windowed] [--no-record] [--dry-run] [-- GAME_ARGS...]` | Demo launcher. On the Jetson: fullscreen and `--env-file .env`. Records each run to `recordings/<timestamp>/` with `game.log`, restarts on a crash (at most 5 in 60 s). Exit code 3 means perception gave up (five deaths, after it had delivered frames): the launcher restarts the whole box. A laptop with no `pyzed` never delivers a frame, so it keeps running with STEP INTO VIEW instead. `Esc` or Ctrl-C ends it. |
 | `uv run pytest` | Run all tests. |
 | `uv run ruff check` / `uv run ruff format --check` | Lint and format check. |
 | `uv run python scripts/check_env.py [--laptop] [--network]` | Environment check (Python, JetPack, RAM, pyzed, ZED camera and `zed_x_daemon`, CUDA, cv2, audio devices, API key; `--network` probes the Meta API). |
@@ -216,6 +216,8 @@ Per-machine overrides go in `config.local.yaml` (gitignored, deep-merged over `c
 | `uv run python scripts/record_session.py [--seconds N] [--out PATH]` | Record the live ZED X to an SVO2 file in `recordings/`. Exit 2 on a camera error or no `pyzed`. |
 | `uv run --env-file .env python scripts/check_spark.py [--classes P1 P2] [--names P1 P2] [--chronicle] [--reasoning-effort E]` | Live Spark check: latency, reply model, each incantation marked `[spark]` or `[fallback]`. |
 | `uv run --env-file .env python scripts/check_muse.py [--phrase TEXT ...] [--wav F ...] [--record S --slot 0\|1] [--keywords words\|phrases\|none ...] [--hold S] [--events]` | Live Muse check: partial and charge latency, spell matching, a suggested `game.charge_window_s`. Default audio is macOS `say`; on the Jetson use `--record` with the real mics. |
+| `uv run pytest tests/test_e2e.py` | End-to-end tests that drive the real game loop through a whole match (part of `uv run pytest`). |
+| `uv run python scripts/soak.py --seconds 600 [--fast]` | Soak test: fake mode, headless, random inputs; reports fps, RSS and growth, exits 1 on a crash or unbounded growth. |
 | `scripts/sync_to_jetson.sh` | rsync the repo from a laptop to the Jetson (`JETSON_HOST`, `JETSON_DIR` override the defaults). |
 
 The Jetson session, in order, is `docs/runbook.md`. `bench_tracking.py` is the hour-1 go/no-go for two-person tracking. It prints GO or NO-GO from the measured fps and the share of frames with two people. On NO-GO, retry with `--body-format BODY_18`. To tune offline, record an SVO with `record_session.py`, then set `camera.svo_path` in `config.local.yaml` and run the game as usual (playback loops; perception handles the `cam_t` rewind).

@@ -13,7 +13,7 @@
 
 **Basic attack:** a push with no charged spell. Free, 8 damage, 0.8 s cooldown, 0.7 s travel. The knight's main source of damage.
 
-**Release grace** (**decided overnight, Adetola to confirm**): the voice charge lands about 0.4 s after the player stops speaking, so a player who pushes on the last word would otherwise throw a basic attack. When the player's mic is on, an uncharged push waits up to 0.6 s (`release_grace_s`). If a matching charge lands in that time, the spell fires with that push. Otherwise the basic attack fires when the wait ends. With the mic off (keyboard play) there is no wait. If basic attacks feel laggy, lower `release_grace_s`.
+**Release grace** (**decided overnight, Adetola to confirm**): the voice charge lands about 0.4 s after the player stops speaking, so a player who pushes on the last word would otherwise throw a basic attack. When the player's mic is on, an uncharged push waits up to 0.6 s (`release_grace_s`). If a matching charge lands in that time, the spell fires with that push. Otherwise the basic attack fires when the wait ends. With the mic off (keyboard play) there is no wait. A pose that is already held (arm overhead, hands together) releases a buff charge that lands late: the buff fires as soon as the charge arrives. If basic attacks feel laggy, lower `release_grace_s`.
 
 ## Damage
 

@@ -43,7 +43,7 @@ There are nine spells, three per class. Six do more than damage: a shield that b
 - **Three processes**, started with `spawn` and supervised (a crashed child restarts):
   - **Perception** is the only code that touches the ZED SDK. It runs depth and body tracking for two people, assigns them to player slots, detects pushes, poses and zones, and writes the camera image into a shared-memory double buffer.
   - **Voice** runs one Muse Voice Transcribe WebSocket per player mic, with that player's incantation words sent as keywords. It matches partial transcripts against only that player's spells with fuzzy matching.
-  - **Game** runs at 60 fps in pygame-ce and never blocks: fusion of body and voice into actions, the game rules, and the renderer. Muse Spark calls run on background threads with an 8 s deadline and a fallback.
+  - **Game** is a pygame-ce loop that never blocks [TODO 08:00: add the measured fps on the Jetson]: fusion of body and voice into actions, the game rules, and the renderer. Muse Spark calls run on background threads with an 8 s deadline and a fallback.
 - **Contracts:** every message between processes is a typed dataclass that round-trips to JSON lines. That gave us `--fake` mode (keyboard players and a synthetic camera) to build the game on laptops, and `--record` / `--replay` to replay real sessions.
 - **Visuals and sound:** a HUD per player, five scenes, hit and K.O. effects, per-element projectiles with glows and trails, and sounds synthesized with numpy at startup. Titles use Cinzel Decorative (SIL Open Font License).
 - **Tests:** 865 automated tests, run headless in GitHub Actions with Ruff lint and format checks.

@@ -186,7 +186,14 @@ Without the launcher: `DISPLAY=:0 uv run --env-file .env python -m magic_box --f
 
 What a good start looks like:
 1. **Boot** lists `camera`, `mic P1`, `mic P2`, `network` and `api key`, each with a check or a cross. It goes to the lobby once the camera has sent a frame (2 s at the earliest), or at 8 s whatever the checks say.
-2. **Lobby** banner: `SAY NAME · SAY FIRE, LIGHTNING OR HOLY · HANDS UP`. Each player's card shows TRACKED and MIC OK.
+2. **Lobby** banner: `SAY NAME · SAY FIRE, LIGHTNING OR HOLY · HANDS UP`. Each player's card shows TRACKED and MIC OK. Say your name and class, then **wait until your card shows your name and class before raising your hands**: the final transcript arrives about 3 s after you stop talking.
+
+**If something is wrong at the venue**
+- **CAMERA RECONNECTING for more than 30 s:** press `Esc` and rerun the launcher. Do not unplug the camera. If perception dies five times (the count resets after `pipeline.restart_reset_s`, 60 s, of healthy running) after it had delivered frames, the game exits with code 3 and prints `perception gave up`; `run_demo.sh` then restarts the whole box by itself. A laptop without `pyzed` never delivered a frame, so it does not exit.
+- **`check_env.py` doesn't list both mics:** swap in the spare mic before starting. If one mic fails to open at start, only that player gets `no mic` (MIC OFF) and the other keeps working; spell keys still work for the dead one.
+- **Wi-Fi is down:** the boot `network` check fails and the game uses the config incantations and the template chronicle at once, with no 8 s wait. **Restarting the game re-probes the network**, so after Wi-Fi comes back, restart it (`Esc`, then the launcher).
+- **The ZED takes a long time to open:** time from launch to the first frame in the boot log, then set `pipeline.camera_boot_timeout_s` (5.0) above it in `config.local.yaml`. Until then a slow open shows a failed `camera` check.
+- If the voice process dies, both mics show MIC OFF until it restarts and connects again.
 
 ## 7. Tune
 
@@ -220,8 +227,10 @@ Change values in `config.local.yaml` on the Jetson, then quit (`Esc`) and start 
 | Zone readout disagrees with the floor tape | `perception.zones.danger_max_m` (1.6), `far_min_m` (2.4) | Match the tape, or move the tape. |
 | Every hit lands at the same multiplier | `game.combat.speed_ref_mps` (2.0) | `Push.speed` is now the punch's peak. Check `best_push_mps` on the victory screen and set the reference near a typical punch. |
 | Loading card shows the config incantations (Spark fell back) | `ai.timeout_s` (8), `game.loading_max_s` (10) | Check Wi-Fi first (phone hotspot). If Spark times out often, raise `ai.timeout_s` and keep `game.loading_max_s` above it. |
+| Voice sessions take too long to be ready at the fight | `game.loading_read_s` (4.0) | The loading card stays up this long after the incantations arrive. The Muse sessions open as soon as the incantations are known (handshake 0.4-1.1 s). Raise it if players need longer to read. |
+| A child process keeps dying and the box restarts too often | `pipeline.restart_reset_s` (60), `pipeline.max_restarts` (5) | A child that runs `restart_reset_s` without dying gets its restart count back. |
 | Sound too loud or too quiet | `render.audio.volume` (0.6) | Adjust. `render.audio.enabled: false` mutes. |
-| K.O. effect gets cut off | `game.ko_hold_s` (2.5), `render.fx.ko_s` (2.0) | Keep `ko_hold_s` at least `fx.ko_s`. |
+| K.O. effect gets cut off | `game.ko_hold_s` (2.5), `render.fx.ko_s` (2.5) | Keep `ko_hold_s` at least `fx.ko_s`. |
 
 **Jetson fps fallbacks.** If render fps drops below 60, try these in order (details in `src/magic_box/render/CLAUDE.md`):
 1. `render.crop_cache: true` (the default): reuses the scaled crop while it barely moves.
@@ -297,7 +306,7 @@ Run with `-- --debug` so the overlay is one key away. Tick each line, and write 
 - [ ] Damage rises when the players stand closer: the distance multiplier runs from ×1.4 at 1.2 m to ×0.7 at 2.8 m, for the attacker at release and the defender at impact.
 - [ ] One player steps out for more than 2 s: STEP INTO VIEW, the fight freezes; stepping back resumes it.
 - [ ] One player stays out about 22 s (2 s to pause, then `abandon_after_s` 20 s): the match ends and the tracked player wins.
-- [ ] KO: the fight freezes for `game.ko_hold_s` (2.5 s) while the K.O. overlay and slow-motion effects play (`render.fx.ko_s`, 2.0 s), then victory.
+- [ ] KO: the fight freezes for `game.ko_hold_s` (2.5 s) while the K.O. overlay and slow-motion effects play (`render.fx.ko_s`, 2.5 s), then victory.
 - [ ] Time-out at 90 s: higher HP wins.
 
 **Sound** (synthesized at startup with numpy; nobody has heard it on real speakers yet)
