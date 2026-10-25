@@ -6,6 +6,7 @@ Owner: Nikhil
 import argparse
 import os
 import sys
+import traceback
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -45,6 +46,22 @@ def hard_exit(code: int) -> None:
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(code)
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Process entry: run, then `hard_exit` with the right code even after a crash."""
+    try:
+        code = run(argv)
+    except SystemExit as e:  # argparse errors, --help
+        code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
+        if isinstance(e.code, str):
+            print(e.code, file=sys.stderr)
+    except KeyboardInterrupt:
+        code = 130
+    except BaseException:
+        traceback.print_exc()
+        code = 1
+    hard_exit(code)
 
 
 def run(argv: Sequence[str] | None = None) -> int:

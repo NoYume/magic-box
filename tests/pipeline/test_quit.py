@@ -24,3 +24,25 @@ def test_module_entry_exits_fast_with_run_code():
         capture_output=True,
     )
     assert done.returncode == 0 and time.monotonic() - start < 15
+
+
+def test_uncaught_error_prints_traceback_and_exits_1_fast():
+    start = time.monotonic()
+    done = subprocess.run(
+        [sys.executable, "-m", "magic_box", "--fake", "--config", "no-such-config.yaml"],
+        timeout=30,
+        capture_output=True,
+        text=True,
+    )
+    assert done.returncode == 1 and "Traceback" in done.stderr
+    assert time.monotonic() - start < 15
+
+
+def test_argument_errors_keep_exit_code_2():
+    done = subprocess.run(
+        [sys.executable, "-m", "magic_box", "--bogus-flag"],
+        timeout=30,
+        capture_output=True,
+        text=True,
+    )
+    assert done.returncode == 2 and "usage" in done.stderr.lower()
