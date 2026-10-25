@@ -333,6 +333,9 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
     glow_s: 1.2
     ko_s: 2.5                 # KO banner + slow motion; keep equal to game.ko_hold_s (validated <=; the frozen fight after a KO)
     ko_slowmo: 0.35           # FX time runs at this rate during the KO banner
+    ko_back_alpha: 150        # cinematic dim behind the centered K.O.
+    ko_band_h_frac: 0.28      # height of the center banner / screen height
+    ko_line_px: 4             # winner-colored rules around the center banner
     banner_pop_s: 0.22
     hit_rgb: [255, 50, 40]
     damage_rgb: [255, 235, 120]
