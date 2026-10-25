@@ -11,7 +11,7 @@ Owner: Daniel
 import mimetypes
 from http import HTTPStatus
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 DEFAULT_GAME_DIR = Path(__file__).resolve().parent.parent / "game"
 # The game defaults to the webcam source; served from the box, it should read the ZED stream.
@@ -78,3 +78,31 @@ def _with_length(response):
         return None
     status, headers, body = response
     return status, {**headers, "Content-Length": str(len(body)), "Connection": "close"}, body
+
+
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def same_origin_websockets(respond):
+    """Refuse WebSocket handshakes started by other sites' pages, then defer to `respond`.
+
+    Browsers apply no same-origin policy to WebSockets, so without this any page a player has open
+    could read the camera stream or write to the debug log. Allowed: no Origin (scripts, not
+    browsers), a page on the host the client used to reach the tracker (any port, so the dev
+    server works too), and pages served from the client's own machine.
+    """
+
+    def guarded(path, headers):
+        origin = headers.get("Origin")
+        if origin and headers.get("Upgrade", "").lower() == "websocket":
+            origin_host = (urlsplit(origin).hostname or "").lower()
+            tracker_host = (urlsplit(f"//{headers.get('Host', '')}").hostname or "").lower()
+            if origin_host != tracker_host and origin_host not in LOCAL_HOSTS:
+                return (
+                    HTTPStatus.FORBIDDEN,
+                    {"Content-Type": "text/plain"},
+                    b"cross-origin refused\n",
+                )
+        return respond(path, headers) if respond else None
+
+    return guarded

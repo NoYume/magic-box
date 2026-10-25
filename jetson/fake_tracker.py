@@ -19,7 +19,12 @@ import cv2
 import numpy as np
 import websockets
 from debug_log import DEFAULT_LOG_DIR, DebugLog, chain_http, receive
-from static_site import DEFAULT_GAME_DIR, as_process_request, static_site
+from static_site import (
+    DEFAULT_GAME_DIR,
+    as_process_request,
+    same_origin_websockets,
+    static_site,
+)
 
 PORT = 8765
 FPS = 30
@@ -115,7 +120,8 @@ async def main():
         finally:
             clients.discard(ws)
 
-    process_request = as_process_request(chain_http(debug_log, static_site(DEFAULT_GAME_DIR)))
+    routes = chain_http(debug_log, static_site(DEFAULT_GAME_DIR))
+    process_request = as_process_request(same_origin_websockets(routes))
     async with websockets.serve(handler, "0.0.0.0", PORT, process_request=process_request):
         print(f"fake tracker on ws://localhost:{PORT}, game page on http://localhost:{PORT}/")
         start = time.time()

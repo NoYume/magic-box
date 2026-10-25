@@ -22,7 +22,12 @@ import numpy as np
 import pyzed.sl as sl
 import websockets
 from debug_log import DEFAULT_LOG_DIR, DebugLog, chain_http, receive
-from static_site import DEFAULT_GAME_DIR, as_process_request, static_site
+from static_site import (
+    DEFAULT_GAME_DIR,
+    as_process_request,
+    same_origin_websockets,
+    static_site,
+)
 
 # Indices into the BODY_34 keypoint array.
 KEYPOINTS = {
@@ -213,7 +218,7 @@ async def serve(capture, port, static_dir, log_dir):
             clients.discard(ws)
 
     site = static_site(static_dir) if static_dir else None
-    hook = as_process_request(chain_http(debug_log, site))
+    hook = as_process_request(same_origin_websockets(chain_http(debug_log, site)))
     async with websockets.serve(handler, "0.0.0.0", port, max_size=None, process_request=hook):
         print(f"[tracker] streaming on ws://0.0.0.0:{port}")
         if static_dir:

@@ -48,3 +48,21 @@ def test_hook_speaks_the_new_api(tmp_path):
     assert response.headers["Content-Type"].startswith("text/javascript")
     Request.headers = {"Upgrade": "websocket"}
     assert hook(object(), Request()) is None
+
+
+def test_refuses_websocket_handshakes_from_other_sites(tmp_path):
+    guarded = static_site.same_origin_websockets(make_site(tmp_path))
+
+    def handshake(origin=None, host="jetson:8765"):
+        headers = {"Upgrade": "websocket", "Host": host}
+        if origin:
+            headers["Origin"] = origin
+        return guarded("/", headers)
+
+    assert handshake("http://jetson:8765") is None  # the tracker's own page
+    assert handshake("http://jetson:5173") is None  # the dev server on the same host
+    assert handshake("http://localhost:5173") is None  # a page served from this machine
+    assert handshake() is None  # scripts send no Origin
+    assert handshake("https://evil.example")[0] == HTTPStatus.FORBIDDEN
+    assert handshake("http://jetson.evil.example:8765")[0] == HTTPStatus.FORBIDDEN
+    assert guarded("/index.html", {"Origin": "https://evil.example"})[0] == HTTPStatus.OK
