@@ -255,6 +255,12 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
       holy: [255, 225, 120]
       basic: [235, 235, 255]
       mana: [70, 120, 255]
+      white: [255, 255, 255]
+      black: [0, 0, 0]
+      ink: [10, 10, 16]        # marks and dark chip text
+      icon_bg: [20, 16, 30]
+      fire_hot: [255, 230, 120]
+      fire_core: [255, 240, 200]
     panel_alpha: 200
     radius_px: 14
   hud:                        # owner: Adetola

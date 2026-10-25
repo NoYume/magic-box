@@ -181,6 +181,8 @@ def draw_bar(
     ghost_frac: float = 0.0,
     ghost: RGB | None = None,
     radius: int = 8,
+    outline: RGB | None = None,
+    shine: RGB | None = None,
 ) -> None:
     """A rounded bar: back, a ghost segment up to `ghost_frac`, then the fill up to `frac`."""
     pygame.draw.rect(surface, back, rect, border_radius=radius)
@@ -191,14 +193,15 @@ def draw_bar(
     fw = round(rect.w * frac)
     if fw > 0:
         pygame.draw.rect(surface, fill, (rect.x, rect.y, fw, rect.h), border_radius=radius)
-        hi = lerp_rgb(fill, (255, 255, 255), 0.35)
+        hi = lerp_rgb(fill, shine if shine is not None else fill, 0.35)
         pygame.draw.rect(
             surface,
             hi,
             (rect.x + 4, rect.y + 3, max(0, fw - 8), max(2, rect.h // 5)),
             border_radius=3,
         )
-    pygame.draw.rect(surface, (0, 0, 0), rect, 2, border_radius=radius)
+    if outline is not None:
+        pygame.draw.rect(surface, outline, rect, 2, border_radius=radius)
 
 
 def ring_points(center, r_out: float, r_in: float, frac: float, steps: int = 40) -> list:
@@ -247,7 +250,8 @@ def draw_chip(
     surface, theme: Theme, text: str, font: str, pos, color: RGB, anchor: str = "topleft"
 ) -> pygame.Rect:
     """A pill-shaped status chip (MIC OK, TRACKED, ...)."""
-    img = theme.text(text, font, (0, 0, 0) if sum(color) > 380 else theme.c["text"], shadow=False)
+    ink = theme.c["ink"] if sum(color) > 380 else theme.c["text"]
+    img = theme.text(text, font, ink, shadow=False)
     w, h = img.get_width() + 24, img.get_height() + 10
     rect = pygame.Rect(0, 0, w, h)
     setattr(rect, anchor, (round(pos[0]), round(pos[1])))
@@ -256,12 +260,13 @@ def draw_chip(
     return rect
 
 
-def draw_effect_icon(surface, kind: str, center, size: int, color: RGB) -> None:
+def draw_effect_icon(
+    surface, kind: str, center, size: int, color: RGB, bg: RGB, slash: RGB
+) -> None:
     """Procedural icon per effect kind: shield, star (empowered), drop (mana_slow), hourglass."""
     cx, cy = center
     s = size / 2
-    dark = (20, 16, 30)
-    pygame.draw.circle(surface, dark, (round(cx), round(cy)), round(s))
+    pygame.draw.circle(surface, bg, (round(cx), round(cy)), round(s))
     pygame.draw.circle(surface, color, (round(cx), round(cy)), round(s), 3)
     i = s * 0.62
     if kind == "shield":
@@ -285,7 +290,7 @@ def draw_effect_icon(surface, kind: str, center, size: int, color: RGB) -> None:
         pts = [(cx, cy - i), (cx + i * 0.65, cy + i * 0.25), (cx - i * 0.65, cy + i * 0.25)]
         pygame.draw.polygon(surface, color, pts)
         pygame.draw.circle(surface, color, (round(cx), round(cy + i * 0.3)), round(i * 0.62))
-        pygame.draw.line(surface, (240, 60, 60), (cx - i, cy + i), (cx + i, cy - i), 4)
+        pygame.draw.line(surface, slash, (cx - i, cy + i), (cx + i, cy - i), 4)
     else:  # slow: hourglass
         pts = [
             (cx - i * 0.7, cy - i),

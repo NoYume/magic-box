@@ -195,7 +195,7 @@ class Fx:
             winner = data.get("winner")
             self.ko_rgb = self.theme.slot_rgb(winner) if winner in (0, 1) else rgb(f["ko_rgb"])
             for slot in (0, 1):
-                self._flash(slot, (255, 255, 255))
+                self._flash(slot, c["white"])
         elif kind == "match_start":
             for slot in (0, 1):
                 self._glow(slot, c["gold"], 0.8)

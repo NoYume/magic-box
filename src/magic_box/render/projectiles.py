@@ -20,8 +20,6 @@ from magic_box.core.contracts import ProjectileView
 from magic_box.render.layout import Rect
 from magic_box.render.style import Theme, blit_glow, lerp_rgb, rgb
 
-WHITE = (255, 255, 255)
-
 
 def _lerp(a: float, b: float, t: float) -> float:
     return a + (b - a) * t
@@ -61,9 +59,9 @@ def _spell_rgb(p: ProjectileView, cfg_proj: Mapping) -> tuple[int, int, int]:
     return rgb(cfg_proj["rgb"].get(p.spell_id, cfg_proj["default_rgb"]))
 
 
-def _draw_fire(surface, center, radius: float, color, rng: random.Random) -> None:
+def _draw_fire(surface, center, radius: float, color, rng: random.Random, th: Theme) -> None:
     cx, cy = center
-    hot = lerp_rgb(color, (255, 230, 120), 0.6)
+    hot = lerp_rgb(color, th.c["fire_hot"], 0.6)
     for _ in range(7):
         a = rng.uniform(0, 2 * math.pi)
         d = radius * rng.uniform(0.4, 1.05)
@@ -75,7 +73,7 @@ def _draw_fire(surface, center, radius: float, color, rng: random.Random) -> Non
             r,
         )
     pygame.draw.circle(surface, color, center, radius * 0.85)
-    pygame.draw.circle(surface, (255, 240, 200), center, radius * 0.45)
+    pygame.draw.circle(surface, th.c["fire_core"], center, radius * 0.45)
 
 
 def _zigzag(start, end, rng: random.Random, jitter: float, segments: int = 6) -> list:
@@ -92,21 +90,21 @@ def _zigzag(start, end, rng: random.Random, jitter: float, segments: int = 6) ->
     return pts
 
 
-def _draw_lightning(surface, center, radius: float, color, rng: random.Random, tail) -> None:
+def _draw_lightning(surface, center, radius: float, color, rng: random.Random, tail, white) -> None:
     pygame.draw.circle(surface, color, center, radius * 0.8)
-    pygame.draw.circle(surface, WHITE, center, radius * 0.45)
+    pygame.draw.circle(surface, white, center, radius * 0.45)
     width = max(2, round(radius / 14))
     for _ in range(4):
         a = rng.uniform(0, 2 * math.pi)
         end = (center[0] + radius * 1.9 * math.cos(a), center[1] + radius * 1.9 * math.sin(a))
-        pygame.draw.lines(surface, WHITE, False, _zigzag(center, end, rng, radius * 0.35, 4), width)
+        pygame.draw.lines(surface, white, False, _zigzag(center, end, rng, radius * 0.35, 4), width)
     if tail is not None:
         pts = _zigzag(tail, center, rng, radius * 0.6, 7)
         pygame.draw.lines(surface, color, False, pts, width + 3)
-        pygame.draw.lines(surface, WHITE, False, pts, width)
+        pygame.draw.lines(surface, white, False, pts, width)
 
 
-def _draw_holy(surface, center, radius: float, color, t: float) -> None:
+def _draw_holy(surface, center, radius: float, color, t: float, white) -> None:
     cx, cy = center
     width = max(2, round(radius / 10))
     for k in range(8):
@@ -121,12 +119,12 @@ def _draw_holy(surface, center, radius: float, color, t: float) -> None:
         )
     pygame.draw.circle(surface, color, center, radius * 1.15, width)
     pygame.draw.circle(surface, color, center, radius * 0.8)
-    pygame.draw.circle(surface, WHITE, center, radius * 0.5)
+    pygame.draw.circle(surface, white, center, radius * 0.5)
 
 
-def _draw_basic(surface, center, radius: float, color) -> None:
+def _draw_basic(surface, center, radius: float, color, white) -> None:
     pygame.draw.circle(surface, color, center, radius * 0.75)
-    pygame.draw.circle(surface, WHITE, center, radius * 0.4)
+    pygame.draw.circle(surface, white, center, radius * 0.4)
 
 
 def _draw_styled(
@@ -151,13 +149,13 @@ def _draw_styled(
     blit_glow(surface, theme, center, min(glow_max, radius * glow_scale), color)
     rng = random.Random(int(t * 30) * 7919 + sum(map(ord, p.spell_id)) + round(p.origin_px[0]))
     if family == "fire":
-        _draw_fire(surface, center, radius, color, rng)
+        _draw_fire(surface, center, radius, color, rng, theme)
     elif family == "lightning":
-        _draw_lightning(surface, center, radius, color, rng, tail)
+        _draw_lightning(surface, center, radius, color, rng, tail, theme.c["white"])
     elif family == "holy":
-        _draw_holy(surface, center, radius, color, t)
+        _draw_holy(surface, center, radius, color, t, theme.c["white"])
     else:
-        _draw_basic(surface, center, radius, color)
+        _draw_basic(surface, center, radius, color, theme.c["white"])
     return center, radius
 
 

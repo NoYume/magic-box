@@ -143,7 +143,13 @@ class Hud:
         if shown > self.h["low_hp_frac"]:
             return self.c["hp_rgb"]
         pulse_ = pulse(t, 10.0)
-        return lerp_rgb(self.c["hp_low_rgb"], (255, 255, 255), 0.35 * pulse_)
+        return lerp_rgb(self.c["hp_low_rgb"], self.theme.c["white"], 0.35 * pulse_)
+
+    def _bar(self, surface, rect, frac_, fill, back, ghost_frac=0.0, ghost=None, radius=8) -> None:
+        c = self.theme.c
+        draw_bar(
+            surface, rect, frac_, fill, back, ghost_frac, ghost, radius, c["black"], c["white"]
+        )
 
     # -- viewer panel -----------------------------------------------------
 
@@ -196,7 +202,7 @@ class Hud:
         hp_h, mana_h = int(self.h["hp_bar_h_px"]), int(self.h["mana_bar_h_px"])
         shown, ghost = self._hp_fracs(me)
         hp_rect = pygame.Rect(x, y, w, hp_h)
-        draw_bar(
+        self._bar(
             surface,
             hp_rect,
             shown,
@@ -216,7 +222,7 @@ class Hud:
         mana = self.mana[me.slot].shown
         mana = frac(me.mana, me.mana_max) if mana is None else mana
         mana_rect = pygame.Rect(x, y + hp_h + 6, w, mana_h)
-        draw_bar(surface, mana_rect, mana, c["mana_rgb"], c["bar_back_rgb"], radius=6)
+        self._bar(surface, mana_rect, mana, c["mana_rgb"], c["bar_back_rgb"], radius=6)
         th.blit_text(
             surface,
             f"MANA {int(me.mana)}",
@@ -240,7 +246,7 @@ class Hud:
         for i, zone in enumerate(("danger", "neutral", "far")):
             col = self.zone_rgb[zone]
             if zone != me.zone:
-                col = lerp_rgb(col, (0, 0, 0), 0.6)
+                col = lerp_rgb(col, th.c["black"], 0.6)
             pygame.draw.rect(surface, col, (x + i * seg_w, my, seg_w - 3, mh), border_radius=5)
         if me.dist > 0:
             mx = x + self._zone_pos(me.dist) * (3 * seg_w - 3)
@@ -268,7 +274,7 @@ class Hud:
             surface, label, "tiny", th.c["ok"] if ready else th.c["dim"], "topleft", (x, y)
         )
         f = 1.0 if ready else 1.0 - frac(me.cooldown_s, self.cooldown_max_s)
-        draw_bar(
+        self._bar(
             surface,
             pygame.Rect(x, y + 22, w, 12),
             f,
@@ -286,7 +292,7 @@ class Hud:
         tx = row.x + 60
         max_w = row.right - tx - 8
         if spell.charged:
-            edge = lerp_rgb(self.c["charge_rgb"], (255, 255, 255), pulse(t, 8.0) * 0.5)
+            edge = lerp_rgb(self.c["charge_rgb"], c["white"], pulse(t, 8.0) * 0.5)
             surface.blit(th.panel(row.w, row.h, c["card_hi"], 230, edge), row.topleft)
             ring = frac(me.charge_s, self.charge_window_s) if me.charge_s > 0 else 1.0
             draw_ring(surface, (cx, cy), 24, 7, ring, self.c["charge_rgb"], c["faint"])
@@ -304,12 +310,13 @@ class Hud:
             th.blit_text(surface, "CHARGED", "tiny", c["dim"], "bottomleft", (tx, row.bottom - 3))
             cue = release_cue(spell.release)
             cue_x = max(name.right, tx + th.font("tiny").size("CHARGED")[0]) + 16
-            font = "big" if th.font("big").size(cue)[0] <= row.right - cue_x - 10 else "text"
+            fits = [f for f in ("huge", "big") if th.font(f).size(cue)[0] <= row.right - cue_x - 10]
+            font = fits[0] if fits else "text"
             th.blit_text(surface, cue, font, c["text"], "midleft", (cue_x, row.centery + 2))
             return
         badge = self.c["mana_rgb"] if can else c["faint"]
         pygame.draw.circle(surface, badge, (cx, cy), 22)
-        pygame.draw.circle(surface, (0, 0, 0), (cx, cy), 22, 2)
+        pygame.draw.circle(surface, c["black"], (cx, cy), 22, 2)
         th.blit_text(
             surface,
             f"{spell.cost:.0f}",
@@ -354,7 +361,15 @@ class Hud:
             col = self.effect_rgb.get(e.kind, th.c["gold"])
             w = size + 96
             surface.blit(th.panel(w, size, th.c["panel"], 190), (x, y))
-            draw_effect_icon(surface, e.kind, (x + size // 2, y + size // 2), size - 6, col)
+            draw_effect_icon(
+                surface,
+                e.kind,
+                (x + size // 2, y + size // 2),
+                size - 6,
+                col,
+                th.c["icon_bg"],
+                th.c["bad"],
+            )
             th.blit_text(
                 surface,
                 EFFECT_LABELS.get(e.kind, e.kind.upper()),
@@ -382,7 +397,7 @@ class Hud:
         )
         rect = pygame.Rect(bar.x, bar.y, bar.w, h)
         shown, ghost = self._hp_fracs(enemy)
-        draw_bar(
+        self._bar(
             surface,
             rect,
             shown,
@@ -404,7 +419,7 @@ class Hud:
         y = back.bottom + 6
         spell = charged_spell(enemy)
         if spell is not None:
-            col = lerp_rgb(c["bad"], (255, 255, 255), 0.4 * pulse(t, 12.0))
+            col = lerp_rgb(c["bad"], c["white"], 0.4 * pulse(t, 12.0))
             text = th.fit_text(f"CHARGING {spell.name.upper()}!", "text", limit_x - bar.x)
             r = th.blit_text(surface, text, "text", col, "topleft", (bar.x, y))
             y = r.bottom + 6
@@ -421,7 +436,7 @@ class Hud:
         surface.blit(th.panel(w, h, c["panel"], 230, edge), (center_x - w // 2, 0))
         col = c["text"]
         if low:
-            col = lerp_rgb(c["bad"], (255, 255, 255), pulse(t, 9.0))
+            col = lerp_rgb(c["bad"], c["white"], pulse(t, 9.0))
         th.blit_text(
             surface, f"{math.ceil(max(0.0, timer_s))}", "big", col, "center", (center_x, h // 2 + 2)
         )

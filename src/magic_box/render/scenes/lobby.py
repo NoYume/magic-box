@@ -105,7 +105,16 @@ def _draw_card(
             y += CLASS_ROW_H
     else:
         th.blit_text(surface, "CLASS", "small", c["dim"], "topleft", (x, y + 8))
-        th.blit_text(surface, class_label(p, classes), "big", slot_rgb, "topleft", (x + 110, y))
+        r = th.blit_text(surface, class_label(p, classes), "big", slot_rgb, "topleft", (x + 110, y))
+        spells = " · ".join(s.name for s in p.spells)
+        th.blit_text(
+            surface,
+            th.fit_text(spells, "small", rect.w - 158),
+            "small",
+            c["gold"],
+            "topleft",
+            (x + 110, r.bottom + 4),
+        )
         y += CLASS_ROW_H
     _ready(surface, style, p, rect.centerx, rect.bottom - 52, t)
 
@@ -119,7 +128,7 @@ def _class_row(
     card(surface, style, rect, edge=slot_rgb if picked else None, hi=picked)
     if picked:
         pygame.draw.circle(surface, slot_rgb, (rect.x + 30, rect.centery), 20)
-        draw_mark(surface, (rect.x + 30, rect.centery), 24, True, (10, 10, 16), 5)
+        draw_mark(surface, (rect.x + 30, rect.centery), 24, True, c["ink"], 5)
     name = th.blit_text(
         surface,
         cv.name.upper(),
@@ -144,7 +153,7 @@ def _ready(surface, style: SceneStyle, p: PlayerView, cx: int, cy: int, t: float
     assert th is not None
     c = th.c
     if p.ready:
-        col = lerp_rgb(c["ok"], (255, 255, 255), 0.3 * pulse(t, 6.0))
+        col = lerp_rgb(c["ok"], c["white"], 0.3 * pulse(t, 6.0))
         text = "READY!"
     else:
         col, text = c["dim"], "RAISE BOTH HANDS"

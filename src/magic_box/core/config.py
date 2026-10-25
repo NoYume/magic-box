@@ -338,6 +338,12 @@ THEME_COLORS: tuple[str, ...] = (
     "holy",
     "basic",
     "mana",
+    "white",
+    "black",
+    "ink",
+    "icon_bg",
+    "fire_hot",
+    "fire_core",
 )
 THEME_FONTS: tuple[str, ...] = ("tiny", "small", "text", "big", "huge", "giant")
 

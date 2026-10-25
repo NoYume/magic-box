@@ -31,6 +31,7 @@ ALL_KEY_CODES = tuple(
 )
 BANNER_PX = 110
 MAX_DT_S = 0.1
+STEP_HINT = "STEP INTO VIEW"
 
 
 class Window:
@@ -150,13 +151,13 @@ class Window:
             return
         pop = self.render_cfg["fx"]["banner_pop_s"]
         age = now - self._banner_since
-        scale = 1.0 + 0.5 * max(0.0, 1.0 - age / pop) if pop > 0 else 1.0
+        scale = 1.0 + 0.3 * max(0.0, 1.0 - age / pop) if pop > 0 else 1.0
         for half in self.layout:
             self._half_banner(view.banner, half.half, scale)
 
     def _half_banner(self, text: str, half: Rect, scale: float) -> None:
         th = self.theme
-        max_w = half.w - 60
+        max_w = half.w - 140
         font = th.font_px(BANNER_PX)
         w = font.size(text)[0]
         if w > max_w:
@@ -193,7 +194,8 @@ class Window:
                 )
                 draw_opponent(self.screen, half.half, surf, crop)
             else:
-                self._step_into_view(half.half, now)
+                if view.banner != STEP_HINT:
+                    self._step_into_view(half.half, now)
             enemy = view.players[half.shows_slot]
             limit_x = half.selfview.x - 10
             self.hud.draw_enemy(self.screen, half.enemy_bar, enemy, limit_x, now)
@@ -250,7 +252,7 @@ class Window:
         col = lerp_rgb(th.c["dim"], th.c["text"], pulse(now, 3.0))
         th.blit_text(
             self.screen,
-            "STEP INTO VIEW",
+            STEP_HINT,
             "huge",
             col,
             "center",

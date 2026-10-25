@@ -38,7 +38,7 @@ def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
         cy = y + ROW_H // 2
         col = c["ok"] if check.ok else c["bad"]
         pygame.draw.circle(surface, col, (rect.x + 70, cy), 32)
-        draw_mark(surface, (rect.x + 70, cy), 40, check.ok, (10, 10, 16), 7)
+        draw_mark(surface, (rect.x + 70, cy), 40, check.ok, c["ink"], 7)
         name = th.blit_text(
             surface, check.name.upper(), "big", c["text"], "midleft", (rect.x + 130, cy)
         )

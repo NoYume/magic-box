@@ -25,7 +25,7 @@ def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
     w, h = surface.get_size()
     win = view.winner_slot
     col = th.slot_rgb(win) if win is not None else c["gold"]
-    blit_glow(surface, th, (w // 2, 120), 240, lerp_rgb(col, (0, 0, 0), 0.55), core=False)
+    blit_glow(surface, th, (w // 2, 120), 240, lerp_rgb(col, c["black"], 0.55), core=False)
     text = headline(view)
     font = th.font_px(170)
     if font.size(text)[0] > w - 120:
@@ -67,7 +67,7 @@ def _stats_card(surface, style: SceneStyle, p: PlayerView, win, x0: int, hw: int
         )
         y += STAT_ROW_H
     if p.ready:
-        ready_rgb = lerp_rgb(c["ok"], (255, 255, 255), 0.3 * pulse(t, 6.0))
+        ready_rgb = lerp_rgb(c["ok"], c["white"], 0.3 * pulse(t, 6.0))
         th.blit_text(
             surface,
             "READY FOR A REMATCH!",
