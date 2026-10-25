@@ -3,10 +3,12 @@ import json
 import pytest
 
 from magic_box.core.contracts import (
+    RELEASE_KINDS,
     Action,
     GameEvent,
     ProjectileView,
     Push,
+    SpellView,
     VoiceConfig,
     VoiceEvent,
 )
@@ -63,3 +65,23 @@ def test_player_state_validates(kwargs):
 def test_action_kind_validated():
     with pytest.raises(ValueError):
         Action(kind="punch", slot=0, t=0.0)
+
+
+def test_speech_and_two_hand_actions_round_trip():
+    speech = Action("speech", 0, 1.0, text="my name is ada")
+    push = Action("push", 1, 2.0, push=Push("R", 2.0, (1.0, 2.0)), two_hand=True, dist=1.8)
+    assert from_json(to_json(speech)) == speech and from_json(to_json(push)) == push
+    assert Action("push", 0, 0.0).two_hand is False and Action("push", 0, 0.0).text == ""
+
+
+def test_status_voice_event_is_valid():
+    ev = VoiceEvent(0, 1.0, "status", "connected", None, 0.0)
+    assert from_json(to_json(ev)) == ev
+
+
+def test_spell_view_release_default_and_validation():
+    assert SpellView("bolt", "Bolt", "x", 20.0, False).release == "push"
+    assert SpellView("heal", "Heal", "x", 40.0, True, "hands_together").release == "hands_together"
+    with pytest.raises(ValueError, match="release"):
+        SpellView("bolt", "Bolt", "x", 20.0, False, "wave")
+    assert RELEASE_KINDS == ("push", "two_hand_push", "arm_overhead", "hands_together")

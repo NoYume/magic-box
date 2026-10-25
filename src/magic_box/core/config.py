@@ -8,6 +8,8 @@ from typing import Any
 
 import yaml
 
+from magic_box.core.contracts import RELEASE_KINDS
+
 Config = dict[str, Any]
 
 REQUIRED_SECTIONS: tuple[str, ...] = (
@@ -35,6 +37,15 @@ CAMERA_MODES: dict[str, tuple[int, int]] = {
     "VGA": (672, 376),
 }
 BODY_FORMATS: tuple[str, ...] = ("BODY_18", "BODY_34", "BODY_38")
+COMBAT_KEYS: tuple[str, ...] = (
+    "speed_ref_mps",
+    "speed_mult_min",
+    "speed_mult_max",
+    "near_m",
+    "near_mult",
+    "far_m",
+    "far_mult",
+)
 
 
 class ConfigError(ValueError):
@@ -116,6 +127,32 @@ def _check_key_spells(cfg: Config, problems: list[str]) -> None:
         problems.append("keys.spells: must define slots 0 and 1")
 
 
+def _check_combat(cfg: Config, problems: list[str]) -> None:
+    if "game" not in cfg:
+        return
+    combat = _get(cfg, "game", "combat")
+    if not isinstance(combat, dict):
+        combat = {}
+    for key in COMBAT_KEYS:
+        if key not in combat:
+            problems.append(f"game.combat.{key}: missing")
+
+
+def _check_voice_and_ai(cfg: Config, problems: list[str]) -> None:
+    if "voice" in cfg:
+        for key in ("api_key_env", "chunk_ms"):
+            if _get(cfg, "voice", key) is None:
+                problems.append(f"voice.{key}: missing")
+    if "ai" in cfg:
+        if _get(cfg, "ai", "api_key_env") is None:
+            problems.append("ai.api_key_env: missing")
+        min_words = _get(cfg, "ai", "min_words")
+        max_words = _get(cfg, "ai", "max_words")
+        if isinstance(min_words, (int, float)) and isinstance(max_words, (int, float)):
+            if min_words > max_words:
+                problems.append("ai.min_words: must be <= ai.max_words")
+
+
 def _check_game(cfg: Config, problems: list[str]) -> None:
     if "game" not in cfg:
         return
@@ -137,6 +174,12 @@ def _check_game(cfg: Config, problems: list[str]) -> None:
             continue
         for spell in spells:
             spell_id = _get(spell, "id")
+            release = _get(spell, "release")
+            if release not in RELEASE_KINDS:
+                problems.append(
+                    f"game.classes.{cls_name}.spells.{spell_id}.release: "
+                    f"must be one of {RELEASE_KINDS}, got {release!r}"
+                )
             where = f"game.classes.{cls_name}.spells.{spell_id}.fallback"
             fallback = _get(spell, "fallback")
             if not isinstance(fallback, dict) or not SLOTS <= set(fallback):
@@ -154,6 +197,8 @@ def validate(cfg: Config) -> list[str]:
     _check_mics(cfg, problems)
     _check_key_spells(cfg, problems)
     _check_game(cfg, problems)
+    _check_combat(cfg, problems)
+    _check_voice_and_ai(cfg, problems)
     return problems
 
 

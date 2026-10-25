@@ -14,9 +14,10 @@ Px = tuple[float, float]  # pixels, unmirrored left image
 SLOTS = (0, 1)
 ZONES = ("danger", "neutral", "far")
 SCENES = ("boot", "lobby", "loading", "fight", "victory")
-VOICE_KINDS = ("incantation", "transcript")
+VOICE_KINDS = ("incantation", "transcript", "status")
 VOICE_MODES = ("transcript", "incantation")
-ACTION_KINDS = ("charge", "push", "pose", "dodge")
+ACTION_KINDS = ("charge", "push", "pose", "dodge", "speech")
+RELEASE_KINDS = ("push", "two_hand_push", "arm_overhead", "hands_together")
 DODGE_KINDS = ("step", "duck")
 GAME_EVENT_KINDS = (
     "match_start",
@@ -101,7 +102,7 @@ class VoiceEvent:
 
     slot: int
     t: float
-    kind: str  # "incantation" | "transcript"
+    kind: str  # "incantation" | "transcript" | "status"
     text: str
     spell_id: str | None
     match_score: float  # 0-100
@@ -115,7 +116,7 @@ class VoiceEvent:
 class Action:
     """Intent to game rules."""
 
-    kind: str  # "charge" | "push" | "pose" | "dodge"
+    kind: str  # "charge" | "push" | "pose" | "dodge" | "speech"
     slot: int
     t: float
     spell_id: str | None = None
@@ -124,6 +125,8 @@ class Action:
     pose: str | None = None
     dodge: str | None = None  # "step" | "duck"
     dist: float = 0.0
+    two_hand: bool = False  # push: other hand crossed the threshold within two_hand_window_s
+    text: str = ""  # speech: final transcript of one speech turn
 
     def __post_init__(self) -> None:
         _check_in("kind", self.kind, ACTION_KINDS)
@@ -154,6 +157,10 @@ class SpellView:
     incantation: str
     cost: float
     charged: bool
+    release: str = "push"  # push | two_hand_push | arm_overhead | hands_together
+
+    def __post_init__(self) -> None:
+        _check_in("release", self.release, RELEASE_KINDS)
 
 
 @dataclass(frozen=True)

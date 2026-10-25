@@ -133,3 +133,59 @@ def test_unknown_body_format_rejected(tmp_path):
     cfg["camera"]["body_format"] = "BODY_70"
     with pytest.raises(ConfigError, match=r"camera\.body_format"):
         load_config(_write(tmp_path, cfg))
+
+
+def test_repo_config_has_phase_tunables():
+    cfg = load_config(ROOT / "config.yaml")
+    assert cfg["intent"]["two_hand_window_s"] == 0.1
+    for key in (
+        "api_key_env",
+        "chunk_ms",
+        "handshake_timeout_s",
+        "reconnect_backoff_s",
+        "reconnect_max_s",
+        "session_max_s",
+        "silence_after_s",
+        "min_keyword_chars",
+        "audio_queue_chunks",
+    ):
+        assert key in cfg["voice"], key
+    assert cfg["ai"]["model"] == "muse-spark-1.3" and cfg["ai"]["min_words"] == 3
+    for key in (
+        "basic_attack_damage",
+        "basic_attack_travel_s",
+        "perfect_mult",
+        "banner_s",
+        "loading_min_s",
+        "loading_max_s",
+        "victory_min_s",
+        "victory_max_s",
+        "pause_after_s",
+        "name_max_chars",
+    ):
+        assert key in cfg["game"], key
+    assert cfg["game"]["combat"]["near_mult"] == 1.4
+    assert cfg["keys"]["fake"][0]["two_hand_push"] == "v"
+    assert cfg["keys"]["fake"][1]["two_hand_push"] == "m"
+    assert "projectiles" in cfg["render"] and "scenes" in cfg["render"]
+
+
+def test_missing_combat_key_rejected(tmp_path):
+    cfg = _base()
+    del cfg["game"]["combat"]["far_mult"]
+    with pytest.raises(ConfigError, match=r"game\.combat\.far_mult"):
+        load_config(_write(tmp_path, cfg))
+
+
+def test_bad_release_rejected(tmp_path):
+    cfg = _base()
+    cfg["game"]["classes"]["fire_mage"]["spells"][0]["release"] = "wave"
+    with pytest.raises(ConfigError, match=r"fireball\.release"):
+        load_config(_write(tmp_path, cfg))
+
+
+def test_min_words_above_max_rejected(tmp_path):
+    cfg = _base()
+    cfg["ai"]["min_words"] = 9
+    with pytest.raises(ConfigError, match=r"ai\.min_words"):
+        load_config(_write(tmp_path, cfg))
