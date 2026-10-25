@@ -54,6 +54,83 @@ async def _idle(should_stop: Callable[[], bool]) -> None:
         await asyncio.sleep(POLL_S)
 
 
+class IncantationTurn:
+    """One session's incantation matching: at most one published match per speech turn.
+
+    Muse's cumulative partials reach the match threshold on a prefix ("lightning answer"
+    scores 80 against "lightning answer my call"), and the whole phrase lands 0.4-0.7 s later
+    (measured live 2026-10-25). So a match under `perfect` is held for up to `hold_s` while a
+    better partial may arrive; a perfect match, `speechEnd`, `speechComplete` or the next
+    `speechStart` publishes the best one at once. `hold_s` 0 publishes the first match.
+    `publish(text, spell_id, score)` may run from a loop timer. Needs a running event loop.
+    `scripts/check_muse.py` drives this same class against the live API.
+    """
+
+    def __init__(
+        self,
+        incantations: Mapping[str, str],
+        threshold: float,
+        perfect: float,
+        hold_s: float,
+        publish: Callable[[str, str, float], None],
+    ) -> None:
+        self._incantations = incantations
+        self._threshold = threshold
+        self._publish = publish
+        self._perfect = perfect
+        self._hold_s = hold_s
+        self._held: tuple[str, str, float] | None = None  # (text, spell_id, score)
+        self._timer: asyncio.TimerHandle | None = None
+        self.armed = True  # a session can open mid-utterance, before its first speechStart
+
+    def handle(self, event: Mapping[str, Any]) -> None:
+        """Feed one Muse event (any type; unknown ones are ignored)."""
+        kind = event.get("type")
+        if kind == "speechStart":
+            self.start()
+        elif kind == "speechEnd":
+            self.flush()
+        elif self.armed and kind in ("transcript", "speechComplete"):
+            text = str(event.get("transcript") or "")
+            match = match_incantation(text, self._incantations, self._threshold)
+            if match is not None:
+                self.offer(text, *match)
+            if kind == "speechComplete":
+                self.flush()
+
+    def start(self) -> None:
+        """speechStart: publish what the last turn held, then re-arm."""
+        self.flush()
+        self.armed = True
+
+    def offer(self, text: str, spell_id: str, score: float) -> None:
+        if not self.armed:
+            return
+        if self._held is None or score > self._held[2]:
+            self._held = (text, spell_id, score)
+        if score >= self._perfect or self._hold_s <= 0:
+            self.flush()
+        elif self._timer is None:
+            self._timer = asyncio.get_running_loop().call_later(self._hold_s, self.flush)
+
+    def flush(self) -> None:
+        """Publish the held match now, if any, and disarm until the next speechStart."""
+        self.cancel()
+        if self._held is not None:
+            held, self._held = self._held, None
+            self.armed = False
+            try:
+                self._publish(*held)
+            except Exception as exc:  # may run as a loop callback: never raise into the loop
+                log_line(f"cannot publish an incantation: {_describe(exc)}")
+
+    def cancel(self) -> None:
+        """Stop the hold timer; a held match is dropped with its session."""
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
+
+
 class _Sessions:
     """Both slots' Muse sessions plus the shared mode, the per-slot wake-ups and the stop flag.
 
@@ -79,6 +156,8 @@ class _Sessions:
         self._sleep = sleep
         self._clock = clock
         self._threshold = v["match_threshold"]
+        self._perfect = v["perfect_threshold"]
+        self._hold_s = v["perfect_hold_s"]
         self._min_chars = v["min_keyword_chars"]
         self._backoff_s = v["reconnect_backoff_s"]
         self._max_s = v["reconnect_max_s"]
@@ -248,27 +327,26 @@ class _Sessions:
         self, slot: int, stream: Any, mode: str, incantations: Mapping[str, str]
     ) -> None:
         """Turn Muse events into VoiceEvents until the socket closes."""
-        armed = True  # a session can open mid-utterance, before its first speechStart
-        async for event in stream.events():
-            kind = event.get("type")
-            if kind == "error":
-                log_line(f"slot {slot}: Muse error: {event.get('message', '')}")
-            elif mode == "incantation":
-                if kind == "speechStart":
-                    armed = True
-                elif armed and kind in ("transcript", "speechComplete"):
-                    text = str(event.get("transcript") or "")
-                    match = match_incantation(text, incantations, self._threshold)
-                    if match is not None:
-                        spell_id, score = match
+
+        def publish(text: str, spell_id: str, score: float) -> None:
+            self._publish(VoiceEvent(slot, self._clock(), "incantation", text, spell_id, score))
+
+        turn = IncantationTurn(incantations, self._threshold, self._perfect, self._hold_s, publish)
+        try:
+            async for event in stream.events():
+                kind = event.get("type")
+                if kind == "error":
+                    log_line(f"slot {slot}: Muse error: {event.get('message', '')}")
+                elif mode == "incantation":
+                    turn.handle(event)
+                elif kind == "speechComplete":
+                    text = str(event.get("transcript") or "").strip()
+                    if text:
                         self._publish(
-                            VoiceEvent(slot, self._clock(), "incantation", text, spell_id, score)
+                            VoiceEvent(slot, self._clock(), "transcript", text, None, 0.0)
                         )
-                        armed = False
-            elif kind == "speechComplete":
-                text = str(event.get("transcript") or "").strip()
-                if text:
-                    self._publish(VoiceEvent(slot, self._clock(), "transcript", text, None, 0.0))
+        finally:
+            turn.cancel()
 
     async def _backoff(self, slot: int, delay: float) -> None:
         """The injected sleep, cut short by stop or a config change."""

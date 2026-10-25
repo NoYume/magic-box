@@ -70,6 +70,8 @@ voice:              # owner: Nikhil (devices: Daniel)
   chunk_ms: 80
   match_threshold: 80
   perfect_threshold: 95
+  perfect_hold_s: 1.0         # hold a sub-perfect match this long for a better partial (live:
+  #                             the whole phrase lands 0.1-0.9 s after a prefix match); 0 = off
   handshake_timeout_s: 5
   reconnect_backoff_s: 1.0
   reconnect_max_s: 10.0
@@ -100,7 +102,7 @@ game:              # owner: Adetola. DRAFT numbers, see docs/game-design.md
   hp_max: 100
   mana_max: 100
   mana_regen_per_s: 8
-  charge_window_s: 3.0
+  charge_window_s: 2.5        # owner: Nikhil. Muse charge latency 0.6 s + 2.0 s reaction (voice/CLAUDE.md)
   dodge_window_s: 0.6
   basic_attack_cooldown_s: 0.8
   basic_attack_damage: 8      # (guess)

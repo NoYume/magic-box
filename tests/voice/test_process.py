@@ -15,6 +15,7 @@ import pytest
 
 from magic_box.core.config import load_config
 from magic_box.core.contracts import VoiceConfig
+from magic_box.voice.matcher import match_incantation
 from magic_box.voice.mic import MicError
 from magic_box.voice.muse_stream import MuseError
 from magic_box.voice.process import BACKOFF_RESET_S, _Sessions, run, serve
@@ -332,6 +333,66 @@ def test_final_text_matched_when_no_partial_matched():
 
     r = run_serve(driver, factory=factory, configs=[VoiceConfig("incantation", INC)])
     assert [e.spell_id for e in r.of_kind("incantation")] == ["fireball"]
+
+
+# Live Muse partials reach the threshold on a prefix: this one scored 91 on 2026-10-25.
+PREFIX = "embers of the forty acres"
+PREFIX_SCORE = match_incantation(PREFIX, INC[0], 80)[1]
+
+
+def incantations_after(events, cfg, wait=None):
+    """Run one incantation-mode session on slot 0 with `events`; optionally keep it open."""
+    second = FakeStream(events)
+    factory = StreamFactory({0: [FakeStream(), second]})
+
+    async def driver(r):
+        await until(second.drained)
+        if wait is not None:
+            await wait(r)
+
+    r = run_serve(driver, cfg=cfg, factory=factory, configs=[VoiceConfig("incantation", INC)])
+    return [(e.spell_id, e.match_score, e.text) for e in r.of_kind("incantation")]
+
+
+def test_prefix_match_waits_for_the_whole_phrase():
+    assert 80 <= PREFIX_SCORE < 95
+    events = [speech_start(), transcript(PREFIX), transcript(PREFIX + " burn")]
+    cfg = fast_cfg(perfect_hold_s=5.0)
+    assert incantations_after(events, cfg) == [("fireball", 100.0, PREFIX + " burn")]
+
+
+def test_held_prefix_match_publishes_when_the_hold_ends():
+    async def wait(r):
+        assert r.of_kind("incantation") == []  # still held
+        await until(lambda: r.of_kind("incantation"))
+
+    events = [speech_start(), transcript(PREFIX), transcript("embers of the forty")]
+    out = incantations_after(events, fast_cfg(perfect_hold_s=0.3), wait)
+    assert out == [("fireball", PREFIX_SCORE, PREFIX)]  # the best partial, not the last
+
+
+def test_speech_end_publishes_a_held_match_at_once():
+    events = [speech_start(), transcript(PREFIX), {"type": "speechEnd", "turnId": 1}]
+    started = time.monotonic()
+    assert incantations_after(events, fast_cfg(perfect_hold_s=30.0)) == [
+        ("fireball", PREFIX_SCORE, PREFIX)
+    ]
+    assert time.monotonic() - started < 5.0
+
+
+def test_next_speech_start_publishes_the_held_match_and_rearms():
+    events = [speech_start(1), transcript(PREFIX), speech_start(2), transcript(PREFIX + " burn")]
+    assert incantations_after(events, fast_cfg(perfect_hold_s=30.0)) == [
+        ("fireball", PREFIX_SCORE, PREFIX),
+        ("fireball", 100.0, PREFIX + " burn"),
+    ]
+
+
+def test_zero_hold_publishes_the_first_match():
+    events = [speech_start(), transcript(PREFIX), transcript(PREFIX + " burn")]
+    assert incantations_after(events, fast_cfg(perfect_hold_s=0)) == [
+        ("fireball", PREFIX_SCORE, PREFIX)
+    ]
 
 
 def test_only_own_players_set_matches():

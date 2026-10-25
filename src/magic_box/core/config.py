@@ -154,6 +154,9 @@ def _check_voice_and_ai(cfg: Config, problems: list[str]) -> None:
         for key in ("api_key_env", "chunk_ms"):
             if _get(cfg, "voice", key) is None:
                 problems.append(f"voice.{key}: missing")
+        hold = _get(cfg, "voice", "perfect_hold_s")
+        if not isinstance(hold, (int, float)) or isinstance(hold, bool) or hold < 0:
+            problems.append(f"voice.perfect_hold_s: must be a number >= 0, got {hold!r}")
     if "ai" in cfg:
         if _get(cfg, "ai", "api_key_env") is None:
             problems.append("ai.api_key_env: missing")
