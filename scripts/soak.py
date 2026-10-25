@@ -208,6 +208,20 @@ class SoakDisplay:
         self.window.close()
 
 
+def render_sizes(window) -> dict[str, int]:
+    """Sizes of the render caches and FX lists (whatever this render version has)."""
+    out: dict[str, int] = {}
+    theme = getattr(window, "theme", None)
+    for name in ("_text", "_panels", "_glows", "_sized_fonts", "_scaled"):
+        if hasattr(theme, name):
+            out[name.strip("_")] = len(getattr(theme, name))
+    fx = getattr(window, "fx", None)
+    for name in ("particles", "texts"):
+        if hasattr(fx, name):
+            out[name] = len(getattr(fx, name))
+    return out
+
+
 class FakeClock:
     def __init__(self, step: float) -> None:
         self.t, self.step = 1000.0, step
@@ -267,6 +281,7 @@ def main(argv=None) -> int:
             "rss_mb": rss_mb(),
             "objects": len(gc.get_objects()),
             "crop_cache": len(getattr(camera_view, "_cache", {})),
+            "render": render_sizes(window),
             "scene": display.view.scene if display.view is not None else "-",
             "matches": sum(results.values()),
             "perf": perf,
@@ -276,7 +291,10 @@ def main(argv=None) -> int:
             f"[{row['t']:6.0f}s] ticks {row['ticks']:6d} fps {row['fps']:5.1f} "
             f"rss {row['rss_mb']:6.1f} MB objects {row['objects']:7d} "
             f"cache {row['crop_cache']} proj_max {max_proj} scene {row['scene']:7s} "
-            f"matches {row['matches']} perf " + " ".join(f"{k}={v:.1f}" for k, v in perf.items()),
+            f"matches {row['matches']} render "
+            + ",".join(f"{k}={v}" for k, v in row["render"].items())
+            + " perf "
+            + " ".join(f"{k}={v:.1f}" for k, v in perf.items()),
             flush=True,
         )
 
@@ -332,6 +350,9 @@ def main(argv=None) -> int:
     print(f"gc objects: start {objs[0]} end {objs[-1]} max {max(objs)}")
     print(f"max projectiles in one view: {max_proj}")
     print(f"crop cache entries at end: {samples[-1]['crop_cache']}")
+    for key in samples[-1]["render"]:
+        sizes = [s["render"].get(key, 0) for s in samples]
+        print(f"render {key}: end {sizes[-1]} max {max(sizes)}")
     print(f"scenes (ticks): {dict(scenes)}")
     print(f"match endings: {dict(results)}")
     print(f"game events: {dict(events)}")
