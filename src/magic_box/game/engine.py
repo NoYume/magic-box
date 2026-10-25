@@ -9,6 +9,7 @@ pause / abandon rule.
 """
 
 import math
+import re
 from collections.abc import Mapping, Sequence
 
 from magic_box.core.config import Config
@@ -60,6 +61,7 @@ class Engine:
         self._ko_at: float | None = None  # when the KO landed (the fight scene holds)
         self._camera_ok: bool | None = None  # None until the loop reports
         self._checks: dict[str, tuple[bool, str]] = {}
+        self._lobby_requested = False
 
     # -- public API -------------------------------------------------------
 
@@ -74,6 +76,13 @@ class Engine:
         for a in actions:
             if a.kind == "speech":
                 self._heard[a.slot] = a.text
+                if self._scenes.scene == "victory" and self._says_menu(a.text):
+                    self._lobby_requested = True
+        if self._lobby_requested:
+            self._lobby_requested = False
+            if self._scenes.reset_to_lobby(now):
+                events += self._on_enter(now)
+                return self._build_view(states, now, events), events
         scene = self._scenes.scene
         if scene == "lobby":
             self._lobby_actions(actions)
@@ -100,6 +109,16 @@ class Engine:
         if changed:
             events += self._on_enter(now)
         return self._build_view(states, now, events), events
+
+    def request_lobby(self) -> None:
+        """Go back to the lobby on the next step (the operator's reset key), keeping names and
+        classes. Ignored in boot and lobby."""
+        self._lobby_requested = True
+
+    def _says_menu(self, text: str) -> bool:
+        """A victory transcript asking for the menu ("main menu", "play again", ...)."""
+        said = " " + " ".join(re.findall(r"[a-z']+", text.lower())) + " "
+        return any(f" {w} " in said for w in self._g["menu_words"])
 
     def provide_incantations(self, incantations: dict[int, dict[str, str]]) -> None:
         if self._scenes.scene != "loading":

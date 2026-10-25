@@ -263,6 +263,9 @@ def _check_game_effects(cfg: Config, classes: dict, problems: list[str]) -> None
         isinstance(w, str) and w and not any(c.isspace() for c in w) for w in stop
     ):
         problems.append("game.name_stop_words: must be a list of single words, quoted")
+    menu = _get(cfg, "game", "menu_words")
+    if not isinstance(menu, list) or not all(isinstance(w, str) and w.strip() for w in menu):
+        problems.append("game.menu_words: must be a list of words or phrases, quoted")
     parry = _get(cfg, "game", "parry_classes")
     if not isinstance(parry, list) or not all(c in classes for c in parry):
         problems.append("game.parry_classes: must be a list of class ids from game.classes")

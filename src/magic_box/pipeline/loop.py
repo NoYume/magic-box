@@ -73,6 +73,7 @@ class GameLoop:
         voice_alive: Callable[[], bool] | None = None,
     ) -> None:
         self._stale_s = cfg["pipeline"]["stale_state_s"]
+        self._reset_key = cfg["keys"].get("reset")
         self._sources = sources
         self._display = display
         self._intent = intent
@@ -182,6 +183,8 @@ class GameLoop:
             t_intent = time.perf_counter()
             actions = self._intent.update(inputs.states, voice, now)
             t_engine = time.perf_counter()
+            if self._reset_key in keys:
+                self._engine.request_lobby()
             view, events = self._engine.step(actions, latest, now)
             t_engine_done = time.perf_counter()
             if self._recorder is not None:

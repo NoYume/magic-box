@@ -789,3 +789,15 @@ def test_record_then_replay_plays_to_the_same_result(tmp_path):
     assert [p.name for p in replayed.view.players] == ["Ada", "P2"]
     assert replayed.view.banner == live.view.banner == "ADA WINS"
     assert {e.kind for e in live.events} >= {"dodge", "buff", "hit", "ko"}
+
+
+def test_reset_key_returns_to_the_lobby_mid_fight():
+    cfg = make_cfg()
+
+    def script(h: Harness):
+        yield from to_fight(h)
+        yield from tap(cfg["keys"]["reset"])
+        yield from until_scene(h, "lobby", max_s=1.0)
+
+    h = Harness(cfg).run(script)
+    assert h.scene == "lobby"

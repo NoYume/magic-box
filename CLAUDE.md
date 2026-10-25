@@ -191,7 +191,7 @@ These are team rules. `tests/test_boundaries.py` enforces the import ones.
 | Guard (Holy Knight parry) | `g` | `o` |
 | Spells | `1` `2` `3` | `8` `9` `0` |
 
-`F1` toggles the debug overlay. `Esc` quits.
+`F1` toggles the debug overlay. `Backspace` goes back to the lobby from any scene (names and classes kept). `Esc` quits.
 
 **Fake match walkthrough** (`uv run python -m magic_box --fake`):
 1. Boot: the self-check list (camera, both mics, network, API key). Fake mode reports the camera at once, so it moves on after 2 s. The mics stay "checking": fake mode starts no voice process.
