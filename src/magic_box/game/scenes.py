@@ -3,23 +3,58 @@
 Owner: Adetola
 """
 
+import re
 import string
 
 from magic_box.core.config import Config
+from magic_box.game.classes import class_keywords, parse_class
 
 NAME_PREFIXES = ("my name is", "i'm", "i am", "this is", "call me", "it's")
+# With a class keyword in the same transcript, the name stops at the first of these.
+NAME_STOP_WORDS = frozenset(
+    "a an the and or but i im i'm pick picks choose chooses want wanna play playing as with"
+    " is be to will please um uh".split()
+)
+_TOKENS = re.compile(r"[^\W\d_]+(?:['-][^\W\d_]+)*|[^\w\s'-]")  # words, or one punctuation
+
+
+def _strip_prefix(s: str) -> tuple[str, bool]:
+    for prefix in NAME_PREFIXES:
+        if s == prefix or s.startswith(prefix + " "):
+            return s[len(prefix) :], True
+    return s, False
 
 
 def parse_name(text: str, max_chars: int) -> str | None:
     """Turn a spoken phrase into a display name, or None when nothing is left."""
-    s = text.lower().replace("’", "'").strip()
-    for prefix in NAME_PREFIXES:
-        if s == prefix or s.startswith(prefix + " "):
-            s = s[len(prefix) :]
-            break
+    s, _ = _strip_prefix(text.lower().replace("’", "'").strip())
     s = "".join(c for c in s if c.isalpha() or c in " -'")
     s = string.capwords(s)[:max_chars].strip()  # capwords: "ada's" -> "Ada's", not "Ada'S"
     return s if any(c.isalpha() for c in s) else None
+
+
+def parse_lobby_speech(text: str, cfg: Config) -> tuple[str | None, str | None]:
+    """(name, class id) from one lobby transcript; either may be None.
+
+    No class keyword: the whole transcript is a name (`parse_name`). With a keyword the
+    class is picked, and a name is taken only after a name prefix, up to the first keyword,
+    punctuation or filler word: "My name is Ada, fire" gives ("Ada", "fire_mage"), and
+    "my name is knight" gives (None, "holy_knight").
+    """
+    max_chars = cfg["game"]["name_max_chars"]
+    class_id = parse_class(text, cfg)
+    if class_id is None:
+        return parse_name(text, max_chars), None
+    rest, had_prefix = _strip_prefix(text.lower().replace("’", "'").strip())
+    if not had_prefix:
+        return None, class_id
+    keywords = class_keywords(cfg)
+    words: list[str] = []
+    for tok in _TOKENS.findall(rest):
+        if not tok[0].isalpha() or tok in keywords or tok in NAME_STOP_WORDS:
+            break
+        words.append(tok)
+    return parse_name(" ".join(words), max_chars), class_id
 
 
 class Hold:

@@ -192,6 +192,12 @@ def test_speech_sets_names_in_lobby():
         ("call me Cy", "fire_mage", "Cy"),
         ("i am bo", "fire_mage", "Bo"),
         ("firefly", "fire_mage", "Firefly"),  # whole words only
+        ("My name is Ada, fire", "fire_mage", "Ada"),
+        ("my name is ada and i pick holy", "holy_knight", "Ada"),
+        ("call me Bo the lightning mage", "lightning_mage", "Bo"),
+        ("this is Cy playing lightning", "lightning_mage", "Cy"),
+        ("I am a fire mage", "fire_mage", "P1"),
+        ("my name is knight", "holy_knight", "P1"),  # the name is the keyword: class only
     ],
 )
 def test_lobby_speech_picks_class_by_keyword_else_name(text, class_id, name):
@@ -199,6 +205,14 @@ def test_lobby_speech_picks_class_by_keyword_else_name(text, class_id, name):
     view = speak(e, to_lobby(e), 0, text)
     assert (view.players[0].class_id, view.players[0].name) == (class_id, name)
     assert view.players[1].class_id == "lightning_mage"
+
+
+def test_keyword_as_name_keeps_the_old_name():
+    e = Engine(CFG)
+    t = to_lobby(e)
+    speak(e, t, 1, "call me cy")
+    view = speak(e, t + DT, 1, "my name is knight")
+    assert (view.players[1].name, view.players[1].class_id) == ("Cy", "holy_knight")
 
 
 def test_picked_class_is_used_for_the_match():

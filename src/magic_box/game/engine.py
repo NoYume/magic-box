@@ -20,8 +20,8 @@ from magic_box.core.contracts import (
     PlayerView,
     SpellView,
 )
-from magic_box.game.classes import class_prompt, class_views, parse_class
-from magic_box.game.scenes import Hold, SceneMachine, parse_name
+from magic_box.game.classes import class_prompt, class_views
+from magic_box.game.scenes import Hold, SceneMachine, parse_lobby_speech
 from magic_box.game.spells import SpellDef, load_spells
 from magic_box.game.state import MatchState
 
@@ -151,15 +151,13 @@ class Engine:
         return ready
 
     def _lobby_actions(self, actions: Sequence[Action]) -> None:
-        """A transcript with a class keyword picks the class; otherwise it sets the name."""
+        """A transcript can pick the class, set the name, or both (`parse_lobby_speech`)."""
         for a in actions:
             if a.kind != "speech":
                 continue
-            class_id = parse_class(a.text, self.cfg)
+            name, class_id = parse_lobby_speech(a.text, self.cfg)
             if class_id is not None:
                 self._classes[a.slot] = class_id
-                continue
-            name = parse_name(a.text, self._g["name_max_chars"])
             if name is not None:
                 self._names[a.slot] = name
 

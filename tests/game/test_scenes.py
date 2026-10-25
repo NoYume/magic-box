@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from magic_box.core.config import load_config
-from magic_box.game.scenes import Hold, SceneMachine, parse_name
+from magic_box.game.scenes import Hold, SceneMachine, parse_lobby_speech, parse_name
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
 G = CFG["game"]
@@ -116,3 +116,21 @@ def test_hands_held_from_victory_wait_in_lobby_until_lowered():
 )
 def test_parse_name(text, name):
     assert parse_name(text, 12) == name
+
+
+@pytest.mark.parametrize(
+    "text,name,class_id",
+    [
+        ("ada", "Ada", None),
+        ("fire", None, "fire_mage"),
+        ("My name is Ada, fire", "Ada", "fire_mage"),
+        ("my name is Ada and I choose lightning", "Ada", "lightning_mage"),
+        ("I'm Zoë the holy knight", "Zoë", "holy_knight"),
+        ("I want to be a knight", None, "holy_knight"),
+        ("I am a fire mage", None, "fire_mage"),
+        ("my name is knight", None, "holy_knight"),
+        ("fire is my name", None, "fire_mage"),
+    ],
+)
+def test_parse_lobby_speech(text, name, class_id):
+    assert parse_lobby_speech(text, CFG) == (name, class_id)

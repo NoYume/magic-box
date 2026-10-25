@@ -29,11 +29,14 @@ def class_views(cfg: Config) -> tuple[ClassView, ...]:
     )
 
 
+def class_keywords(cfg: Config) -> dict[str, str]:
+    """Lowercase keyword -> class id."""
+    return {kw.lower(): cid for cid, c in cfg["game"]["classes"].items() for kw in c["keywords"]}
+
+
 def parse_class(text: str, cfg: Config) -> str | None:
     """Class id picked by a transcript, or None. The last keyword said wins ("fire, no, holy")."""
-    keywords = {
-        kw.lower(): cid for cid, c in cfg["game"]["classes"].items() for kw in c["keywords"]
-    }
+    keywords = class_keywords(cfg)
     picked = None
     for word in _WORD.findall(text.lower()):
         picked = keywords.get(word, picked)
