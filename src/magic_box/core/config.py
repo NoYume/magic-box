@@ -162,6 +162,11 @@ def _check_voice_and_ai(cfg: Config, problems: list[str]) -> None:
         if isinstance(min_words, (int, float)) and isinstance(max_words, (int, float)):
             if min_words > max_words:
                 problems.append("ai.min_words: must be <= ai.max_words")
+        # Muse Spark chat completions; "none" is rejected with HTTP 400 (dev.meta.ai docs).
+        efforts = ("minimal", "low", "medium", "high", "xhigh")
+        effort = _get(cfg, "ai", "reasoning_effort")
+        if effort is not None and effort not in efforts:
+            problems.append(f"ai.reasoning_effort: must be null or one of {efforts}: {effort!r}")
 
 
 def _check_game(cfg: Config, problems: list[str]) -> None:

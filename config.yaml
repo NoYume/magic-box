@@ -92,8 +92,10 @@ ai:                 # owner: Nikhil
   max_words: 7
   max_cross_similarity: 60    # (guess) rapidfuzz ratio between the two players' incantations
   chronicle_max_words: 120
+  reasoning_effort: minimal   # minimal|low|medium|high|xhigh, null = model default. Measured
+  #                             2026-10-25: model default timed out at 8 s, low 6.2 s, minimal 3.2 s
 
-game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
+game:              # owner: Adetola. DRAFT numbers, see docs/game-design.md
   round_s: 90
   hp_max: 100
   mana_max: 100

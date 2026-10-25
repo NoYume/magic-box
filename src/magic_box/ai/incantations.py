@@ -101,7 +101,10 @@ def _prompt(classes: Mapping[int, str], names: Mapping[int, str], cfg: Config) -
         'Reply with only JSON: {"0": {spell_id: incantation, ...}, "1": {spell_id: text, ...}}.',
         f"Each incantation is {ai['min_words']} to {ai['max_words']} words, using only letters, "
         "spaces and apostrophes (no digits or punctuation), and easy to say aloud.",
-        "Give them Texas, Austin and HackTX flavor.",
+        "Use common English words a speech recognizer spells reliably: no acronyms, "
+        "brand names or made-up words.",
+        "Start each of a player's incantations with a different word.",
+        "Give them Texas and Austin flavor.",
         "The two players' sets must sound clearly different from each other.",
     ]
     return "\n".join(lines)

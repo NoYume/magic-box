@@ -1,6 +1,10 @@
 """Muse Spark client over an OpenAI-compatible API (spec 2026-10-24 nikhil-pipeline, section 10).
 
 Owner: Nikhil
+
+Verified live on 2026-10-25: chat completions at `https://api.meta.ai/v1` with model
+`muse-spark-1.3`. Spark reasons before it answers. `ai.reasoning_effort` caps that so an
+incantation set lands inside the `ai.timeout_s` deadline; `null` omits it (model-set effort).
 """
 
 import os
@@ -18,18 +22,26 @@ def log_line(msg: str) -> None:
     print(f"spark: {msg}", file=sys.stderr, flush=True)
 
 
-def log_fallback(job: str, exc: Exception) -> None:
-    """One stderr line: the exception type and HTTP status only.
+def describe_error(exc: BaseException) -> str:
+    """The exception type and HTTP status only, such as `AuthenticationError 401`.
 
     Never the message: an openai error can echo request details.
     """
     status = getattr(exc, "status_code", None)
     code = "" if status is None else f" {status}"
-    log_line(f"{job} fell back: {type(exc).__name__}{code}")
+    return f"{type(exc).__name__}{code}"
+
+
+def log_fallback(job: str, exc: Exception) -> None:
+    """One stderr line: the exception type and HTTP status only."""
+    log_line(f"{job} fell back: {describe_error(exc)}")
 
 
 class SparkClient:
-    """Chat completion against `ai.base_url`. The OpenAI client is created on first use."""
+    """Chat completion against `ai.base_url`. The OpenAI client is created on first use.
+
+    `last_model` is the model id the last reply reported (None before the first reply).
+    """
 
     def __init__(
         self,
@@ -41,9 +53,10 @@ class SparkClient:
         self._env = os.environ if env is None else env
         self._factory = openai_factory
         self._client = None
+        self.last_model: str | None = None
 
     def _api_key(self) -> str | None:
-        return self._env.get(self.cfg["ai"]["api_key_env"]) or None
+        return (self._env.get(self.cfg["ai"]["api_key_env"]) or "").strip() or None
 
     def available(self) -> bool:
         """True when Spark is enabled and a key is present."""
@@ -69,6 +82,9 @@ class SparkClient:
         if not self.available():
             raise SparkUnavailable("Spark is disabled or the API key is missing")
         ai = self.cfg["ai"]
+        extra = {}
+        if ai.get("reasoning_effort") is not None:
+            extra["reasoning_effort"] = ai["reasoning_effort"]
         reply = self._get_client().chat.completions.create(
             model=ai["model"],
             temperature=ai["temperature"],
@@ -76,5 +92,7 @@ class SparkClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
+            **extra,
         )
+        self.last_model = getattr(reply, "model", None)
         return reply.choices[0].message.content or ""

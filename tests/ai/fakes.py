@@ -25,7 +25,8 @@ class FakeOpenAI:
         if isinstance(self.reply, Exception):
             raise self.reply
         message = SimpleNamespace(content=self.reply)
-        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+        # The live API echoes the model id (checked 2026-10-25: "muse-spark-1.3").
+        return SimpleNamespace(model=kw.get("model"), choices=[SimpleNamespace(message=message)])
 
 
 class FakeClient:
