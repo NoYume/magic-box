@@ -72,19 +72,24 @@ class GameLoop:
         self._on_tick = on_tick
         self._ai = ai
         self._voice_control = voice_control
+        self._last_voice_config: VoiceConfig | None = None
         self._clock = clock
         self._recorder = recorder
+
+    def _send_voice_config(self, config: VoiceConfig) -> None:
+        self._last_voice_config = config
+        self._voice_control.put(config)
 
     def _on_scene_entered(self, view, match_events: list[GameEvent], now: float) -> None:
         names = {p.slot: p.name for p in view.players}
         if view.scene == "lobby" and self._voice_control is not None:
-            self._voice_control.put(VoiceConfig(mode="transcript", incantations={}))
+            self._send_voice_config(VoiceConfig(mode="transcript", incantations={}))
         elif view.scene == "loading" and self._ai is not None:
             classes = {p.slot: p.class_id for p in view.players}
             self._ai.start_incantations(classes, names, now)
         elif view.scene == "fight" and self._voice_control is not None:
             sets = {p.slot: {s.id: s.incantation for s in p.spells} for p in view.players}
-            self._voice_control.put(VoiceConfig(mode="incantation", incantations=sets))
+            self._send_voice_config(VoiceConfig(mode="incantation", incantations=sets))
         elif view.scene == "victory" and self._ai is not None:
             self._ai.start_chronicle(list(match_events), names, now)
 
@@ -108,9 +113,12 @@ class GameLoop:
             inputs = self._sources.poll(keys, now, dt)
             voice = inputs.voice + self._keyboard_voice.poll(keys, now)
             latest = latest_states(latest, inputs.states, now, self._stale_s)
-            for e in voice:
-                if e.kind == "status":
-                    self._engine.provide_mic_status(e.slot, e.text == "connected")
+            statuses = [e for e in voice if e.kind == "status"]
+            for e in statuses:
+                self._engine.provide_mic_status(e.slot, e.text == "connected")
+            if statuses and self._last_voice_config is not None:
+                # A restarted voice child starts in transcript mode; it ignores an equal config.
+                self._voice_control.put(self._last_voice_config)
             actions = self._intent.update(inputs.states, voice, now)
             view, events = self._engine.step(actions, latest, now)
             if self._recorder is not None:

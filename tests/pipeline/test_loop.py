@@ -196,6 +196,40 @@ def test_status_events_reach_engine_and_intent():
     assert engine.mic == [(1, True)] and [e.kind for e in intent.voice] == ["status"]
 
 
+def test_voice_status_resends_the_last_voice_config():
+    """A restarted voice child starts in transcript mode; a status re-sends the config."""
+
+    class StatusSources(FakeSources):
+        def __init__(self, cfg):
+            super().__init__(cfg)
+            self.tick = 0
+
+        def poll(self, keys, now, dt):
+            got = super().poll(keys, now, dt)
+            tick, self.tick = self.tick, self.tick + 1
+            if tick in (0, 2):  # before any config, then mid-fight from both slots
+                status = [VoiceEvent(s, now, "status", "connected", None, 0.0) for s in (0, 1)]
+                got = replace(got, voice=status)
+            return got
+
+    q = ListQueue()
+    GameLoop(
+        CFG,
+        StatusSources(CFG),
+        ScriptedDisplay([]),
+        Intent(CFG),
+        SceneEngine(["lobby", "fight", "fight", "fight"]),
+        KeyboardVoiceSource(CFG),
+        voice_control=q,
+    ).run(max_ticks=4)
+    sets = {0: {"fireball": "embers burn"}, 1: {"fireball": "embers burn"}}
+    assert [(c.mode, c.incantations) for c in q.items] == [
+        ("transcript", {}),
+        ("incantation", sets),
+        ("incantation", sets),
+    ]
+
+
 def test_full_fake_match_reaches_a_hit():
     cfg = copy.deepcopy(CFG)
     cfg["ai"]["enabled"] = False
