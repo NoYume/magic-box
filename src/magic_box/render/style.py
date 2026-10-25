@@ -17,6 +17,7 @@ import pygame
 RGB = tuple[int, int, int]
 SCALE_STEP = 0.02  # pop and grow animations snap to this, so their frames are cached
 SCALE_CACHE_MAX = 64
+FIT_CACHE_MAX = 256  # fit_lines results (text, fonts, box); a FIFO, like the scaled cache
 REPO_ROOT = Path(__file__).resolve().parents[3]  # src/magic_box/render/style.py -> repo
 
 
@@ -97,6 +98,7 @@ class Theme:
         self.title_px: dict[str, int] = {k: int(v) for k, v in t["title_px"].items()}
         self.glow_steps = glow_steps(render_cfg["projectiles"])
         self._scaled: dict[tuple, tuple[pygame.Surface, pygame.Surface]] = {}
+        self._fits: dict[tuple, tuple[str, tuple[str, ...]]] = {}
         self.stars: Mapping = t["stars"]
 
     def slot_rgb(self, slot: int | None) -> RGB:
@@ -176,7 +178,21 @@ class Theme:
         self, text: str, fonts: tuple[str, ...], max_w: int, max_h: int, max_lines: int
     ) -> tuple[str, list[str]]:
         """The first (largest) font in `fonts` whose wrapped lines fit `max_w` x `max_h` in at
-        most `max_lines` lines. Only if none fits: the last font, cut with an ellipsis."""
+        most `max_lines` lines. Only if none fits: the last font, cut with an ellipsis.
+
+        Cached per (text, fonts, box), since the HUD and loading card refit every frame."""
+        key = (text, tuple(fonts), max_w, max_h, max_lines)
+        hit = self._fits.get(key)
+        if hit is None:
+            name, lines = self._fit_lines(text, fonts, max_w, max_h, max_lines)
+            if len(self._fits) >= FIT_CACHE_MAX:
+                del self._fits[next(iter(self._fits))]
+            hit = self._fits[key] = (name, tuple(lines))
+        return hit[0], list(hit[1])
+
+    def _fit_lines(
+        self, text: str, fonts: tuple[str, ...], max_w: int, max_h: int, max_lines: int
+    ) -> tuple[str, list[str]]:
         for name in fonts:
             f = self.fonts[name]
             lines = wrap_text(text, f, max_w)

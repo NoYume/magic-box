@@ -73,3 +73,21 @@ def test_helpers():
     assert all(pulse(t / 10, 3.0) in {i / 8 for i in range(9)} for t in range(100))
     pts = ring_points((0, 0), 10, 5, 0.25)
     assert pts[0] == pytest.approx((0.0, -10.0)) and len(pts) >= 4
+
+
+def test_fit_lines_is_cached_per_text_fonts_and_box(theme, monkeypatch):
+    import magic_box.render.style as style
+
+    calls = []
+    real = style.wrap_text
+    monkeypatch.setattr(style, "wrap_text", lambda *a: calls.append(a) or real(*a))
+    fonts = ("big", "text", "small", "tiny")
+    first = theme.fit_lines("embers of the forty acres burn", fonts, 400, 120, 2)
+    n = len(calls)
+    assert theme.fit_lines("embers of the forty acres burn", fonts, 400, 120, 2) == first
+    assert len(calls) == n  # second call: no re-wrapping
+    theme.fit_lines("embers of the forty acres burn", fonts, 300, 120, 2)
+    assert len(calls) > n  # another box is fitted again
+    for i in range(style.FIT_CACHE_MAX + 10):
+        theme.fit_lines(f"words {i}", fonts, 400, 120, 2)
+    assert len(theme._fits) <= style.FIT_CACHE_MAX
