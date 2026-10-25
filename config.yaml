@@ -300,7 +300,7 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
     burst_count: 24
     particle_s: 0.9
     glow_s: 1.2
-    ko_s: 2.4
+    ko_s: 2.0                 # KO banner + slow motion; the engine's game.ko_hold_s should match
     ko_slowmo: 0.35           # FX time runs at this rate during the KO banner
     banner_pop_s: 0.22
     hit_rgb: [255, 50, 40]

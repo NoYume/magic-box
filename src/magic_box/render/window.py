@@ -130,7 +130,8 @@ class Window:
             self.screen.blit(self.background, (0, 0))
             draw_scene(self.screen, view, self.scene_style, now)
         self._draw_banner(view, now)
-        self.fx.draw_overlay(self.screen)
+        if view.scene == "fight":
+            self.fx.draw_overlay(self.screen)
 
     # -- banner -------------------------------------------------------------
 

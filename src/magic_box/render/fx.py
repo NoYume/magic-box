@@ -4,9 +4,10 @@ Owner: Adetola
 
 `Fx.update(view, dt)` reads `GameView.events` (this tick's GameEvents) and spawns effects;
 `draw` paints them over the halves, `shake_offset` tells the window how far to shift a half, and
-`draw_overlay` paints the KO banner over everything. Particles and floating texts are capped
-(`render.fx.max_particles`, `max_texts`): the oldest go first. Event data is read with `.get()`
-because older recordings and the thin engine carry less of it.
+`draw_overlay` paints the KO banner over everything. FX live only in the fight scene: they are
+cleared when the scene changes, so the engine holds the fight for the KO (`game.ko_hold_s`).
+Particles and floating texts are capped (`render.fx.max_particles`, `max_texts`): the oldest go
+first. Event data is read with `.get()` because older recordings and the thin engine carry less.
 """
 
 import math
@@ -114,7 +115,23 @@ class Fx:
     def timescale(self) -> float:
         return float(self.f["ko_slowmo"]) if self.ko_left > 0 else 1.0
 
+    def clear(self) -> None:
+        """Drop every effect (the scene left the fight)."""
+        self.particles, self.texts = [], []
+        self.halves = [HalfFx(), HalfFx()]
+        self.ko_left = 0.0
+
     def update(self, view: GameView, dt: float) -> None:
+        """Spawn this tick's effects and advance them; only the fight scene has FX."""
+        if view.scene != "fight":
+            if (
+                self.ko_left > 0
+                or self.particles
+                or self.texts
+                or any(h.flash_left > 0 or h.shake_left > 0 or h.glow_left > 0 for h in self.halves)
+            ):
+                self.clear()
+            return
         for e in view.events:
             self.on_event(e, view)
         real_dt = dt

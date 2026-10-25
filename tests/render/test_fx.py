@@ -87,3 +87,20 @@ def test_events_with_missing_data_are_ignored_quietly(fx):
     )
     fx.update(make_view(events=odd), 0.016)
     fx.draw(pygame.Surface((1920, 1080)))
+
+
+def test_fx_clears_when_the_scene_leaves_fight(fx):
+    ko = (
+        GameEvent(0.0, "hit", 0, {"target": 1, "damage": 30}),
+        GameEvent(0.0, "ko", None, {"winner": 0}),
+    )
+    fx.update(make_view(events=ko), 0.016)
+    assert fx.ko_left > 0 and fx.particles and fx.texts and fx.halves[1].shake_left > 0
+    fx.update(make_view(scene="victory"), 0.016)
+    assert fx.ko_left == 0 and not fx.particles and not fx.texts
+    assert all(h.shake_left == 0 and h.flash_left == 0 and h.glow_left == 0 for h in fx.halves)
+
+
+def test_events_outside_the_fight_spawn_nothing(fx):
+    fx.update(make_full_view("victory"), 0.016)
+    assert fx.ko_left == 0 and not fx.particles and not fx.texts

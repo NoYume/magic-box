@@ -102,6 +102,20 @@ def test_draw_scenes_with_empty_lists_and_long_names():
         w.close()
 
 
+def test_ko_overlay_and_fx_stop_when_victory_starts():
+    from magic_box.core.contracts import GameEvent
+
+    w = Window(CFG, headless=True)
+    try:
+        ko = (GameEvent(0.0, "hit", 0, {"target": 1, "damage": 30}), GameEvent(0.0, "ko", None, {}))
+        w.render(make_full_view("fight", events=ko), None, {}, 1.0)
+        assert w.fx.ko_left > 0
+        w.render(make_full_view("victory", events=()), None, {}, 1.02)
+        assert w.fx.ko_left == 0 and not w.fx.particles
+    finally:
+        w.close()
+
+
 def test_victory_draws_a_draw_without_banner():
     w = Window(CFG, headless=True)
     try:
