@@ -20,6 +20,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEGRA_RELEASE = Path("/etc/nv_tegra_release")
+PROC = Path("/proc")  # host processes are visible here in Docker (compose.yaml: pid: host)
 
 
 @dataclass
@@ -84,11 +85,27 @@ def _zed_camera() -> tuple[bool, str]:
     return True, f"{model} serial {d.serial_number} ({state})"
 
 
+def _zed_x_daemon_process() -> tuple[bool, str]:
+    """No systemd (the Docker image): look for the host daemon among the visible processes."""
+    for proc in PROC.iterdir():
+        try:
+            if proc.name.isdigit() and (proc / "comm").read_text().strip() == "ZEDX_Daemon":
+                return True, f"ZEDX_Daemon running (pid {proc.name})"
+        except OSError:
+            continue  # the process exited while we looked
+    return False, "no ZEDX_Daemon process (on the host: sudo systemctl restart zed_x_daemon)"
+
+
 def _zed_x_daemon() -> tuple[bool, str]:
-    out = subprocess.run(
-        ["systemctl", "is-active", "zed_x_daemon"], capture_output=True, text=True, timeout=5
-    )
-    state = out.stdout.strip() or "unknown"
+    try:
+        out = subprocess.run(
+            ["systemctl", "is-active", "zed_x_daemon"], capture_output=True, text=True, timeout=5
+        )
+    except FileNotFoundError:
+        return _zed_x_daemon_process()
+    state = out.stdout.strip()
+    if not state:  # systemctl is there but no systemd answers (the Docker image)
+        return _zed_x_daemon_process()
     if state == "active":
         return True, "active"
     return False, f"{state} (sudo systemctl restart zed_x_daemon)"
