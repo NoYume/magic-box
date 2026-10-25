@@ -99,6 +99,7 @@ class DebugOverlay:
         self.zones = cfg["perception"]["zones"]
         self.font = pygame.font.Font(None, self.oc["font_px"])
         self.line_h = self.font.get_linesize()
+        self.perf_text = ""  # set by the game loop: stage timings and latency
         self.histories = {0: SlotHistory(self.oc["graph_s"]), 1: SlotHistory(self.oc["graph_s"])}
 
     def draw(
@@ -114,6 +115,8 @@ class DebugOverlay:
             self.histories[slot].add(state)
         cam_fps = max(camera_fps(h.frames) for h in self.histories.values())
         header = f"render {fps:.0f} fps | camera {cam_fps:.1f} fps | dropped {dropped}"
+        if self.perf_text:
+            header += f" | {self.perf_text}"
         self._text_panel(surface, header, (0, 0))
         _, panels, map_rect = overlay_rects(
             surface.get_width(), surface.get_height(), self.cfg, self.line_h

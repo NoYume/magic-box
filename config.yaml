@@ -6,6 +6,7 @@ display:            # owner: Adetola + Nikhil
   height: 1080
   fps: 60
   fullscreen: false
+  vsync: false                # true: SCALED + vsync, can cap fps at the monitor rate
 
 camera:             # owner: Enoch
   model: ZED_X                # scripts/check_env.py compares the connected camera's model
@@ -47,6 +48,10 @@ pipeline:           # owner: Nikhil
   stale_state_s: 0.2
   restart_backoff_s: 1.0
   max_restarts: 5
+  camera_stale_s: 1.5         # live: no new frame_idx for this long = camera not ok
+  camera_boot_timeout_s: 5.0  # live: no first frame by now = camera check fails
+  network_probe_timeout_s: 3.0
+  perf_window_s: 10.0         # perf summary window (overlay header, --debug print)
 
 intent:             # owner: Nikhil
   dodge_step_m: 0.3           # (guess)
@@ -146,6 +151,9 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
   crop_aspect: [8, 9]
   crop_padding: 0.15
   crop_smoothing: 0.25        # EMA alpha per drawn frame
+  camera_scale_quality: fast  # fast = pygame scale | smooth = smoothscale (prettier, slower)
+  self_view: true             # false skips the mirrored self-view (saves fps)
+  crop_cache: true            # reuse the scaled crop when frame_idx and crop are unchanged
   selfview_width_frac: 0.26
   margin_px: 16
   hud_height_frac: 0.26

@@ -41,7 +41,11 @@ class Window:
         disp = cfg["display"]
         self.width, self.height, self.fps = disp["width"], disp["height"], disp["fps"]
         flags = pygame.FULLSCREEN if disp["fullscreen"] else 0
-        self.screen = pygame.display.set_mode((self.width, self.height), flags)
+        if disp["vsync"]:
+            flags |= pygame.SCALED  # pygame only honors vsync with SCALED or OPENGL
+        self.screen = pygame.display.set_mode(
+            (self.width, self.height), flags, vsync=1 if disp["vsync"] else 0
+        )
         pygame.display.set_caption("Magic Box")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, HUD_FONT_SIZE)

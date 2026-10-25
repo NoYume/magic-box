@@ -15,6 +15,7 @@ from magic_box.intent.fusion import Intent
 from magic_box.pipeline.loop import GameLoop
 from magic_box.pipeline.processes import LiveRuntime, start_live
 from magic_box.pipeline.sources import FakeSources, KeyboardVoiceSource, ReplaySources, Sources
+from magic_box.render.camera_view import configure as configure_camera_view
 from magic_box.render.window import Window
 from magic_box.replay.record import SessionRecorder
 
@@ -26,6 +27,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     mode.add_argument("--replay", metavar="DIR", type=Path, help="replay a recorded session")
     parser.add_argument("--record", metavar="DIR", type=Path, help="record this session")
     parser.add_argument("--debug", action="store_true", help="show the debug overlay")
+    parser.add_argument("--fullscreen", action="store_true", help="fullscreen window")
     parser.add_argument("--headless", action="store_true", help="no visible window")
     parser.add_argument("--config", type=Path, default=Path("config.yaml"))
     parser.add_argument("--max-ticks", type=int, default=None, metavar="N")
@@ -43,6 +45,9 @@ def run(argv: Sequence[str] | None = None) -> int:
     on_tick = None
     try:
         cfg = load_config(args.config)
+        if args.fullscreen:
+            cfg["display"]["fullscreen"] = True
+        configure_camera_view(cfg["render"])
         if args.fake:
             sources = FakeSources(cfg)
         elif args.replay is not None:
@@ -73,6 +78,11 @@ def run(argv: Sequence[str] | None = None) -> int:
             ai=ai,
             voice_control=voice_control,
             recorder=recorder,
+            live=runtime is not None,
+            perception_alive=(
+                (lambda: runtime.supervisor.alive("perception")) if runtime is not None else None
+            ),
+            debug_print=args.debug,
         )
         loop.run(max_ticks=args.max_ticks)
         return 0

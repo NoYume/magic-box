@@ -200,6 +200,27 @@ def _check_game(cfg: Config, problems: list[str]) -> None:
                 problems.append(f"{where}: slot 0 and slot 1 incantations must differ")
 
 
+def _check_pipeline_render(cfg: Config, problems: list[str]) -> None:
+    for key in (
+        "camera_stale_s",
+        "camera_boot_timeout_s",
+        "network_probe_timeout_s",
+        "perf_window_s",
+    ):
+        value = _get(cfg, "pipeline", key)
+        if "pipeline" in cfg and (not isinstance(value, (int, float)) or value <= 0):
+            problems.append(f"pipeline.{key}: must be a positive number")
+    if "render" in cfg:
+        quality = _get(cfg, "render", "camera_scale_quality")
+        if quality not in ("fast", "smooth"):
+            problems.append("render.camera_scale_quality: must be 'fast' or 'smooth'")
+        for key in ("self_view", "crop_cache"):
+            if not isinstance(_get(cfg, "render", key), bool):
+                problems.append(f"render.{key}: must be true or false")
+    if "display" in cfg and not isinstance(_get(cfg, "display", "vsync"), bool):
+        problems.append("display.vsync: must be true or false")
+
+
 def validate(cfg: Config) -> list[str]:
     """Return every problem found in `cfg` (empty list means valid)."""
     problems = [f"{name}: missing section" for name in REQUIRED_SECTIONS if name not in cfg]
@@ -211,6 +232,7 @@ def validate(cfg: Config) -> list[str]:
     _check_game(cfg, problems)
     _check_combat(cfg, problems)
     _check_voice_and_ai(cfg, problems)
+    _check_pipeline_render(cfg, problems)
     return problems
 
 

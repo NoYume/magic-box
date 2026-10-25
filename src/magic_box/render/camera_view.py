@@ -74,9 +74,40 @@ def frame_to_surface(frame: Frame) -> pygame.Surface:
     return pygame.image.frombuffer(frame.image, (w, h), "BGRA")
 
 
-def _scaled_crop(frame_surf: pygame.Surface, dest: Rect, crop: Rect) -> pygame.Surface:
+_opts = {"smooth": False, "self_view": True, "crop_cache": True}
+_cache: dict[tuple, pygame.Surface] = {}
+_cache_owner: pygame.Surface | None = None
+
+
+def configure(render_cfg: Mapping) -> None:
+    """Apply the Jetson fps fallbacks (`render.camera_scale_quality`, `self_view`, `crop_cache`)."""
+    _opts["smooth"] = render_cfg["camera_scale_quality"] == "smooth"
+    _opts["self_view"] = bool(render_cfg["self_view"])
+    _opts["crop_cache"] = bool(render_cfg["crop_cache"])
+    _cache.clear()
+
+
+def _scaled_crop(
+    frame_surf: pygame.Surface, dest: Rect, crop: Rect, flip: bool = False
+) -> pygame.Surface:
+    """Scaled (and optionally mirrored) crop; cached while the same frame surface is drawn."""
+    global _cache_owner
+    key = (crop.as_tuple(), dest.w, dest.h, flip)
+    if _opts["crop_cache"]:
+        if _cache_owner is not frame_surf:
+            _cache.clear()
+            _cache_owner = frame_surf
+        hit = _cache.get(key)
+        if hit is not None:
+            return hit
     clipped = pygame.Rect(crop.as_tuple()).clip(frame_surf.get_rect())
-    return pygame.transform.scale(frame_surf.subsurface(clipped), (dest.w, dest.h))
+    scale = pygame.transform.smoothscale if _opts["smooth"] else pygame.transform.scale
+    out = scale(frame_surf.subsurface(clipped), (dest.w, dest.h))
+    if flip:
+        out = pygame.transform.flip(out, True, False)
+    if _opts["crop_cache"]:
+        _cache[key] = out
+    return out
 
 
 def draw_opponent(surface, dest: Rect, frame_surf, crop: Rect) -> None:
@@ -87,13 +118,12 @@ def draw_selfview(
     surface, dest: Rect, frame_surf, crop: Rect, keypoints_px: Mapping[str, Px]
 ) -> None:
     """Mirrored view of the viewer (like a mirror), with the skeleton on top."""
+    if not _opts["self_view"]:
+        return
     old_clip = surface.get_clip()
     surface.set_clip(pygame.Rect(dest.as_tuple()))  # keypoints can fall outside the image
     try:
-        surface.blit(
-            pygame.transform.flip(_scaled_crop(frame_surf, dest, crop), True, False),
-            (dest.x, dest.y),
-        )
+        surface.blit(_scaled_crop(frame_surf, dest, crop, flip=True), (dest.x, dest.y))
         for a, b in SKELETON_EDGES:
             if a in keypoints_px and b in keypoints_px:
                 pygame.draw.line(

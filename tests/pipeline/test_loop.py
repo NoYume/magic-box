@@ -96,6 +96,12 @@ class SceneEngine:
     def provide_mic_status(self, slot, ok):
         self.mic.append((slot, ok))
 
+    def provide_camera_status(self, ok):
+        self.camera = getattr(self, "camera", []) + [ok]
+
+    def provide_check(self, name, ok, detail=""):
+        self.checks = getattr(self, "checks", {}) | {name: (ok, detail)}
+
 
 class FakeAi:
     def __init__(self, poll_results=()):

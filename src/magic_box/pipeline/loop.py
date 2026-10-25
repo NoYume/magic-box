@@ -4,6 +4,7 @@ Owner: Nikhil
 """
 
 import dataclasses
+import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Protocol
@@ -13,6 +14,8 @@ from magic_box.core.config import Config
 from magic_box.core.contracts import Frame, GameEvent, PlayerState, VoiceConfig
 from magic_box.game.engine import Engine
 from magic_box.intent.fusion import Intent
+from magic_box.pipeline.health import BootChecks, CameraWatch
+from magic_box.pipeline.perf import PerfStats
 from magic_box.pipeline.sources import KeyboardVoiceSource, Sources
 from magic_box.replay.record import SessionRecorder
 
@@ -62,6 +65,10 @@ class GameLoop:
         voice_control: Any = None,
         clock: Callable[[], float] = time.monotonic,
         recorder: SessionRecorder | None = None,
+        live: bool = False,
+        perception_alive: Callable[[], bool] | None = None,
+        debug_print: bool = False,
+        boot_checks: BootChecks | None = None,
     ) -> None:
         self._stale_s = cfg["pipeline"]["stale_state_s"]
         self._sources = sources
@@ -75,6 +82,16 @@ class GameLoop:
         self._last_voice_config: VoiceConfig | None = None
         self._clock = clock
         self._recorder = recorder
+        pipe = cfg["pipeline"]
+        self._watch = CameraWatch(
+            pipe["camera_stale_s"], pipe["camera_boot_timeout_s"], live, perception_alive
+        )
+        self._checks = (
+            boot_checks if boot_checks is not None else BootChecks(cfg, self._engine.provide_check)
+        )
+        self._perf = PerfStats(pipe["perf_window_s"])
+        self._debug_print = debug_print
+        self._camera_ok: bool | None = None
 
     def _send_voice_config(self, config: VoiceConfig) -> None:
         self._last_voice_config = config
@@ -93,6 +110,14 @@ class GameLoop:
         elif view.scene == "victory" and self._ai is not None:
             self._ai.start_chronicle(list(match_events), names, now)
 
+    def _record_perf(self, t_done: float, stages: dict[str, float], state_ts: list[float]) -> None:
+        latency = time.monotonic() - max(state_ts) if state_ts else None
+        if self._perf.add_tick(t_done, stages, latency) and self._debug_print:
+            print(self._perf.long(), file=sys.stderr, flush=True)
+        overlay = getattr(self._display, "_debug_overlay", None)
+        if overlay is not None:
+            overlay.perf_text = self._perf.short()
+
     def run(self, max_ticks: int | None = None) -> int:
         """Run until quit or `max_ticks`; returns the number of ticks run."""
         latest: dict[int, PlayerState] = {}
@@ -110,6 +135,7 @@ class GameLoop:
             if dt > 0:
                 inst = 1.0 / dt
                 fps = inst if fps == 0.0 else fps + _FPS_SMOOTHING * (inst - fps)
+            t_poll = time.perf_counter()
             inputs = self._sources.poll(keys, now, dt)
             voice = inputs.voice + self._keyboard_voice.poll(keys, now)
             latest = latest_states(latest, inputs.states, now, self._stale_s)
@@ -119,8 +145,18 @@ class GameLoop:
             if statuses and self._last_voice_config is not None:
                 # A restarted voice child starts in transcript mode; it ignores an equal config.
                 self._voice_control.put(self._last_voice_config)
+            camera_ok = self._watch.update(
+                now, inputs.frame.frame_idx if inputs.frame is not None else None
+            )
+            if camera_ok != self._camera_ok:
+                self._camera_ok = camera_ok
+                self._engine.provide_camera_status(camera_ok)
+            self._checks.poll(self._watch.seen_frame, camera_ok)
+            t_intent = time.perf_counter()
             actions = self._intent.update(inputs.states, voice, now)
+            t_engine = time.perf_counter()
             view, events = self._engine.step(actions, latest, now)
+            t_engine_done = time.perf_counter()
             if self._recorder is not None:
                 for state in inputs.states:
                     self._recorder.write_state(state)
@@ -146,7 +182,19 @@ class GameLoop:
             )
             if inputs.frame is not None:
                 last_frame = inputs.frame
+            t_draw = time.perf_counter()
             self._display.draw(view, last_frame, latest, fps, dropped=inputs.dropped)
+            t_done = time.perf_counter()
+            self._record_perf(
+                t_done,
+                {
+                    "poll": t_intent - t_poll,
+                    "intent": t_engine - t_intent,
+                    "engine": t_engine_done - t_engine,
+                    "draw": t_done - t_draw,
+                },
+                [s.t for s in inputs.states],
+            )
             if self._on_tick is not None:
                 self._on_tick()
             ticks += 1

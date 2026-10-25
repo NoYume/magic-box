@@ -55,3 +55,26 @@ def test_selfview_skeleton_is_clipped_to_dest():
     ]
     assert any(inside.collidepoint(p) for p in drawn)
     assert not [p for p in drawn if not inside.collidepoint(p)]
+
+
+def test_crop_cache_reuses_scaled_surface_and_respects_options():
+    import pygame
+
+    from magic_box.render import camera_view as cv
+
+    frame = pygame.Surface((640, 360))
+    dest, crop = Rect(0, 0, 50, 50), Rect(0, 0, 320, 320)
+    cv.configure({"camera_scale_quality": "fast", "self_view": True, "crop_cache": True})
+    first = cv._scaled_crop(frame, dest, crop)
+    assert cv._scaled_crop(frame, dest, crop) is first
+    assert cv._scaled_crop(pygame.Surface((640, 360)), dest, crop) is not first
+    cv.configure({"camera_scale_quality": "smooth", "self_view": False, "crop_cache": False})
+    try:
+        a = cv._scaled_crop(frame, dest, crop)
+        assert cv._scaled_crop(frame, dest, crop) is not a and a.get_size() == (50, 50)
+        target = pygame.Surface((100, 100))
+        target.fill((1, 2, 3))
+        cv.draw_selfview(target, dest, frame, crop, {})
+        assert tuple(target.get_at((10, 10)))[:3] == (1, 2, 3)  # self-view off draws nothing
+    finally:
+        cv.configure({"camera_scale_quality": "fast", "self_view": True, "crop_cache": True})
