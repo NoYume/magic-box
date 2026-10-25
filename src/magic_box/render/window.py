@@ -5,7 +5,7 @@ Owner: Adetola + Nikhil
 
 import os
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 
 import pygame
 
@@ -20,6 +20,7 @@ from magic_box.render.camera_view import (
 )
 from magic_box.render.debug_overlay import DebugOverlay
 from magic_box.render.fx import Fx
+from magic_box.render.guides import Guides
 from magic_box.render.hud import Hud
 from magic_box.render.layout import Rect, compute_layout
 from magic_box.render.projectiles import draw_projectiles
@@ -76,6 +77,10 @@ class Window:
             + victory_glow_tints(self.theme)
         )
         self.audio = Audio(cfg, enabled=not headless)
+        # Per-slot mic RMS (0..1 of full scale) for the on-screen wave; main.py sets it in live
+        # mode, from the voice process. None draws no wave.
+        self.mic_levels: Callable[[], Sequence[float]] | None = None
+        self.guides = Guides(self.theme, self.layout)
         self.opp_smoothers = (
             CropSmoother(self.render_cfg["crop_smoothing"]),
             CropSmoother(self.render_cfg["crop_smoothing"]),
@@ -138,6 +143,7 @@ class Window:
         dt = 0.0 if self._last_draw_t is None else min(MAX_DT_S, max(0.0, now - self._last_draw_t))
         self._last_draw_t = now
         self.hud.update(view, dt)
+        self.guides.update(self.mic_levels() if self.mic_levels is not None else None, now)
         self.fx.update(view, dt)
         self.audio.update(view)
         if view.scene == "fight":
@@ -146,6 +152,7 @@ class Window:
         else:
             self.screen.blit(self.background, (0, 0))
             draw_scene(self.screen, view, self.scene_style, now)
+        self.guides.draw(self.screen, view, now)
         self._draw_banner(view, now)
         if view.scene == "fight":
             self.fx.draw_overlay(self.screen)
