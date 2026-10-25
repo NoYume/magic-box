@@ -81,7 +81,8 @@ class Supervisor:
         proc = self._procs.get(name)
         return proc is not None and proc.is_alive()
 
-    def stop(self, timeout: float = 2.0) -> None:
+    def stop(self, timeout: float = 2.0, terminate_timeout: float = 1.0) -> None:
+        """Ask children to stop, SIGTERM stragglers, then SIGKILL so none outlives the game."""
         self.stop_event.set()
         deadline = time.monotonic() + timeout
         for proc in self._procs.values():
@@ -89,7 +90,11 @@ class Supervisor:
         for proc in self._procs.values():
             if proc.is_alive():
                 proc.terminate()
-                proc.join(0.3)
+                proc.join(terminate_timeout)
+        for proc in self._procs.values():
+            if proc.is_alive():  # still holding the camera or mic: no orphans
+                proc.kill()
+                proc.join(0.5)
 
 
 @dataclass
@@ -98,9 +103,12 @@ class LiveRuntime:
     sources: LiveSources
     control_q: DropOldestQueue
     frame_bus: FrameBus
+    stop_timeout_s: float = 2.0
+    terminate_timeout_s: float = 1.0
 
     def close(self) -> None:
-        self.supervisor.stop(timeout=0.5)  # quit must return within ~1 s
+        # The window is already closed when this runs, so the wait is not visible to players.
+        self.supervisor.stop(self.stop_timeout_s, self.terminate_timeout_s)
         self.frame_bus.close()
         self.frame_bus.unlink()
 
@@ -122,4 +130,11 @@ def start_live(cfg: Config) -> LiveRuntime:
         frame_bus.close()
         frame_bus.unlink()
         raise
-    return LiveRuntime(supervisor, LiveSources(state_q, voice_q, frame_bus), control_q, frame_bus)
+    return LiveRuntime(
+        supervisor,
+        LiveSources(state_q, voice_q, frame_bus),
+        control_q,
+        frame_bus,
+        pipe["stop_timeout_s"],
+        pipe["terminate_timeout_s"],
+    )

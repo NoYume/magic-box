@@ -53,6 +53,15 @@ def test_push_peak_wait_must_be_between_0_and_0_1(tmp_path, bad):
         load_config(_write(tmp_path, cfg))
 
 
+@pytest.mark.parametrize("key", ["stop_timeout_s", "terminate_timeout_s"])
+@pytest.mark.parametrize("bad", [0, -1.0, "x"])
+def test_pipeline_stop_timeouts_must_be_positive(tmp_path, key, bad):
+    cfg = _base()
+    cfg["pipeline"][key] = bad
+    with pytest.raises(ConfigError, match=key):
+        load_config(_write(tmp_path, cfg))
+
+
 def test_mics_must_cover_both_slots(tmp_path):
     cfg = _base()
     cfg["voice"]["mics"] = [{"slot": 0, "device": None, "channel": 0}]

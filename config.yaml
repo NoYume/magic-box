@@ -51,6 +51,8 @@ pipeline:           # owner: Nikhil
   camera_stale_s: 1.5         # live: no new frame_idx for this long = camera not ok
   camera_boot_timeout_s: 5.0  # live: no first frame by now = camera check fails
   network_probe_timeout_s: 3.0
+  stop_timeout_s: 2.0         # on quit, wait this long for children to exit on their own (perception closes the ZED)
+  terminate_timeout_s: 1.0    # then SIGTERM and wait this long; after that SIGKILL
   perf_window_s: 10.0         # perf summary window (overlay header, --debug print)
 
 intent:             # owner: Nikhil

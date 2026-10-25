@@ -9,6 +9,15 @@ from tests.helpers import crash_immediately, wait_for_stop
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
 
 
+def ignore_sigterm_forever(stop) -> None:
+    import signal
+    import time as _time
+
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    while True:
+        _time.sleep(0.05)
+
+
 def _poll_for(sup, seconds):
     end = time.monotonic() + seconds
     while time.monotonic() < end:
@@ -49,3 +58,37 @@ def test_start_live_wires_sources_with_stubbed_perception():
         assert inputs.states == [] and inputs.frame is None
     finally:
         rt.close()
+
+
+def test_stop_kills_a_child_that_ignores_sigterm():
+    sup = Supervisor(
+        [ProcSpec("stubborn", ignore_sigterm_forever, ())],
+        spawn_context(),
+        backoff_s=0.05,
+        max_restarts=0,
+    )
+    sup.start()
+    _poll_for(sup, 1.0)  # let the child install its handler
+    assert sup.alive("stubborn")
+    sup.stop(timeout=0.2, terminate_timeout=0.2)
+    assert not sup.alive("stubborn")
+
+
+def test_runtime_close_uses_configured_timeouts():
+    from magic_box.pipeline.processes import LiveRuntime
+
+    calls = []
+
+    class Sup:
+        def stop(self, timeout, terminate_timeout):
+            calls.append((timeout, terminate_timeout))
+
+    class Bus:
+        def close(self):
+            pass
+
+        def unlink(self):
+            pass
+
+    LiveRuntime(Sup(), None, None, Bus(), 1.25, 0.75).close()
+    assert calls == [(1.25, 0.75)]
