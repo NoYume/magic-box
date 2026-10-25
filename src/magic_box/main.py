@@ -113,9 +113,17 @@ def run(argv: Sequence[str] | None = None) -> int:
                 (lambda: runtime.supervisor.alive("perception")) if runtime is not None else None
             ),
             debug_print=args.debug,
+            perception_gave_up=(
+                (lambda: runtime.supervisor.gave_up("perception")) if runtime is not None else None
+            ),
+            voice_alive=(
+                (lambda: runtime.supervisor.alive("voice"))
+                if runtime is not None and cfg["voice"]["enabled"]
+                else None
+            ),
         )
         loop.run(max_ticks=args.max_ticks)
-        return 0
+        return loop.exit_code
     except NotImplementedError as e:
         print(f"not implemented yet: {e}", file=sys.stderr)
         return 2

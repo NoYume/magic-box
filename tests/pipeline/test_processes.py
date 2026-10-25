@@ -92,3 +92,43 @@ def test_runtime_close_uses_configured_timeouts():
 
     LiveRuntime(Sup(), None, None, Bus(), 1.25, 0.75).close()
     assert calls == [(1.25, 0.75)]
+
+
+class _FakeProc:
+    def __init__(self, alive):
+        self.alive = alive
+
+    def is_alive(self):
+        return self.alive
+
+
+def _bare_supervisor(reset_s=60.0, max_restarts=2):
+    sup = Supervisor(
+        [ProcSpec("p", wait_for_stop, ())], spawn_context(), 0.0, max_restarts, reset_s
+    )
+    sup._spawn = lambda spec: sup._procs.__setitem__(spec.name, _FakeProc(True))  # no real child
+    return sup
+
+
+def test_restart_count_resets_after_healthy_uptime():
+    sup = _bare_supervisor(reset_s=0.05)
+    sup._procs["p"] = _FakeProc(True)
+    sup._spawned_at["p"] = time.monotonic()
+    sup._restarts["p"] = 2
+    sup.poll()
+    assert sup.restarts("p") == 2  # not healthy long enough yet
+    time.sleep(0.08)
+    sup.poll()
+    assert sup.restarts("p") == 0
+
+
+def test_gave_up_only_when_dead_and_out_of_restarts():
+    sup = _bare_supervisor()
+    assert not sup.gave_up("p")  # never started
+    sup._procs["p"] = _FakeProc(True)
+    sup._restarts["p"] = 2
+    assert not sup.gave_up("p")  # alive
+    sup._procs["p"].alive = False
+    assert sup.gave_up("p")
+    sup._restarts["p"] = 1
+    assert not sup.gave_up("p")  # a restart is still available

@@ -178,3 +178,72 @@ def test_network_probe_that_never_returns_reports_timeout():
     bc.poll(False, True)
     assert got["network"] == (False, "timeout")
     release.set()
+
+
+def test_loop_exits_3_when_perception_gives_up_after_frames():
+    gave_up = [False]
+
+    class Ticker:
+        n = 0
+
+        def __call__(self):
+            Ticker.n += 1
+            gave_up[0] = Ticker.n >= 5
+
+    engine = CamEngine(CFG)
+    loop = GameLoop(
+        CFG,
+        FakeSources(CFG),  # delivers frames every tick
+        ScriptedDisplay([]),
+        Intent(CFG),
+        engine,
+        KeyboardVoiceSource(CFG),
+        on_tick=Ticker(),
+        perception_gave_up=lambda: gave_up[0],
+    )
+    assert loop.run(max_ticks=100) == 4 and loop.exit_code == 3
+
+
+def test_loop_keeps_running_when_perception_never_delivered_a_frame():
+    class NoFrames(FakeSources):
+        def poll(self, keys, now, dt):
+            return replace(super().poll(keys, now, dt), frame=None, states=[])
+
+    loop = GameLoop(
+        CFG,
+        NoFrames(CFG),
+        ScriptedDisplay([]),
+        Intent(CFG),
+        CamEngine(CFG),
+        KeyboardVoiceSource(CFG),
+        perception_gave_up=lambda: True,
+    )
+    assert loop.run(max_ticks=5) == 5 and loop.exit_code == 0
+
+
+def test_dead_voice_process_reports_both_mics_off_once():
+    alive = [True]
+    mic = []
+
+    class MicEngine(CamEngine):
+        def provide_mic_status(self, slot, ok):
+            mic.append((slot, ok))
+
+    class Ticker:
+        n = 0
+
+        def __call__(self):
+            Ticker.n += 1
+            alive[0] = Ticker.n < 2
+
+    GameLoop(
+        CFG,
+        FakeSources(CFG),
+        ScriptedDisplay([]),
+        Intent(CFG),
+        MicEngine(CFG),
+        KeyboardVoiceSource(CFG),
+        on_tick=Ticker(),
+        voice_alive=lambda: alive[0],
+    ).run(max_ticks=6)
+    assert mic == [(0, False), (1, False)]

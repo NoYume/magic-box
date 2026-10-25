@@ -302,6 +302,7 @@ def _check_pipeline_render(cfg: Config, problems: list[str]) -> None:
         "network_probe_timeout_s",
         "perf_window_s",
         "stop_timeout_s",
+        "restart_reset_s",
         "terminate_timeout_s",
     ):
         value = _get(cfg, "pipeline", key)

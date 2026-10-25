@@ -69,6 +69,8 @@ class GameLoop:
         perception_alive: Callable[[], bool] | None = None,
         debug_print: bool = False,
         boot_checks: BootChecks | None = None,
+        perception_gave_up: Callable[[], bool] | None = None,
+        voice_alive: Callable[[], bool] | None = None,
     ) -> None:
         self._stale_s = cfg["pipeline"]["stale_state_s"]
         self._sources = sources
@@ -92,6 +94,10 @@ class GameLoop:
         self._perf = PerfStats(pipe["perf_window_s"])
         self._debug_print = debug_print
         self._camera_ok: bool | None = None
+        self._perception_gave_up = perception_gave_up
+        self._voice_alive = voice_alive
+        self._voice_was_alive: bool | None = None
+        self.exit_code = 0  # 3: perception gave up after delivering frames (relaunch the box)
 
     def _send_voice_config(self, config: VoiceConfig) -> None:
         self._last_voice_config = config
@@ -145,6 +151,13 @@ class GameLoop:
             if statuses and self._last_voice_config is not None:
                 # A restarted voice child starts in transcript mode; it ignores an equal config.
                 self._voice_control.put(self._last_voice_config)
+            if self._voice_alive is not None:
+                alive = self._voice_alive()
+                if self._voice_was_alive and not alive:
+                    # The dead voice process cannot report; its mics are not listening.
+                    for slot in (0, 1):
+                        self._engine.provide_mic_status(slot, False)
+                self._voice_was_alive = alive
             camera_ok = self._watch.update(
                 now, inputs.frame.frame_idx if inputs.frame is not None else None
             )
@@ -197,5 +210,13 @@ class GameLoop:
             )
             if self._on_tick is not None:
                 self._on_tick()
+            if (
+                self._perception_gave_up is not None
+                and self._watch.seen_frame
+                and self._perception_gave_up()
+            ):
+                print("perception gave up", file=sys.stderr, flush=True)
+                self.exit_code = 3
+                break
             ticks += 1
         return ticks

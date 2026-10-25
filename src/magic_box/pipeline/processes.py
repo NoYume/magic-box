@@ -31,12 +31,19 @@ class ProcSpec:
 
 class Supervisor:
     def __init__(
-        self, specs: Sequence[ProcSpec], ctx: BaseContext, backoff_s: float, max_restarts: int
+        self,
+        specs: Sequence[ProcSpec],
+        ctx: BaseContext,
+        backoff_s: float,
+        max_restarts: int,
+        reset_s: float = 60.0,
     ) -> None:
         self._specs = {s.name: s for s in specs}
         self._ctx = ctx
         self._backoff_s = backoff_s
         self._max_restarts = max_restarts
+        self._reset_s = reset_s
+        self._spawned_at: dict[str, float] = {}
         self.stop_event = ctx.Event()
         self._procs: dict[str, object] = {}
         self._restarts = {s.name: 0 for s in specs}
@@ -48,6 +55,7 @@ class Supervisor:
         )
         proc.start()
         self._procs[spec.name] = proc
+        self._spawned_at[spec.name] = time.monotonic()
 
     def start(self) -> None:
         for spec in self._specs.values():
@@ -59,7 +67,12 @@ class Supervisor:
         now = time.monotonic()
         for name, spec in self._specs.items():
             proc = self._procs.get(name)
-            if proc is None or proc.is_alive():
+            if proc is None:
+                continue
+            if proc.is_alive():
+                # Healthy for a while: earlier deaths no longer count toward giving up.
+                if self._restarts[name] and now - self._spawned_at[name] >= self._reset_s:
+                    self._restarts[name] = 0
                 continue
             if not spec.restart or self._restarts[name] >= self._max_restarts:
                 continue
@@ -73,6 +86,13 @@ class Supervisor:
                 file=sys.stderr,
             )
             self._spawn(spec)
+
+    def gave_up(self, name: str) -> bool:
+        """True once `name` is dead and out of restarts (or is not restarted at all)."""
+        proc = self._procs.get(name)
+        if proc is None or proc.is_alive():
+            return False
+        return not self._specs[name].restart or self._restarts[name] >= self._max_restarts
 
     def restarts(self, name: str) -> int:
         return self._restarts[name]
@@ -123,7 +143,9 @@ def start_live(cfg: Config) -> LiveRuntime:
     specs = [ProcSpec("perception", perception_run, (cfg, state_q, frame_bus.name))]
     if cfg["voice"]["enabled"]:
         specs.append(ProcSpec("voice", voice_run, (cfg, voice_q, control_q)))
-    supervisor = Supervisor(specs, ctx, pipe["restart_backoff_s"], pipe["max_restarts"])
+    supervisor = Supervisor(
+        specs, ctx, pipe["restart_backoff_s"], pipe["max_restarts"], pipe["restart_reset_s"]
+    )
     try:
         supervisor.start()
     except BaseException:

@@ -48,6 +48,7 @@ pipeline:           # owner: Nikhil
   stale_state_s: 0.2
   restart_backoff_s: 1.0
   max_restarts: 5
+  restart_reset_s: 60.0       # a child alive this long gets its restart count back
   camera_stale_s: 1.5         # live: no new frame_idx for this long = camera not ok
   camera_boot_timeout_s: 5.0  # live: no first frame by now = camera check fails
   network_probe_timeout_s: 3.0
