@@ -13,8 +13,9 @@ Process plumbing and the game-process loop: supervisor, shared-memory frame bus,
 
 - The loop calls `engine.provide_camera_status(ok)` on changes and `engine.provide_check(name, ok, detail)` once per check. Live mode: camera not ok when no new `frame_idx` for `pipeline.camera_stale_s`, when perception is not alive (restarting), or when no first frame arrives within `camera_boot_timeout_s`. Fake and replay are always ok.
 - Perf: per-tick poll/intent/engine/draw times and latency are shown in the F1 header (the loop sets `debug_overlay.perf_text`) and printed to stderr with `--debug`.
-- Quit: `main.hard_exit()` (called by `__main__`) skips the interpreter's join of non-daemon threads, so a Spark call in flight cannot delay exit; `LiveRuntime.close()` stops children within ~0.5 s.
-- `scripts/run_demo.sh` launches the game fullscreen on the Jetson, records each run and restarts on crash (max 5 per 60 s).
+- Quit: `main.main()` (called by `__main__`) always ends in `hard_exit()`, even after an uncaught error (traceback printed, exit 1), which skips the interpreter's join of non-daemon threads so a Spark call in flight cannot delay exit or the launcher's restart. The window closes first; then `LiveRuntime.close()` waits `pipeline.stop_timeout_s` for the children, SIGTERMs after that and waits `terminate_timeout_s`, then SIGKILLs so none outlives the game.
+- The `network` check reports `(False, "timeout")` if the probe thread has not returned within `network_probe_timeout_s` + 1 s (DNS is not bounded by the connect timeout).
+- `scripts/run_demo.sh` launches the game fullscreen on the Jetson, records each run and restarts on crash (max 5 per 60 s). Ctrl-C or a game exit of 130/143 stops it.
 
 ## Hard rules
 - Never block the game loop. The frame bus read and `DropOldestQueue.drain()` return immediately.
