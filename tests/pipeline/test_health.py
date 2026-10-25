@@ -154,3 +154,27 @@ def test_loop_live_reports_camera_down_when_perception_dead():
         perception_alive=lambda: False,
     ).run(max_ticks=3)
     assert engine.cam == [False] and engine.chk["camera"] == (False, "no frames")
+
+
+def test_network_probe_that_never_returns_reports_timeout():
+    import threading
+
+    release = threading.Event()
+    now = [0.0]
+    got = {}
+    bc = BootChecks(
+        CFG,
+        lambda n, ok, d: got.update({n: (ok, d)}),
+        env={},
+        probe=lambda u, t: (bool(release.wait(5)), "late"),
+        clock=lambda: now[0],
+    )
+    bc.poll(False, True)
+    assert "network" not in got
+    now[0] = CFG["pipeline"]["network_probe_timeout_s"] + 0.5  # inside the margin
+    bc.poll(False, True)
+    assert "network" not in got
+    now[0] = CFG["pipeline"]["network_probe_timeout_s"] + 1.5
+    bc.poll(False, True)
+    assert got["network"] == (False, "timeout")
+    release.set()

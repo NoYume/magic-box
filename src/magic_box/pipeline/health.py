@@ -6,6 +6,7 @@ Owner: Nikhil
 import os
 import socket
 import threading
+import time
 from collections.abc import Callable, Mapping
 from urllib.parse import urlparse
 
@@ -52,6 +53,9 @@ class CameraWatch:
         return now - self._last_change_t < self._stale_s
 
 
+PROBE_MARGIN_S = 1.0  # slack on top of the connect timeout before the check reports a timeout
+
+
 def probe_host(base_url: str, timeout_s: float) -> tuple[bool, str]:
     """TCP connect to the host of `base_url`. Blocking: run it on a thread."""
     parsed = urlparse(base_url)
@@ -78,7 +82,10 @@ class BootChecks:
         provide: Callable[[str, bool, str], None],
         env: Mapping[str, str] | None = None,
         probe: Callable[[str, float], tuple[bool, str]] | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        self._clock = clock
+        self._started_t = clock()
         self._provide = provide
         self._reported: set[str] = set()
         self._camera_reported: bool | None = None
@@ -89,6 +96,7 @@ class BootChecks:
         self._result: tuple[bool, str] | None = None
         if self._enabled:
             timeout = float(cfg["pipeline"]["network_probe_timeout_s"])
+            self._deadline_s = timeout + PROBE_MARGIN_S
 
             def work() -> None:
                 try:
@@ -98,6 +106,7 @@ class BootChecks:
 
             threading.Thread(target=work, name="net-probe", daemon=True).start()
         else:
+            self._deadline_s = 0.0
             self._result = (True, "ai disabled")
 
     def poll(self, seen_frame: bool, camera_ok: bool) -> None:
@@ -110,6 +119,13 @@ class BootChecks:
                 self._provide("api key", True, "")
             else:
                 self._provide("api key", False, "not set")
+        if (
+            "network" not in self._reported
+            and self._result is None
+            and self._clock() - self._started_t > self._deadline_s
+        ):
+            # connect()'s timeout does not bound DNS, so give up on the probe ourselves
+            self._result = (False, "timeout")
         if "network" not in self._reported and self._result is not None:
             self._reported.add("network")
             self._provide("network", *self._result)
