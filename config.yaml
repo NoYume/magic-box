@@ -7,6 +7,12 @@ display:            # owner: Adetola + Nikhil
   fps: 60
   fullscreen: false
   vsync: false                # true: SCALED + vsync, can cap fps at the monitor rate
+  web:                        # --web: stream the game to a browser (no monitor at the venue)
+    host: 0.0.0.0
+    port: 8000
+    stream_width: 1280        # JPEG width; the game still draws at width x height
+    stream_fps: 30
+    jpeg_quality: 80
 
 camera:             # owner: Enoch
   model: ZED_X                # scripts/check_env.py compares the connected camera's model

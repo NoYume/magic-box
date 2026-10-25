@@ -54,3 +54,9 @@ def test_openai_is_preloaded_after_the_live_children_start(monkeypatch):
     order.clear()
     assert main.run(["--fake", "--headless", "--max-ticks", "2"]) == 0
     assert order == ["preload"]
+
+
+def test_web_flag_streams_to_a_browser():
+    from magic_box.main import parse_args
+
+    assert parse_args(["--web"]).web and not parse_args([]).web

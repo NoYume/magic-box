@@ -88,11 +88,14 @@ The host needs JetPack, the ZED X driver (`zed_x_daemon`) and Docker with the `n
 docker compose build                      # once, and again after pyproject.toml or uv.lock change
 docker compose run --rm magic-box uv run --env-file .env python scripts/check_env.py --network
 docker compose run --rm magic-box uv run python scripts/bench_tracking.py --seconds 30
-DISPLAY=:0 docker compose up              # scripts/run_demo.sh, fullscreen on the Jetson's display
+docker compose up                         # the demo in a browser: open http://<jetson>:8000/
 docker compose down
 ```
 
-Any runbook command works as `docker compose run --rm magic-box <command>`. `DISPLAY` reaches the
+There is no monitor at the venue, so `docker compose up` runs `scripts/run_demo.sh -- --web`: the game
+draws off-screen and streams to any browser on the network (`display.web`, port 8000; double-click
+for fullscreen, keys typed in the page reach the game, F1 is the depth overlay). Any runbook command
+works as `docker compose run --rm magic-box <command>`. `DISPLAY` reaches the
 container only when you set it; with a `DISPLAY` that X refuses, the ZED X capture fails (Argus EGL
 errors), so leave it unset for headless runs. Only one process can open the ZED X at a time. The
 first body-tracking run optimizes the AI model for a few minutes; the `zed-resources` volume keeps it.

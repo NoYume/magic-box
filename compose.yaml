@@ -1,7 +1,7 @@
 # magic-box on the Jetson in Docker. The ZED SDK lives in the image; the repo is mounted at /app,
 # so .env, config.local.yaml, recordings/ and code edits work exactly as on the host.
 #   docker compose build                                    # once, and after pyproject/uv.lock change
-#   DISPLAY=:0 docker compose up                            # the demo: scripts/run_demo.sh
+#   docker compose up                                       # the demo, in a browser: http://<jetson>:8000/
 #   docker compose run --rm magic-box <any runbook command> # e.g. uv run python scripts/check_env.py
 # Only one process can open the ZED X at a time: stop anything else that uses it first.
 # Owner: Daniel + Enoch
@@ -34,6 +34,9 @@ services:
       - /etc/systemd/system/zed_x_daemon.service:/etc/systemd/system/zed_x_daemon.service:ro
       - zed-resources:/usr/local/zed/resources # AI models; the first run optimizes them (minutes)
       - zed-settings:/usr/local/zed/settings # camera calibration
+    # The demo with browser output (no monitor at the venue): run_demo.sh records every run and
+    # restarts the game on a crash; --web streams it on display.web.port (8000).
+    command: ["scripts/run_demo.sh", "--", "--web"]
     # No restart policy: run_demo.sh restarts the game itself, and at boot the container would race
     # other ZED users for the camera.
 
