@@ -58,10 +58,11 @@ class IncantationTurn:
     """One session's incantation matching: at most one published match per speech turn.
 
     Muse's cumulative partials reach the match threshold on a prefix ("lightning answer"
-    scores 80 against "lightning answer my call"), and the whole phrase lands 0.4-0.7 s later
-    (measured live 2026-10-25). So a match under `perfect` is held for up to `hold_s` while a
-    better partial may arrive; a perfect match, `speechEnd`, `speechComplete` or the next
-    `speechStart` publishes the best one at once. `hold_s` 0 publishes the first match.
+    scores 80 against "lightning answer my call"), and the whole phrase lands 0-0.9 s later,
+    median 0.4 s (measured live 2026-10-25). So a match under `perfect` is held for up to
+    `hold_s` while a better partial may arrive; a perfect match, `speechEnd`, `speechComplete`
+    or the next `speechStart` publishes the best one at once. `hold_s` 0 publishes the first
+    match.
     `publish(text, spell_id, score)` may run from a loop timer. Needs a running event loop.
     `scripts/check_muse.py` drives this same class against the live API.
     """

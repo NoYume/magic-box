@@ -33,7 +33,7 @@ Fake-mode keys produce pushes (`f`/`h`), two-hand pushes (`v`/`m`), ducks (`c`/`
 ## Rechecked 2026-10-25 against the overnight rulings
 - `Push.speed` becomes the thrust's peak (Task 4), so a push can be reported after both hands crossed. Intent needs no change: the other hand's history covers `two_hand_window_s` and includes the push frame itself, so a hand still past the threshold then counts (`test_peak_speed_push_still_two_hand_when_the_other_hand_crossed_long_before`).
 - Dodge thresholds (`dodge_step_m` 0.3, `dodge_duck_m` 0.25, `dodge_lookback_s` 0.4) are untouched by the rulings and still guesses. A step during a brief tracking loss still counts on re-acquire (the window is not cleared), which is what a fast dodge needs.
-- A charge now lands about 0.4 s after the player stops speaking (see `voice/CLAUDE.md`). A push in that gap is a basic attack; the charge then waits `game.charge_window_s` (2.5 s) for the next release.
+- A charge now lands about 0.4 s after the player stops speaking, and up to about +0.8 s for a held sub-perfect match (see `voice/CLAUDE.md`). The engine's `game.release_grace_s` (0.6 s, Task 1) holds an uncharged push that long for a charge; after that the push is a basic attack, and the charge waits `game.charge_window_s` (3.0 s) for the next release.
 
 ## Open TODOs
 - `TODO(Nikhil)`: tune `two_hand_window_s` with real arms on the Jetson (0 removes the wait, but then only hands that cross on the same frame count).
