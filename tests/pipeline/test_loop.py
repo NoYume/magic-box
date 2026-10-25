@@ -240,9 +240,12 @@ def test_full_fake_match_reaches_a_hit():
     cfg = copy.deepcopy(CFG)
     cfg["ai"]["enabled"] = False
     k0 = cfg["keys"]["fake"]
+    g = cfg["game"]
+    boot_ticks = int(g["boot_max_s"] * 60) + 5  # covers boot with or without a camera report
+    hold_ticks = int(g["hands_up_hold_s"] * 60) + 5
     script = (
-        [set()] * 2
-        + [{k0[0]["hands_up"], k0[1]["hands_up"]}] * 5
+        [set()] * boot_ticks
+        + [{k0[0]["hands_up"], k0[1]["hands_up"]}] * hold_ticks
         + [set()] * 620
         + [{"1"}, set(), {k0[0]["push"]}]
         + [set()] * 150
@@ -260,7 +263,8 @@ def test_full_fake_match_reaches_a_hit():
     )
     loop.run(max_ticks=len(script))
     scenes = [v.scene for v in display.views]
-    assert scenes[0] == "lobby" and "loading" in scenes and scenes[-1] == "fight"
+    assert scenes[0] == "boot" and "lobby" in scenes and "loading" in scenes
+    assert scenes[-1] == "fight"
     assert display.views[-1].players[1].hp < cfg["game"]["hp_max"]
 
 
