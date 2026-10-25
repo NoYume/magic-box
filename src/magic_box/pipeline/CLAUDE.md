@@ -17,6 +17,9 @@ Process plumbing and the game-process loop: supervisor, shared-memory frame bus,
 - The `network` check reports `(False, "timeout")` if the probe thread has not returned within `network_probe_timeout_s` + 1 s (DNS is not bounded by the connect timeout).
 - `scripts/run_demo.sh` launches the game fullscreen on the Jetson, records each run and restarts on crash (max 5 per 60 s). Ctrl-C or a game exit of 130/143 stops it.
 
+- Supervisor: a child alive for `pipeline.restart_reset_s` gets its restart count back. When perception is dead and out of restarts, and it had delivered a frame in this run, the loop prints `perception gave up` and `GameLoop.exit_code` is 3 (`main.run` returns it; cleanup and `hard_exit` still run). Children stop themselves when the game process is gone (`streams.ParentAwareStop`, checked once a second).
+- Voice: the incantation `VoiceConfig` is sent in `loading` as soon as the engine has the incantations (a tick after `provide_incantations`), not only at the fight; equal configs are not re-sent. A dead voice process reports `provide_mic_status(slot, False)` for both slots. If the boot `network` check failed, `AiWorker.set_offline(True)` makes Spark jobs resolve to fallbacks at once.
+
 ## Hard rules
 - Never block the game loop. The frame bus read and `DropOldestQueue.drain()` return immediately.
 - Streams drop the *oldest* item on overflow and count drops (`dropped`). Do not drop newest.
