@@ -62,6 +62,15 @@ def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
                 (name.right + 24, cy + 2),
             )
         y += ROW_H
+    if view.timer_s is not None and view.timer_s > 0:
+        th.blit_text(
+            surface,
+            f"STARTING IN {math.ceil(view.timer_s)}",
+            "text",
+            c["dim"],
+            "midtop",
+            (w // 2, rect.bottom + 70),
+        )
     missing = sum(1 for ch in view.checks if not ch.ok)
     if missing:
         note = f"{missing} MISSING: keyboard spell keys still work"

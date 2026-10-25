@@ -141,8 +141,8 @@ def make_full_events(t: float = 0.0) -> tuple[GameEvent, ...]:
         GameEvent(t, "hit", 0, {"spell_id": "fireball", "damage": 18.4, "target": 1}),
         GameEvent(t, "dodge", 1, {"spell_id": "bolt", "dodge": "duck"}),
         GameEvent(t, "block", 0, {"spell_id": "bolt", "attacker": 1}),
-        GameEvent(t, "heal", 1, {"spell_id": "heal", "amount": 25}),
-        GameEvent(t, "buff", 0, {"spell_id": "holy_light", "effect": "empowered"}),
+        GameEvent(t, "heal", 1, {"spell_id": "heal", "amount": 25, "target": 1}),
+        GameEvent(t, "buff", 0, {"spell_id": "holy_light", "effect": "empowered", "target": 0}),
         GameEvent(t, "ko", None, {"winner": 0}),
         GameEvent(t, "match_end", None, {"winner": 0, "reason": "ko"}),
     )
@@ -168,7 +168,7 @@ def make_full_view(scene: str = "fight", **overrides: Any) -> GameView:
             ProjectileView("basic", 1, (320.0, 280.0), 0.2, False),
         ),
         "banner": "FIREBALL!" if scene == "fight" else None,
-        "timer_s": {"fight": 42.3, "loading": 2.4}.get(scene),
+        "timer_s": {"fight": 42.3, "loading": 2.4, "boot": 4.2}.get(scene),
         "chronicle": CHRONICLE if scene == "victory" else None,
         "events": make_full_events(),
         "classes": (

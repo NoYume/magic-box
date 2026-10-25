@@ -62,6 +62,22 @@ def _num(value) -> float | None:
         return None
 
 
+EFFECT_TEXT = {
+    "shield": "SHIELD UP!",
+    "empowered": "EMPOWERED!",
+    "mana_slow": "MANA SLOWED!",
+    "slow": "SLOWED!",
+}
+
+
+def affected_slot(e: GameEvent) -> int | None:
+    """Heal and buff: the affected player is `data["target"]`, else the caster (`slot`)."""
+    target = e.data.get("target") if isinstance(e.data, Mapping) else None
+    if target in (0, 1):
+        return int(target)
+    return e.slot if e.slot in (0, 1) else None
+
+
 def event_target(e: GameEvent) -> int | None:
     """The slot an event lands on: `data["target"]`, else the opponent of `slot`."""
     target = e.data.get("target") if isinstance(e.data, Mapping) else None
@@ -81,6 +97,8 @@ class Fx:
         self.layout = tuple(layout)
         self.family = cfg["render"]["projectiles"].get("family", {})
         self.end_y_frac = float(cfg["render"]["projectiles"]["end_y_frac"])
+        self.spell_effect = dict(self.f.get("spell_effect", {}))
+        self.effect_rgb = {k: rgb(v) for k, v in cfg["render"]["hud"]["effect_rgb"].items()}
         self.max_particles = int(self.f["max_particles"])
         self.max_texts = int(self.f["max_texts"])
         self.particles: list[Particle] = []
@@ -132,6 +150,10 @@ class Fx:
                 return
             color = self._spell_rgb(data.get("spell_id"))
             dmg = _num(data.get("damage"))
+            if dmg is not None and dmg <= 0:  # e.g. Static Field: its buff event shows the rest
+                cx, cy = self._impact_point(target)
+                self._burst(cx, cy, color, int(f["burst_count"]) // 2, 320.0)
+                return
             self._flash(target, rgb(f["hit_rgb"]))
             self.halves[target].shake_left = float(f["shake_s"])
             cx, cy = self._impact_point(target)
@@ -165,7 +187,7 @@ class Fx:
             ox, oy = self._opponent_point(1 - slot)
             self._text("BLOCKED", "big", col, ox, oy)
         elif kind == "heal":
-            slot = e.slot if e.slot in (0, 1) else None
+            slot = affected_slot(e)
             if slot is None:
                 return
             col = rgb(f["heal_rgb"])
@@ -176,12 +198,15 @@ class Fx:
             self._text(label, "huge", col, hud.x + hud.w * 0.55, hud.y - 30)
             self._glow(slot, col, 0.6)
         elif kind == "buff":
-            slot = e.slot if e.slot in (0, 1) else None
+            slot = affected_slot(e)
             if slot is None:
                 return
-            col = rgb(f["buff_rgb"])
+            effect = self._effect_kind(data)
+            col = self.effect_rgb.get(effect, rgb(f["buff_rgb"])) if effect else rgb(f["buff_rgb"])
             self._glow(slot, col, float(f["glow_s"]))
             half = self.layout[slot].half
+            if effect in EFFECT_TEXT:
+                self._text(EFFECT_TEXT[effect], "huge", col, half.x + half.w / 2, half.h * 0.6)
             self._sparkles(
                 half.x, half.y + half.h * 0.3, half.w, half.h * 0.5, col, int(f["sparkle_count"])
             )
@@ -201,6 +226,14 @@ class Fx:
                 self._glow(slot, c["gold"], 0.8)
 
     # -- spawners ---------------------------------------------------------------
+
+    def _effect_kind(self, data: Mapping) -> str | None:
+        for key in ("effect", "kind", "effect_kind"):
+            value = data.get(key)
+            if isinstance(value, str):
+                return value
+        spell = data.get("spell_id")
+        return self.spell_effect.get(spell) if isinstance(spell, str) else None
 
     def _spell_rgb(self, spell_id) -> RGB:
         fam = self.family.get(spell_id, "basic") if isinstance(spell_id, str) else "basic"

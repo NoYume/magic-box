@@ -5,7 +5,7 @@ import pytest
 
 from magic_box.core.config import load_config
 from magic_box.core.contracts import GameEvent
-from magic_box.render.fx import Fx, event_target
+from magic_box.render.fx import Fx, affected_slot, event_target
 from magic_box.render.layout import compute_layout
 from magic_box.render.style import Theme
 from tests.factories import make_full_events, make_full_view, make_view
@@ -25,6 +25,25 @@ def test_event_target_prefers_data_then_opponent():
     assert event_target(GameEvent(0.0, "hit", 0, {"target": 0})) == 0
     assert event_target(GameEvent(0.0, "hit", 0, {})) == 1
     assert event_target(GameEvent(0.0, "hit", None, {})) is None
+
+
+def test_affected_slot_prefers_target_then_caster():
+    assert affected_slot(GameEvent(0.0, "buff", 1, {"target": 0})) == 0
+    assert affected_slot(GameEvent(0.0, "heal", 1, {})) == 1
+    assert affected_slot(GameEvent(0.0, "buff", None, {})) is None
+
+
+def test_zero_damage_hit_does_not_flash_or_shake(fx):
+    fx.update(make_view(events=(GameEvent(0.0, "hit", 1, {"target": 0, "damage": 0}),)), 0.0)
+    assert fx.halves[0].shake_left == 0 and fx.halves[0].flash_left == 0 and not fx.texts
+
+
+def test_debuff_glows_on_the_target_half_in_the_effect_color(fx):
+    ev = GameEvent(0.0, "buff", 1, {"spell_id": "static_field", "target": 0})
+    fx.update(make_view(events=(ev,)), 0.0)
+    assert fx.halves[0].glow_left > 0 and fx.halves[1].glow_left == 0
+    assert fx.halves[0].glow_rgb == tuple(CFG["render"]["hud"]["effect_rgb"]["mana_slow"])
+    assert len(fx.texts) == 1
 
 
 def test_particle_and_text_caps_hold(fx):

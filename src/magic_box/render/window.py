@@ -141,7 +141,11 @@ class Window:
             return  # the victory scene draws the banner as its headline
         th = self.theme
         if view.scene != "fight":
-            img = th.text(view.banner, "big", th.c["gold"])
+            font = th.font("big")
+            w = font.size(view.banner)[0]
+            if w > self.width - 220:  # shrink to fit the ribbon
+                font = th.font_px(max(20, int(font.get_height() * (self.width - 220) / w)))
+            img = th.text(view.banner, font, th.c["gold"])
             band = th.panel(self.width - 160, img.get_height() + 30, th.c["panel"], 210)
             y = self.height - band.get_height() - 30
             self.screen.blit(band, (80, y))

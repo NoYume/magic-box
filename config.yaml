@@ -310,6 +310,7 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
     heal_rgb: [110, 255, 140]
     buff_rgb: [255, 220, 100]
     ko_rgb: [255, 60, 50]
+    spell_effect: {flame_wall: shield, holy_light: empowered, static_field: mana_slow, inferno: slow}  # buff fallback
   audio:                      # owner: Adetola. synthesized at startup; silent if the mixer cannot open
     enabled: true
     volume: 0.6
