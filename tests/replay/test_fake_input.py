@@ -72,3 +72,13 @@ def test_frame_idx_and_time_advance():
     s1, f1 = fp.step(frozenset(), 0.5, 0.5)
     assert (f0.frame_idx, f1.frame_idx) == (0, 1)
     assert _p1(s1).frame_idx == 1 and _p1(s1).t == 0.5
+
+
+def test_two_hand_key_pushes_with_both_wrists():
+    fp = FakePlayers(CFG)
+    states, _ = fp.step(frozenset({K0["two_hand_push"]}), now=0.0, dt=0.016)
+    p1 = _p1(states)
+    assert p1.push is not None
+    assert p1.wrist_vz == {"L": -FAKE["push_speed_mps"], "R": -FAKE["push_speed_mps"]}
+    states, _ = fp.step(frozenset({K0["two_hand_push"]}), now=0.016, dt=0.016)
+    assert _p1(states).push is None  # edge-triggered

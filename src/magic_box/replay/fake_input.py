@@ -41,6 +41,7 @@ class FakePlayers:
         self._x = {0: float(fake["start_x_m"]), 1: -float(fake["start_x_m"])}
         self._z = {0: float(fake["start_z_m"]), 1: float(fake["start_z_m"])}
         self._prev_push = {0: False, 1: False}
+        self._prev_two_hand = {0: False, 1: False}
         self._frame_idx = 0
 
     def step(self, keys: frozenset[str], now: float, dt: float) -> tuple[list[PlayerState], Frame]:
@@ -69,6 +70,10 @@ class FakePlayers:
         pushing = k["push"] in keys
         pushed = pushing and not self._prev_push[slot]
         self._prev_push[slot] = pushing
+
+        two_hand_held = k["two_hand_push"] in keys
+        two_hand = two_hand_held and not self._prev_two_hand[slot]
+        self._prev_two_hand[slot] = two_hand_held
 
         duck = fake["duck_m"] if k["duck"] in keys else 0.0
         hands_up = k["hands_up"] in keys
@@ -108,7 +113,10 @@ class FakePlayers:
         head_box = (int(hx - head_r), int(hy - head_r), int(2 * head_r), int(2 * head_r))
         self._fill(image, head_box, _SLOT_BGR[slot])
 
-        push = Push("R", float(fake["push_speed_mps"]), px["r_wrist"]) if pushed else None
+        speed = float(fake["push_speed_mps"])
+        push = Push("R", speed, px["r_wrist"]) if (pushed or two_hand) else None
+        vz_l = -speed if two_hand else 0.0
+        vz_r = -speed if (pushed or two_hand) else 0.0
         return PlayerState(
             slot=slot,
             player_id=slot + 1,
@@ -120,7 +128,7 @@ class FakePlayers:
             root_vx=dx / dt if dt else 0.0,
             head=pts["head"],
             wrists={"L": pts["l_wrist"], "R": pts["r_wrist"]},
-            wrist_vz={"L": 0.0, "R": -float(fake["push_speed_mps"]) if pushed else 0.0},
+            wrist_vz={"L": vz_l, "R": vz_r},
             zone=zone_for_distance(z, self._cfg["perception"]["zones"]),
             push=push,
             pose_flags=frozenset(flags),

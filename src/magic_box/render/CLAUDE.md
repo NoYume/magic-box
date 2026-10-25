@@ -34,5 +34,4 @@ uv run python -m magic_box --fake --headless --max-ticks 60
 Tests use the SDL dummy drivers set in `tests/conftest.py`.
 
 ## Open TODOs
-- `TODO(Nikhil)` `projectiles.py`: `draw_projectiles` raises `NotImplementedError` when a projectile targets a viewer. The placeholder engine never emits projectiles, so `--fake` works today.
 - `TODO(Adetola)`: real `hud.py`; real lobby, loading and victory scenes.

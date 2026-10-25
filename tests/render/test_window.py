@@ -1,6 +1,9 @@
 from pathlib import Path
 
+import pytest
+
 from magic_box.core.config import load_config
+from magic_box.core.contracts import ProjectileView
 from magic_box.render.window import Window
 from magic_box.replay.fake_input import FakePlayers
 from tests.factories import make_view
@@ -44,5 +47,26 @@ def test_draw_with_the_debug_overlay_on():
             frozenset({CFG["keys"]["fake"][0]["push"]}), 0.0, 0.016
         )
         w.draw(make_view(), frame, {s.slot: s for s in states}, fps=60.0, dropped=1)
+    finally:
+        w.close()
+
+
+@pytest.mark.parametrize("scene", ["lobby", "loading", "victory"])
+def test_draw_each_placeholder_scene(scene):
+    w = Window(CFG, headless=True)
+    try:
+        w.draw(
+            make_view(scene=scene, chronicle="A long tale. " * 40, timer_s=2.0), None, {}, fps=60.0
+        )
+    finally:
+        w.close()
+
+
+def test_draw_fight_with_projectiles():
+    w = Window(CFG, headless=True)
+    try:
+        states, frame = FakePlayers(CFG).step(frozenset(), 0.0, 0.0)
+        view = make_view(projectiles=(ProjectileView("fireball", 0, (480.0, 300.0), 0.5, True),))
+        w.draw(view, frame, {s.slot: s for s in states}, fps=60.0)
     finally:
         w.close()

@@ -20,7 +20,7 @@ from magic_box.render.debug_overlay import DebugOverlay
 from magic_box.render.hud import draw_enemy_bar, draw_hud
 from magic_box.render.layout import Rect, compute_layout
 from magic_box.render.projectiles import draw_projectiles
-from magic_box.render.scenes import draw_scene
+from magic_box.render.scenes import draw_scene, make_style
 
 ALL_KEY_CODES = tuple(
     getattr(pygame, name) for name in dir(pygame) if name.startswith("K_") and name != "K_"
@@ -47,6 +47,8 @@ class Window:
         self.font = pygame.font.Font(None, HUD_FONT_SIZE)
         self.hint_font = pygame.font.Font(None, HINT_FONT_SIZE)
         self.banner_font = pygame.font.Font(None, BANNER_SIZE)
+        self.scene_style = make_style(self.render_cfg["scenes"])
+        self.proj_font = pygame.font.Font(None, self.render_cfg["projectiles"]["font_px"])
         self.layout = compute_layout(self.width, self.height, self.render_cfg)
         self.opp_smoothers = (
             CropSmoother(self.render_cfg["crop_smoothing"]),
@@ -103,7 +105,7 @@ class Window:
         if view.scene == "fight":
             self._draw_fight(view, frame, states)
         else:
-            draw_scene(self.screen, view)
+            draw_scene(self.screen, view, self.scene_style)
         if view.banner:
             img = self.banner_font.render(view.banner, True, TEXT_RGB)
             self.screen.blit(img, img.get_rect(center=(self.width // 2, self.height // 2)))
@@ -149,7 +151,15 @@ class Window:
             if crop is None and surf is not None:
                 crop = Rect(0, 0, surf.get_width(), surf.get_height())
             if crop is not None:
-                draw_projectiles(self.screen, half.half, crop, view.projectiles, half.viewer_slot)
+                draw_projectiles(
+                    self.screen,
+                    half.half,
+                    crop,
+                    view.projectiles,
+                    half.viewer_slot,
+                    rc["projectiles"],
+                    self.proj_font,
+                )
         div = rc["divider_px"]
         pygame.draw.rect(
             self.screen,
