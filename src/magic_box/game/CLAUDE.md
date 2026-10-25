@@ -29,7 +29,7 @@ Pure game rules: classes, spells and their effects, HP and mana, charge and dodg
 | Heal | +25 HP on the caster, capped at `hp_max` (`heal` event with the HP actually gained). |
 | Chain | 3 bolts of 7, launched `chain_gap_s` (0.25 s) apart. Each bolt needs its own dodge: one dodge avoids only the earliest bolt in its window. |
 
-Rules: a spell is a projectile when it does damage or carries a hit effect (`mana_slow`, `slow`); otherwise it is instant and shows a `SPELL NAME!` banner. `shield` and `empowered` go on the caster at release, `mana_slow` and `slow` on the target at impact. Re-applying an effect keeps the longer timer. Effect timers run on the match clock, so a pause freezes them.
+Rules: a spell is a projectile when it does damage or carries a hit effect (`mana_slow`, `slow`); otherwise it is instant and shows a `SPELL NAME!` banner. `shield` and `empowered` go on the caster at release, `mana_slow` and `slow` on the target at impact (not on a knockout blow). Re-applying an effect keeps the longer timer. Effect timers run on the match clock, so a pause freezes them.
 
 Events: `buff` (slot = caster; data `spell_id`, `effect`, `target`, `duration_s`), `heal` (slot = caster; `spell_id`, `amount`, `hp`), `block` (slot = defender; `spell_id`, `attacker`), plus `cast`, `hit` (Static Field hits for 0), `dodge`, `ko`, `match_end` (reason `ko`, `time` or `abandon`).
 

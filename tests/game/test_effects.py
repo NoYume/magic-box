@@ -330,3 +330,13 @@ def test_ko_clears_projectiles_still_in_flight():
     land(ms, 0.75)
     assert ms.result() == (0, "ko") and ms.projectiles == []
     assert [e.kind for e in ms.take_events()][-2:] == ["ko", "match_end"]
+
+
+def test_a_knockout_blow_puts_no_effect_on_the_loser():
+    """A lethal Inferno ends the match: no "slow" buff event or badge on the KO'd player."""
+    ms = new()
+    ms.players[1].hp = 10.0
+    cast(ms, 0, "inferno", push(0))
+    land(ms, 2.4)
+    assert kinds(ms) == ["cast", "hit", "ko", "match_end"]
+    assert ms.effect_views(1) == ()

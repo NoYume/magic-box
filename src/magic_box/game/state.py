@@ -422,13 +422,14 @@ class MatchState:
             target=proj.target,
             hp_left=round(target.hp, 1),
         )
+        if target.hp <= 0:
+            self._log(now, "ko", None, winner=proj.attacker)
+            self._end(now, proj.attacker, "ko")
+            return  # no effect on a KO'd player (it would pop "SLOWED!" over the K.O.)
         if proj.hit_effect is not None:
             self._add_effect(
                 proj.attacker, proj.target, proj.spell_id, proj.hit_effect, proj.effect_s, now
             )
-        if target.hp <= 0:
-            self._log(now, "ko", None, winner=proj.attacker)
-            self._end(now, proj.attacker, "ko")
 
     def _time_out(self, now: float) -> None:
         h0, h1 = self.players[0].hp, self.players[1].hp
