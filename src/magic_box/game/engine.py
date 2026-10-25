@@ -108,12 +108,14 @@ class Engine:
     def provide_camera_status(self, ok: bool) -> None:
         """Camera frames arriving; False while perception restarts (CAMERA RECONNECTING).
 
-        An ok status never creates the boot `camera` line: the loop reports ok before the
-        first frame, and only `provide_check("camera", True)` (a frame seen) passes boot.
+        A status never makes the boot `camera` line ok: the loop reports ok before the first
+        frame, so only `provide_check("camera", True)` (BootChecks: a frame seen) passes boot.
+        A False status marks the line "no frames" only while it isn't ok yet; once frames
+        were seen the line stays ok, and the banner and pause show the live state.
         """
         self._camera_ok = ok
-        if not ok or "camera" in self._checks:
-            self._derived_check("camera", ok, "ok" if ok else "no frames")
+        if not ok and not self._check("camera")[0]:
+            self._derived_check("camera", False, "no frames")
 
     def provide_check(self, name: str, ok: bool, detail: str = "") -> None:
         """One boot self-check result (`camera`, `mic P1`, `mic P2`, `network`, `api key`)."""

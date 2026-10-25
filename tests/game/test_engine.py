@@ -136,8 +136,31 @@ def test_checks_from_reports_and_mic_status():
         CheckView("api key", False, "no META_MODEL_API_KEY"),
         CheckView("svo", True, "playback"),
     )
-    e.provide_camera_status(True)
-    assert e.step([], states(), 0.05)[0].checks[0] == CheckView("camera", True, "ok")
+    e.provide_camera_status(True)  # a status never makes the line ok
+    assert e.step([], states(), 0.05)[0].checks[0] == CheckView("camera", False, "no frames")
+    e.provide_check("camera", True)  # BootChecks: a frame arrived
+    assert e.step([], states(), 0.1)[0].checks[0] == CheckView("camera", True, "")
+
+
+def test_perception_dying_at_startup_does_not_pass_boot_on_a_later_ok_status():
+    e = Engine(CFG)
+    e.provide_camera_status(False)  # perception died before the first frame
+    run(e, 0.0, 1.0, states(), dt=0.25)
+    e.provide_camera_status(True)  # restarted, still no frame
+    view, _ = run(e, 1.25, G["boot_max_s"] - 0.25, states(), dt=0.25)
+    assert view.scene == "boot"
+    assert view.checks[0] == CheckView("camera", False, "no frames")
+    e.provide_check("camera", True)  # BootChecks re-reports once a frame arrives
+    assert e.step([], states(), G["boot_max_s"] - 0.2)[0].scene == "lobby"
+
+
+def test_camera_outage_after_a_frame_leaves_the_camera_line_ok():
+    e = Engine(CFG)
+    t = boot(e)
+    e.provide_camera_status(False)
+    view, _ = e.step([], states(), t)
+    assert view.banner == "CAMERA RECONNECTING"
+    assert view.checks[0] == CheckView("camera", True, "")  # frames were seen; not stale later
 
 
 def test_camera_check_counts_for_boot():
