@@ -38,6 +38,7 @@ class HeldPush:
     action: Action
     until: float  # match clock
     spell_only: bool = False  # held during the basic cooldown: dropped, not a basic, at expiry
+    pushed: float = 0.0  # match clock of the push; a basic it fires counts its cooldown from here
 
 
 @dataclass
@@ -160,7 +161,7 @@ class MatchState:
             if p.held is not None and self.clock >= p.held.until:
                 held, p.held = p.held, None
                 if not held.spell_only:
-                    self._basic(p, held.action, now)
+                    self._basic(p, held.action, now, pushed=held.pushed)
         for proj in sorted(self.projectiles, key=lambda pr: pr.launched + pr.travel_s):
             if self._result is not None:
                 break
@@ -286,7 +287,7 @@ class MatchState:
                 p.charge = None
                 self._cast(p, c, action, action.push.origin_px, action.push.speed, now)
                 return
-        on_cooldown = self.clock < p.basic_ready_at
+        on_cooldown = self.clock < p.basic_ready_at - 1e-9  # float slack: on time is ready
         if p.held is not None and p.held.spell_only and not on_cooldown:
             p.held = None  # the cooldown is over: this push may fire a basic again
         if p.held is not None:
@@ -300,7 +301,7 @@ class MatchState:
         ):
             # The voice charge lands ~0.4 s after speech: give it a chance to catch up. On the
             # basic cooldown the push can still release a late spell, but never a basic.
-            p.held = HeldPush(action, self.clock + grace, spell_only=on_cooldown)
+            p.held = HeldPush(action, self.clock + grace, spell_only=on_cooldown, pushed=self.clock)
             return
         if not on_cooldown:
             self._basic(p, action, now)
@@ -321,9 +322,14 @@ class MatchState:
         kinds = ("two_hand_push", "push") if push.two_hand else ("push",)
         return spell.release in kinds
 
-    def _basic(self, p: PlayerMatch, action: Action, now: float) -> None:
+    def _basic(
+        self, p: PlayerMatch, action: Action, now: float, pushed: float | None = None
+    ) -> None:
+        """Fire a basic attack. The cooldown counts from the push (`pushed`, for one released
+        after the grace hold), so spammed basics keep the cooldown cadence, each just late."""
         assert action.push is not None
-        p.basic_ready_at = self.clock + self.cfg["game"]["basic_attack_cooldown_s"]
+        start = self.clock if pushed is None else pushed
+        p.basic_ready_at = start + self.cfg["game"]["basic_attack_cooldown_s"]
         basic = Charge(basic_attack(self.cfg), 0.0, 0.0)
         self._cast(p, basic, action, action.push.origin_px, action.push.speed, now)
 

@@ -1,6 +1,7 @@
 """Release grace: a push with no charge waits for a late voice charge (mic on only)."""
 
 import copy
+import math
 from pathlib import Path
 
 import pytest
@@ -74,7 +75,8 @@ def test_no_charge_fires_the_basic_attack_when_the_grace_ends():
     assert (proj.spell_id, proj.speed) == ("basic", 2.5)
     [ev] = ms.take_events()
     assert (ev.kind, ev.t, ev.data["spell_id"]) == ("cast", 7.0, "basic")
-    assert ms.cooldown_left(0) == pytest.approx(G["basic_attack_cooldown_s"])
+    # Ruling: the cooldown counts from the push (clock 0), not from the basic firing.
+    assert ms.cooldown_left(0) == pytest.approx(G["basic_attack_cooldown_s"] - ms.clock)
 
 
 def test_mic_off_fires_the_basic_attack_at_once():
@@ -219,10 +221,11 @@ def test_no_spell_only_hold_on_cooldown_when_nothing_is_affordable():
     assert ms.players[0].held is None and casts(ms) == ["basic"]
 
 
-def _basics_from_spam(period: float, seconds: float = 10.0) -> int:
-    """Basic attacks from a live-mic player pushing every `period` with no voice charge."""
+def _basic_times_from_spam(period: float, seconds: float = 10.0) -> list[float]:
+    """Match-clock times of the basics from a live-mic player pushing every `period` with no
+    voice charge."""
     ms = new()
-    t, nxt, n = 0.0, 0.0, 0
+    t, nxt, times = 0.0, 0.0, []
     dt = 1 / 60
     while t < seconds:
         if t >= nxt - 1e-9:
@@ -231,30 +234,37 @@ def _basics_from_spam(period: float, seconds: float = 10.0) -> int:
         ms.players[0].mana = G["mana_max"]
         ms.players[1].hp = 1e9
         ms.advance(dt, STATES, t)
-        n += len(casts(ms))
+        times += [ms.clock] * len(casts(ms))
         t += dt
-    return n
+    return times
 
 
-def _expected_basics(period: float, seconds: float = 10.0) -> int:
-    """The no-spell-only-hold cadence: a push with no open normal hold and no cooldown opens
-    a hold whose basic fires `release_grace_s` later; the cooldown runs from that basic."""
+def _expected_basic_times(period: float, seconds: float = 10.0) -> list[float]:
+    """Ruling: a push the cooldown allows fires its basic `release_grace_s` later, and the
+    cooldown counts from the push. Spell-only holds never block a push after the cooldown."""
     cd = G["basic_attack_cooldown_s"]
-    hold_until, ready, n, t = -1.0, 0.0, 0, 0.0
-    while t < seconds:
-        if t >= hold_until and t >= ready:
-            hold_until = t + GRACE
-            if hold_until < seconds:
-                n += 1
-            ready = hold_until + cd
-        t += period
-    return n
+    ready, times, k = 0.0, [], 0
+    while k * period < seconds:
+        t = k * period
+        if t >= ready - 1e-9:
+            if t + GRACE < seconds:
+                times.append(t + GRACE)
+            ready = t + cd
+        k += 1
+    return times
 
 
-@pytest.mark.parametrize("period", [0.4, 0.5])
+@pytest.mark.parametrize("period", [0.4, 0.5, 0.8])
 def test_push_spam_keeps_the_basic_cadence(period):
-    """A spell-only hold opened late in the cooldown must not swallow the next push after it."""
-    assert _basics_from_spam(period) == _expected_basics(period)
+    """With a live mic, spammed basics come every cooldown (the first push at or after it),
+    each up to release_grace_s late; not every cooldown + grace. A spell-only hold opened late
+    in the cooldown doesn't swallow the next push after it."""
+    got, want = _basic_times_from_spam(period), _expected_basic_times(period)
+    assert len(got) == len(want)
+    assert all(abs(a - b) <= 2 / 60 for a, b in zip(got, want, strict=True))
+    cadence = math.ceil(G["basic_attack_cooldown_s"] / period - 1e-9) * period
+    assert all(abs(b - a - cadence) <= 2 / 60 for a, b in zip(got, got[1:], strict=False))
+    assert cadence < G["basic_attack_cooldown_s"] + GRACE
 
 
 @pytest.mark.parametrize(("mana_slow", "held"), [(False, True), (True, False)])
