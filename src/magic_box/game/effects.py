@@ -3,8 +3,8 @@
 Owner: Adetola
 
 - `shield` (Flame Wall, on the caster): blocks the next incoming hit, then ends.
-- `empowered` (Holy Light, on the caster): spells released while it lasts deal
-  x `game.empowered_mult`.
+- `empowered` (Holy Light, on the caster): spells and basic attacks released while it
+  lasts deal x `game.empowered_mult`.
 - `mana_slow` (Static Field, on the target): mana regen x `game.mana_slow_mult`.
 - `slow` (Inferno, on the target): the next charge window is x `game.slow_charge_mult`;
   charging uses it up.
