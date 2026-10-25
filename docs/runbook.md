@@ -274,7 +274,7 @@ Run with `-- --debug` so the overlay is one key away. Tick each line, and write 
 - [ ] Both raise hands and hold about 0.3 s: loading starts. A one-frame flicker does not start it.
 
 **Loading**
-- [ ] Each half shows its player's class, incantations and release cue, and a countdown.
+- [ ] Each half shows its player's class, incantations and release cue, and a countdown. Long incantations shrink and wrap instead of being cut off.
 - [ ] The incantations are Spark-written, not the config ones (for example, not "embers of the forty acres burn").
 
 **Fight: each spell** (say it, then release). Damage and effects show on the target's half.
@@ -297,8 +297,12 @@ Run with `-- --debug` so the overlay is one key away. Tick each line, and write 
 - [ ] Damage rises when the players stand closer: the distance multiplier runs from ×1.4 at 1.2 m to ×0.7 at 2.8 m, for the attacker at release and the defender at impact.
 - [ ] One player steps out for more than 2 s: STEP INTO VIEW, the fight freezes; stepping back resumes it.
 - [ ] One player stays out about 22 s (2 s to pause, then `abandon_after_s` 20 s): the match ends and the tracked player wins.
-- [ ] KO: the fight freezes about 2.5 s with the K.O. effect, then victory.
+- [ ] KO: the fight freezes for `game.ko_hold_s` (2.5 s) while the K.O. overlay and slow-motion effects play (`render.fx.ko_s`, 2.0 s), then victory.
 - [ ] Time-out at 90 s: higher HP wins.
+
+**Sound** (synthesized at startup with numpy; nobody has heard it on real speakers yet)
+- [ ] Listen on the venue speakers or monitor audio: cast whoosh, hit thump, dodge swish, block clang, heal chime, buff shimmer, K.O. boom, the loading countdown tick, the fight's last-5-seconds tick and the match-start fanfare.
+- [ ] Set `render.audio.volume` (0.6) so it is clear but not harsh. If any sound is bad, `render.audio.enabled: false` mutes them all.
 
 **Victory and rematch**
 - [ ] Winner headline, a stats card per player, the chronicle (Spark-written with Wi-Fi, a template without).
