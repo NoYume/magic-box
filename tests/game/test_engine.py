@@ -152,6 +152,24 @@ def test_ko_to_victory_chronicle_and_back_to_lobby():
     assert view.scene == "lobby" and view.players[0].name == "Ada"
 
 
+def test_hands_held_from_victory_wait_in_lobby_and_names_can_change():
+    e = Engine(CFG)
+    to_fight(e)
+    e._match.players[1].hp = 1  # noqa: SLF001 (white-box shortcut to a KO)
+    t = G["loading_min_s"] + 0.2
+    e.step([Action("push", 0, t, push=Push("R", 2.0, (480.0, 300.0)), dist=2.0)], states(), t)
+    view, _ = run(e, t + 0.05, t + 1.0, states())
+    assert view.scene == "victory"
+    t2 = t + 1.05 + G["victory_min_s"]
+    view, _ = run(e, t2, t2 + 2.0, states(up=(True, True)))  # hands held into the lobby
+    assert view.scene == "lobby"
+    t3 = t2 + 2.05
+    view, _ = e.step([Action("speech", 1, t3, text="call me cy")], states(up=(True, True)), t3)
+    assert view.scene == "lobby" and view.players[1].name == "Cy"
+    assert e.step([], states(), t3 + 0.05)[0].scene == "lobby"  # hands down
+    assert e.step([], states(up=(True, True)), t3 + 0.1)[0].scene == "loading"
+
+
 def test_mic_status_reaches_player_view():
     e = Engine(CFG)
     e.provide_mic_status(1, True)
