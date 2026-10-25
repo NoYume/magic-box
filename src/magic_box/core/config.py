@@ -238,6 +238,9 @@ def _check_game_effects(cfg: Config, classes: dict, problems: list[str]) -> None
     lo, hi = _get(cfg, "game", "boot_min_s"), _get(cfg, "game", "boot_max_s")
     if _is_num(lo) and _is_num(hi) and lo > hi:
         problems.append("game.boot_min_s: must be <= game.boot_max_s")
+    ko_s, hold = _get(cfg, "render", "fx", "ko_s"), _get(cfg, "game", "ko_hold_s")
+    if _is_num(ko_s) and _is_num(hold) and ko_s > hold:
+        problems.append("render.fx.ko_s: must be <= game.ko_hold_s (FX are cleared at victory)")
     words = _get(cfg, "game", "name_max_words")
     if not isinstance(words, int) or isinstance(words, bool) or words < 1:
         problems.append("game.name_max_words: must be an integer >= 1")

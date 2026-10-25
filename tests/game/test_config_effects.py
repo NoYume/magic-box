@@ -122,3 +122,8 @@ def test_name_stop_words_cover_the_ruling():
 def test_name_max_words_must_be_an_integer_at_least_1(value):
     found = problems(lambda c: c["game"].update(name_max_words=value))
     assert any("game.name_max_words" in p for p in found)
+
+
+def test_ko_banner_must_not_outlast_the_ko_hold():
+    found = problems(lambda c: c["render"]["fx"].update(ko_s=c["game"]["ko_hold_s"] + 0.5))
+    assert any("render.fx.ko_s" in p for p in found)
