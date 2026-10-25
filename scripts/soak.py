@@ -75,6 +75,7 @@ class RandomPlayers:
         self.held: dict[str, int] = {}  # key -> ticks left
         self.scene = "boot"
         self.states: dict = {}
+        self.passive = False  # this match: nobody attacks (plays to a time-out)
 
     def _hold(self, key: str, ticks: int) -> None:
         self.held[key] = max(self.held.get(key, 0), ticks)
@@ -97,7 +98,7 @@ class RandomPlayers:
             if r.random() < 0.01:
                 z = st.root[2] if st is not None else self.start_z
                 self._hold(k["closer"] if z > self.start_z else k["farther"], r.randint(5, 40))
-            if self.scene != "fight":
+            if self.scene != "fight" or self.passive:
                 continue
             if r.random() < 0.03:
                 self._hold(k["push"], 1)
@@ -125,6 +126,7 @@ class SoakSources:
         self.scene = "boot"
         self.gone_until = {0: 0.0, 1: 0.0}
         self.camera_down_until = 0.0
+        self.leave_next: int | None = None  # this slot walks off for good (an abandon)
         self.counts: Counter = Counter()
 
     def poll(self, keys, now, dt):
@@ -134,6 +136,9 @@ class SoakSources:
         r = self.rng
         per_tick = 1.0 / self.fps
         voice = list(got.voice)
+        if self.leave_next is not None:
+            self.gone_until[self.leave_next] = now + 30.0
+            self.leave_next = None
         for slot in (0, 1):
             if self.scene == "lobby" and r.random() < per_tick / 3:
                 text = r.choice(TRANSCRIPTS)
@@ -183,6 +188,16 @@ class SoakDisplay:
         return self.window.tick()
 
     def draw(self, view, frame, states, fps, dropped=0):
+        if view.scene == "fight" and (self.view is None or self.view.scene != "fight"):
+            roll = (
+                self.players.rng.random()
+            )  # each match: mostly a brawl, some time-outs and walk-offs
+            self.players.passive = roll < 0.15
+            if 0.15 <= roll < 0.3:
+                self.sources.leave_next = self.players.rng.choice((0, 1))
+                self.sources.counts["walk-off match"] += 1
+            if self.players.passive:
+                self.sources.counts["passive match"] += 1
         self.view = view
         self.players.scene = self.sources.scene = view.scene
         self.players.states = states
@@ -209,6 +224,7 @@ def main(argv=None) -> int:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--fast", action="store_true", help="no frame cap; fake 60 fps clock")
     parser.add_argument("--config", type=Path, default=ROOT / "config.yaml")
+    parser.add_argument("--debug", action="store_true", help="draw the F1 debug overlay too")
     args = parser.parse_args(argv)
 
     sys.path.insert(0, str(ROOT / "src"))
@@ -227,7 +243,9 @@ def main(argv=None) -> int:
     rng = random.Random(args.seed)
     sources = SoakSources(FakeSources(cfg), rng, float(cfg["display"]["fps"]))
     players = RandomPlayers(cfg, rng)
-    display = SoakDisplay(Window(cfg, headless=True), players, sources, args.fast)
+    window = Window(cfg, headless=True)
+    window.debug = args.debug
+    display = SoakDisplay(window, players, sources, args.fast)
     engine = Engine(cfg)
     results: Counter = Counter()
     scenes: Counter = Counter()
