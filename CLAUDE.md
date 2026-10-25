@@ -2,6 +2,8 @@
 
 Read this first. Each package folder under `src/magic_box/` has its own short `CLAUDE.md`; Claude Code loads it when you work there. Spec: `docs/superpowers/specs/2026-10-24-magic-box-design.md`.
 
+**Deadline: Sunday 2026-10-25, 11:30 CDT.** Everything has to be demo-ready and submitted by then. Check the time left before starting multi-step work, and favor what makes the live demo on the Jetson work over polish.
+
 ## What this is
 
 A game console built from a ZED X stereo camera, a Jetson Orin Nano and an external monitor. It runs a 1v1 magic duel for HackTX 2026 (Hardware, Meta and Best Overall tracks). Two players stand side by side. Each watches their own half of a split screen showing a live close-up of the *opponent*. Players speak a Muse Spark-written incantation into their own clip-on mic to charge a spell, then release it with a body gesture (usually a fast push toward the camera). The defender dodges by stepping aside or ducking. Real distance to the camera scales damage.
@@ -206,6 +208,8 @@ Per-machine overrides go in `config.local.yaml` (gitignored, deep-merged over `c
 `bench_tracking.py` is the hour-1 go/no-go for two-person tracking. It prints GO or NO-GO from the measured fps and the share of frames with two people. On NO-GO, retry with `--body-format BODY_18`. To tune offline, record an SVO with `record_session.py`, then set `camera.svo_path` in `config.local.yaml` and run the game as usual (playback loops; perception handles the `cam_t` rewind).
 
 ## Milestones
+
+All milestones land before the deadline: **Sunday 2026-10-25, 11:30 CDT**.
 
 - **Hour 0–1:** Daniel: Jetson env and `check_env.py`. Enoch: `bench_tracking.py` go/no-go with two people. Nikhil: `--fake` running on the Jetson's monitor. Adetola: `docs/game-design.md` pass.
 - **M1:** live ZED → `PlayerState` → layout C crops and self-view skeletons on the monitor.
