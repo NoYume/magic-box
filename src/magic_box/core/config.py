@@ -316,6 +316,51 @@ def _check_pipeline_render(cfg: Config, problems: list[str]) -> None:
         problems.append("display.vsync: must be true or false")
 
 
+THEME_COLORS: tuple[str, ...] = (
+    "text",
+    "dim",
+    "faint",
+    "shadow",
+    "gold",
+    "ok",
+    "bad",
+    "warn",
+    "panel",
+    "panel_edge",
+    "card",
+    "card_hi",
+    "p1",
+    "p2",
+    "bg_top",
+    "bg_bottom",
+    "fire",
+    "lightning",
+    "holy",
+    "basic",
+    "mana",
+)
+THEME_FONTS: tuple[str, ...] = ("tiny", "small", "text", "big", "huge", "giant")
+
+
+def _check_render(cfg: Config, problems: list[str]) -> None:
+    if "render" not in cfg:
+        return
+    colors = _get(cfg, "render", "theme", "colors")
+    missing = [k for k in THEME_COLORS if not isinstance(colors, dict) or k not in colors]
+    if missing:
+        problems.append(f"render.theme.colors: missing {', '.join(missing)}")
+    fonts = _get(cfg, "render", "theme", "font_px")
+    missing = [k for k in THEME_FONTS if not isinstance(fonts, dict) or k not in fonts]
+    if missing:
+        problems.append(f"render.theme.font_px: missing {', '.join(missing)}")
+    cap = _get(cfg, "render", "fx", "max_particles")
+    if not isinstance(cap, int) or cap < 0:
+        problems.append("render.fx.max_particles: must be an integer >= 0")
+    volume = _get(cfg, "render", "audio", "volume")
+    if not isinstance(volume, (int, float)) or not 0 <= volume <= 1:
+        problems.append("render.audio.volume: must be a number from 0 to 1")
+
+
 def validate(cfg: Config) -> list[str]:
     """Return every problem found in `cfg` (empty list means valid)."""
     problems = [f"{name}: missing section" for name in REQUIRED_SECTIONS if name not in cfg]
@@ -328,6 +373,7 @@ def validate(cfg: Config) -> list[str]:
     _check_combat(cfg, problems)
     _check_voice_and_ai(cfg, problems)
     _check_pipeline_render(cfg, problems)
+    _check_render(cfg, problems)
     return problems
 
 
