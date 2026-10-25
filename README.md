@@ -50,7 +50,7 @@ Fake-mode keys (from `config.yaml`):
 | Guard (Holy Knight parry) | `g` | `o` |
 | Spells (voice fallback, always on) | `1` `2` `3` | `8` `9` `0` |
 
-`F1` toggles the debug overlay. `Esc` quits.
+`F1` toggles the debug overlay. `Backspace` goes back to the lobby from any scene. On the end screen, saying "main menu" or "play again" does the same. `Esc` quits.
 
 Boot moves on after 2 s. In the lobby both players hold their hands up (`r` + `y`) for 0.3 s to start. The keyboard can't speak, so fake mode keeps the default classes (P1 Fire Mage, P2 Holy Knight). With a `.env` holding `META_MODEL_API_KEY`, `uv run --env-file .env python -m magic_box --fake` also calls Muse Spark for the incantations and the chronicle.
 

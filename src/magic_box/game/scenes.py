@@ -122,6 +122,15 @@ class SceneMachine:
         self.entered_at = now
         self._armed = True
 
+    def reset_to_lobby(self, now: float) -> bool:
+        """Back to the lobby from loading, fight or victory (a reset). Players must lower their
+        hands before raising them starts the next match. False if already in boot or lobby."""
+        if self.scene in ("boot", "lobby"):
+            return False
+        self._armed = False
+        self.scene, self.entered_at = "lobby", now
+        return True
+
     def elapsed(self, now: float) -> float:
         return 0.0 if self.entered_at is None else now - self.entered_at
 

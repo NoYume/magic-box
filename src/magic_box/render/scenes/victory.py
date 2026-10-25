@@ -86,7 +86,7 @@ def _stats_card(surface, style: SceneStyle, p: PlayerView, win, x0: int, hw: int
     else:
         th.blit_text(
             surface,
-            "RAISE BOTH HANDS FOR A REMATCH",
+            'RAISE BOTH HANDS OR SAY "MAIN MENU"',
             "small",
             c["faint"],
             "midbottom",
