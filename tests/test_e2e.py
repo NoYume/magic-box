@@ -28,6 +28,8 @@ from magic_box.replay.record import SessionRecorder
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_CFG = load_config(ROOT / "config.yaml")
+# Written against fire vs lightning; config.yaml's own default puts the parry knight in slot 1.
+BASE_CFG["game"]["default_classes"] = {0: "fire_mage", 1: "lightning_mage"}
 FPS = 60
 DT = 1 / FPS
 KEYS = BASE_CFG["keys"]["fake"]
@@ -447,6 +449,32 @@ def test_flame_wall_blocks_the_next_hit():
     assert h.player(0).hp == cfg["game"]["hp_max"]
     assert h.player(0).effects == ()  # the shield is used up
     assert h.player(0).stats["blocks"] == 1
+
+
+def test_knight_guard_parries_then_push_ripostes():
+    """The guard key goes through FakePlayers, intent's pose edge and the engine."""
+    cfg = make_cfg(default_classes={0: "fire_mage", 1: "holy_knight"})
+    travel = cfg["game"]["classes"]["fire_mage"]["spells"][0]["travel_s"]
+
+    def script(h: Harness):
+        yield from to_fight(h)
+        out["n"] = n = len(h.events)
+        yield from cast(h, 0, "fireball")
+        yield from wait_for(h, "cast", n, spell_id="fireball", max_s=0.5)
+        yield from hold(NONE, travel - cfg["game"]["parry_window_s"] / 2 - 4 * DT)
+        yield from tap(KEYS[1]["guard"], ticks=3)
+        yield from wait_for(h, "block", n, max_s=1.0)
+        yield from tap(KEYS[1]["push"], ticks=3)
+        yield from wait_for(h, "hit", n, spell_id="riposte", max_s=1.5)
+
+    out: dict = {}
+    h = Harness(cfg).run(script)
+    [block] = h.find("block", since=out["n"])
+    assert (block.slot, block.data["spell_id"], block.data["parry"]) == (1, "fireball", True)
+    assert h.player(1).hp == cfg["game"]["hp_max"]
+    [hit] = h.find("hit", since=out["n"])
+    assert (hit.slot, hit.data["spell_id"]) == (1, "riposte")
+    assert h.player(0).hp < cfg["game"]["hp_max"]
 
 
 @pytest.mark.parametrize("ducks", [1, 3])

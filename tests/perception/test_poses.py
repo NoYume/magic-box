@@ -37,3 +37,18 @@ def test_without_a_pelvis_only_the_head_bounds_hands_together():
     kp = {k: v for k, v in BASE.items() if k != "pelvis"}
     kp |= {"l_wrist": (0.65, 0.1, 2.0), "r_wrist": (0.55, 0.1, 2.0)}
     assert detect_poses(kp, HEAD, P) == {"hands_together"}
+
+
+def test_wrist_held_toward_camera_at_shoulder_height_is_guard():
+    kp = BASE | {"r_wrist": (0.5, -0.55, 2.0 - P["guard_forward_m"] - 0.05)}
+    assert detect_poses(kp, HEAD, P) == {"guard"}
+
+
+def test_guard_needs_reach_and_height():
+    short = BASE | {"r_wrist": (0.5, -0.55, 2.0 - P["guard_forward_m"] + 0.05)}
+    low = BASE | {"r_wrist": (0.5, -0.2, 2.0 - P["guard_forward_m"] - 0.05)}
+    no_neck = {k: v for k, v in BASE.items() if k != "neck"}
+    no_neck |= {"r_wrist": (0.5, -0.55, 1.5)}
+    assert detect_poses(short, HEAD, P) == frozenset()
+    assert detect_poses(low, HEAD, P) == frozenset()
+    assert "guard" not in detect_poses(no_neck, HEAD, P)
