@@ -57,9 +57,9 @@ def to_fight(e, t=None):
     view, _, t = hold_hands(e, t)
     assert view.scene == "loading"
     e.provide_incantations({0: {"fireball": "a b c"}, 1: {}})
-    view, events = run(e, t, t + G["loading_min_s"] + 0.1, states())
+    view, events = run(e, t, t + max(G["loading_min_s"], G["loading_read_s"]) + 0.1, states())
     assert view.scene == "fight"
-    return view, events, t + G["loading_min_s"] + 0.15
+    return view, events, t + max(G["loading_min_s"], G["loading_read_s"]) + 0.15
 
 
 def ko(e, t):
@@ -342,9 +342,9 @@ def test_loading_countdown_then_fight_with_provided_and_fallback_incantations():
     e = Engine(CFG)
     view, _, t = hold_hands(e, to_lobby(e))
     assert view.scene == "loading"
-    assert G["loading_min_s"] - DT - 1e-9 <= view.timer_s <= G["loading_min_s"]
+    assert view.timer_s is None  # nothing to read yet: no countdown
     e.provide_incantations({0: {"fireball": "a b c"}, 1: {}})
-    view, events = run(e, t, t + G["loading_min_s"], states())
+    view, events = run(e, t, t + max(G["loading_min_s"], G["loading_read_s"]), states())
     assert (
         view.scene == "fight"
         and view.banner == "FIGHT!"
@@ -356,10 +356,49 @@ def test_loading_countdown_then_fight_with_provided_and_fallback_incantations():
     assert [ev.kind for ev in events] == ["match_start"]
 
 
+def test_loading_leaves_read_time_after_late_incantations():
+    """Spark answers in 3.1-3.8 s; players still get loading_read_s to read the new card."""
+    e = Engine(CFG)
+    _, _, t = hold_hands(e, to_lobby(e))
+    view, _ = run(e, t, t + 3.5, states())
+    assert view.scene == "loading" and view.timer_s is None
+    e.provide_incantations({0: {"fireball": "a b c"}, 1: {}})
+    t2 = t + 3.5 + DT
+    view, _ = e.step([], states(), t2)
+    assert view.scene == "loading"
+    assert view.timer_s == pytest.approx(G["loading_read_s"])
+    view, _ = run(e, t2 + DT, t2 + G["loading_read_s"] - DT, states())
+    assert view.scene == "loading" and 0 < view.timer_s <= DT + 1e-6
+    view, _ = run(e, t2 + G["loading_read_s"], t2 + G["loading_read_s"] + DT, states())
+    assert view.scene == "fight"
+
+
+def test_loading_lasts_loading_min_s_when_incantations_come_at_once():
+    cfg = copy.deepcopy(CFG)
+    cfg["game"]["loading_read_s"] = 1.0
+    e = Engine(cfg)
+    _, _, t = hold_hands(e, to_lobby(e))
+    e.provide_incantations({0: {}, 1: {}})
+    view, _ = e.step([], states(), t)
+    assert view.timer_s == pytest.approx(G["loading_min_s"], abs=0.2)
+    view, _ = run(e, t + DT, t + G["loading_min_s"] - 0.3, states())
+    assert view.scene == "loading"
+    view, _ = run(e, t + G["loading_min_s"] - 0.25, t + G["loading_min_s"] + 0.1, states())
+    assert view.scene == "fight"
+
+
 def test_loading_falls_back_at_max_time():
     e = Engine(CFG)
     _, _, t = hold_hands(e, to_lobby(e))
     view, _ = run(e, t, t + G["loading_max_s"] + 0.1, states(), dt=0.25)
+    assert view.scene == "loading" and view.timer_s is not None  # fallback in, now reading
+    view, _ = run(
+        e,
+        t + G["loading_max_s"] + 0.35,
+        t + G["loading_max_s"] + G["loading_read_s"] + 0.5,
+        states(),
+        dt=0.25,
+    )
     assert view.scene == "fight"
     assert view.players[0].spells[0].incantation == "embers of the forty acres burn"
 

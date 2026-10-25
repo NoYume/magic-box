@@ -263,7 +263,12 @@ def test_full_flow_two_matches_through_the_real_window():
             ("Bob", "holy_knight"),
         ]
         yield from until_scene(h, "loading", BOTH_HANDS_UP)
+        marks["loading"] = h.now
+        assert h.view.timer_s is None  # no countdown before the incantations arrive
+        yield NONE
+        assert h.view.timer_s == pytest.approx(max(g["loading_min_s"], g["loading_read_s"]))
         yield from until_scene(h, "fight")
+        marks["fight"] = h.now
         incs = {s.id: s.incantation for s in h.player(0).spells}
         assert all(incs.values()), incs
         # Fireball then Inferno: 34.2 + 66.6 at the fake 3 m/s push is a KO.
@@ -305,6 +310,9 @@ def test_full_flow_two_matches_through_the_real_window():
     scenes = [v.scene for v in h.views]
     assert scenes[0] == "boot"
     assert marks["lobby"] - 1000.0 == pytest.approx(g["boot_min_s"], abs=3 * DT)
+    # AI off: the fallback incantations arrive on the second loading tick.
+    loading_s = max(g["loading_min_s"], g["loading_read_s"] + DT)
+    assert marks["fight"] - marks["loading"] == pytest.approx(loading_s, abs=2 * DT)
     assert marks["victory"] - marks["ko"] == pytest.approx(g["ko_hold_s"], abs=2 * DT)
     assert marks["lobby2"] - marks["victory"] == pytest.approx(g["victory_min_s"], abs=0.5)
     assert len(h.find("match_start")) == 2

@@ -219,6 +219,7 @@ GAME_TIMING_KEYS: tuple[str, ...] = (
     "slow_charge_mult",
     "release_grace_s",
     "ko_hold_s",
+    "loading_read_s",
 )
 
 

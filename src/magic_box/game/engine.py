@@ -45,6 +45,7 @@ class Engine:
         self._heard: dict[int, str] = {s: "" for s in SLOTS}
         self._hands: dict[int, Hold] = {s: Hold(g["hands_up_hold_s"]) for s in SLOTS}
         self._incantations: dict[int, dict[str, str]] | None = None
+        self._incantations_at: float | None = None  # first step that saw them (loading)
         self._match: MatchState | None = None
         self._chronicle: str | None = None
         self._mic_ok: dict[int, bool] = {s: False for s in SLOTS}
@@ -78,13 +79,15 @@ class Engine:
             if self._incantations is None and self._scenes.elapsed(now) >= self._g["loading_max_s"]:
                 self._incantations = {}
                 self._fill_fallbacks()
+            if self._incantations is not None and self._incantations_at is None:
+                self._incantations_at = now
         elif scene == "fight":
             events += self._fight(actions, states, dt, now)
 
         changed = self._scenes.update(
             now,
             both_ready=all(ready.values()),
-            incantations_ready=self._incantations is not None,
+            incantations_ready=self._loading_left(now) == 0.0,
             match_over=self._match_over(now),
             camera_ok=self._check("camera")[0],
         )
@@ -203,6 +206,18 @@ class Engine:
             match.advance(dt, states, now)
         return match.take_events()
 
+    def _loading_left(self, now: float) -> float | None:
+        """Seconds until loading may end: at least `loading_min_s` in all and `loading_read_s`
+        after the incantations arrived. None while they haven't (no countdown yet)."""
+        if self._incantations_at is None:
+            return None
+        g = self._g
+        left = max(
+            g["loading_min_s"] - self._scenes.elapsed(now),
+            self._incantations_at + g["loading_read_s"] - now,
+        )
+        return max(0.0, left) if left > 1e-9 else 0.0
+
     def _match_over(self, now: float) -> bool:
         """The match ended; after a KO, only once `ko_hold_s` has passed (finishing FX)."""
         result = self._match.result() if self._match is not None else None
@@ -234,6 +249,7 @@ class Engine:
         events: list[GameEvent] = []
         if scene == "loading":
             self._incantations = None
+            self._incantations_at = None
             self._chronicle = None
         elif scene == "fight":
             self._untracked_since.clear()
@@ -273,7 +289,7 @@ class Engine:
             banner = CAMERA_BANNER if camera_down else self._lobby_banner
         elif scene == "loading":
             banner = CAMERA_BANNER if camera_down else None
-            timer = max(0.0, self._g["loading_min_s"] - self._scenes.elapsed(now))
+            timer = self._loading_left(now)  # None until there is something to read
         elif scene == "fight":
             assert match is not None
             if self._pause == "camera":

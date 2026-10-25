@@ -82,7 +82,15 @@ def test_effect_kind_and_time(effect, effect_s):
 
 
 @pytest.mark.parametrize(
-    "key", ["boot_min_s", "hands_up_hold_s", "abandon_after_s", "release_grace_s", "ko_hold_s"]
+    "key",
+    [
+        "boot_min_s",
+        "hands_up_hold_s",
+        "abandon_after_s",
+        "release_grace_s",
+        "ko_hold_s",
+        "loading_read_s",
+    ],
 )
 @pytest.mark.parametrize("value", [-1, True, "2"])
 def test_game_numbers_are_numbers_at_least_0(key, value):
