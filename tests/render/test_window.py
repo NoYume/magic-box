@@ -150,3 +150,20 @@ def test_victory_draws_a_draw_without_banner():
         w.render(make_full_view("victory", banner=None, winner_slot=None), None, {}, 1.0)
     finally:
         w.close()
+
+
+def _hints_drawn(banner, monkeypatch):
+    """How many halves draw the STEP INTO VIEW hint (nobody tracked) under `banner`."""
+    w = Window(CFG, headless=True)
+    calls = []
+    monkeypatch.setattr(w, "_step_into_view", lambda half, now: calls.append(half))
+    try:
+        w.render(make_view(banner=banner), None, {}, 0.0)
+    finally:
+        w.close()
+    return len(calls)
+
+
+def test_pause_banner_with_its_countdown_replaces_the_step_hint(monkeypatch):
+    assert _hints_drawn(None, monkeypatch) == 2
+    assert _hints_drawn("STEP INTO VIEW · 12", monkeypatch) == 0

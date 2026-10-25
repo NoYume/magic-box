@@ -8,6 +8,7 @@ checks, camera health, names and class picks, debounced hands-up, and the
 pause / abandon rule.
 """
 
+import math
 from collections.abc import Mapping, Sequence
 
 from magic_box.core.config import Config
@@ -219,6 +220,14 @@ class Engine:
         )
         return max(0.0, left) if left > 1e-9 else 0.0
 
+    def _pause_banner(self, now: float) -> str:
+        """'STEP INTO VIEW · 12': whole seconds left until the pause abandons the match."""
+        since = self._tracking_pause_since
+        if since is None:
+            return PAUSE_BANNER
+        left = max(0.0, self._g["abandon_after_s"] - (now - since))
+        return f"{PAUSE_BANNER} · {math.ceil(left - 1e-9)}"
+
     def _match_over(self, now: float) -> bool:
         """The match ended; after a KO, only once `ko_hold_s` has passed (finishing FX)."""
         result = self._match.result() if self._match is not None else None
@@ -296,7 +305,7 @@ class Engine:
             if self._pause == "camera":
                 banner = CAMERA_BANNER
             elif self._pause == "tracking":
-                banner = PAUSE_BANNER
+                banner = self._pause_banner(now)
             else:
                 banner = match.banner()
             timer = match.time_left

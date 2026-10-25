@@ -9,6 +9,7 @@ Owner: Daniel
 """
 
 import copy
+import math
 import random
 from collections.abc import Callable, Iterator
 from dataclasses import replace
@@ -190,6 +191,11 @@ class _HarnessSources:
 
 
 # -- reusable script pieces --------------------------------------------------
+
+
+def paused(view: GameView) -> bool:
+    """The tracking-pause banner ("STEP INTO VIEW · 12")."""
+    return (view.banner or "").startswith("STEP INTO VIEW")
 
 
 def hold(keys=NONE, seconds: float = 0.0) -> Iterator[frozenset[str]]:
@@ -514,9 +520,8 @@ def test_abandon_after_a_long_pause(leave, winner, banner):
         yield from to_fight(h)
         h.gone |= leave
         out["left"] = h.now
-        yield from until(
-            h, lambda h: h.view.banner == "STEP INTO VIEW", max_s=g["pause_after_s"] + 1
-        )
+        yield from until(h, lambda h: paused(h.view), max_s=g["pause_after_s"] + 1)
+        assert h.view.banner == f"STEP INTO VIEW · {math.ceil(g['abandon_after_s'])}"
         timer = h.view.timer_s
         yield from until_scene(h, "victory", max_s=g["pause_after_s"] + g["abandon_after_s"] + 2)
         out["victory"] = h.now
@@ -538,10 +543,10 @@ def test_return_before_abandon_resumes_the_match():
     def script(h: Harness):
         yield from to_fight(h)
         h.gone.add(1)
-        yield from until(h, lambda h: h.view.banner == "STEP INTO VIEW", max_s=4)
+        yield from until(h, lambda h: paused(h.view), max_s=4)
         yield from hold(NONE, 5.0)
         h.gone.clear()
-        yield from until(h, lambda h: h.view.banner != "STEP INTO VIEW", max_s=1)
+        yield from until(h, lambda h: not paused(h.view), max_s=1)
         n = len(h.events)
         yield from tap(KEYS[0]["push"])
         yield from wait_for(h, "hit", n, slot=0)

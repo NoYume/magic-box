@@ -1,4 +1,5 @@
 import copy
+import math
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,11 @@ def run(engine, t0, t1, st, actions=(), dt=DT):
         events += ev
         first, t = False, t + dt
     return view, events
+
+
+def paused(view):
+    """The tracking-pause banner, with or without its abandon countdown."""
+    return (view.banner or "").startswith("STEP INTO VIEW")
 
 
 def boot(e, t=0.0):
@@ -464,7 +470,7 @@ def test_pause_freezes_projectile_and_resumes():
     e.step([Action("push", 0, t, push=Push("R", 2.0, (480.0, 300.0)), dist=2.0)], states(), t)
     e.step([], states(ok=(True, False)), t + 0.1)  # P2 just left
     view, _ = e.step([], states(ok=(True, False)), t + 0.3)  # gone 0.2 s > 0.1 s: paused
-    assert view.banner == "STEP INTO VIEW"
+    assert paused(view)
     frozen, left = view.projectiles[0].progress, view.timer_s
     view, events = run(e, t + 0.35, t + 3.0, states(ok=(True, False)))
     assert view.projectiles[0].progress == pytest.approx(frozen)
@@ -483,11 +489,31 @@ def test_abandon_after_a_long_pause_gives_the_tracked_player_the_win():
     gone = states(ok=(True, False))
     end = t + G["pause_after_s"] + G["abandon_after_s"]
     view, events = run(e, t, end - 0.2, gone, dt=0.1)
-    assert view.scene == "fight" and view.banner == "STEP INTO VIEW"
+    assert view.scene == "fight" and paused(view)
     view, events = run(e, end - 0.1, end + 0.3, gone, dt=0.1)
     assert view.scene == "victory" and view.winner_slot == 0 and view.banner == "P1 WINS"
     [end_ev] = [ev for ev in events if ev.kind == "match_end"]
     assert end_ev.data["reason"] == "abandon" and end_ev.data["winner"] == 0
+
+
+def test_tracking_pause_banner_counts_down_to_the_abandon():
+    e = Engine(CFG)
+    _, _, t = to_fight(e)
+    gone = states(ok=(True, False))
+    view, _ = run(e, t, t + G["pause_after_s"] + DT, gone)  # the pause starts on this tick
+    abandon = G["abandon_after_s"]
+    assert view.banner == f"STEP INTO VIEW · {math.ceil(abandon)}"
+    start = t + G["pause_after_s"] + DT
+    view, _ = run(e, start + DT, start + 8.1, gone)
+    assert view.banner == f"STEP INTO VIEW · {math.ceil(abandon - 8.1)}"
+
+
+def test_camera_pause_banner_has_no_countdown():
+    e = Engine(CFG)
+    _, _, t = to_fight(e)
+    e.provide_camera_status(False)
+    view, _ = run(e, t, t + 5.0, states(ok=(False, False)), dt=0.25)
+    assert view.banner == "CAMERA RECONNECTING"
 
 
 def test_abandon_with_both_gone_is_a_draw():
@@ -538,7 +564,7 @@ def test_camera_recovery_pauses_whoever_is_still_untracked_at_once():
     e.provide_camera_status(True)
     rec = t + 5.25
     view, _ = e.step([], states(ok=(True, False)), rec)  # P2 not re-acquired yet
-    assert view.banner == "STEP INTO VIEW"
+    assert paused(view)
     left = view.timer_s
     view, _ = run(
         e, rec + 0.25, rec + G["abandon_after_s"] - 0.25, states(ok=(True, False)), dt=0.25
@@ -556,12 +582,12 @@ def test_camera_recovery_resumes_once_both_are_tracked_again():
     run(e, t, t + 1.0, states(ok=(False, False)), dt=0.25)
     e.provide_camera_status(True)
     view, _ = e.step([], states(ok=(False, False)), t + 1.25)
-    assert view.banner == "STEP INTO VIEW"
+    assert paused(view)
     view, _ = e.step([], states(ok=(True, False)), t + 1.5)
-    assert view.banner == "STEP INTO VIEW"
+    assert paused(view)
     left = view.timer_s
     view, _ = e.step([], states(), t + 1.75)  # both seen: the clock runs again
-    assert view.banner != "STEP INTO VIEW"
+    assert not paused(view)
     assert view.timer_s == pytest.approx(left - 0.25)
 
 
@@ -572,7 +598,7 @@ def test_camera_recovery_with_both_tracked_does_not_pause():
     run(e, t, t + 1.0, states(ok=(False, False)), dt=0.25)
     e.provide_camera_status(True)
     view, _ = e.step([], states(), t + 1.25)
-    assert view.banner not in ("STEP INTO VIEW", "CAMERA RECONNECTING")
+    assert not paused(view) and view.banner != "CAMERA RECONNECTING"
 
 
 def test_camera_reconnecting_banner_in_lobby():
@@ -647,7 +673,7 @@ def test_ko_hold_ignores_pause_abandon_and_camera():
     e.provide_camera_status(False)
     view, events = run(e, t_ko + DT, t_ko + 29.0, states(ok=(False, False)), dt=0.25)
     assert view.scene == "fight" and events == []
-    assert view.banner not in ("STEP INTO VIEW", "CAMERA RECONNECTING")
+    assert not paused(view) and view.banner != "CAMERA RECONNECTING"
     view, _ = e.step([], states(ok=(False, False)), t_ko + 30.0)
     assert view.scene == "victory" and view.winner_slot == 0
 

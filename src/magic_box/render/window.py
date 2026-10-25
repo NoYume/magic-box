@@ -203,7 +203,7 @@ class Window:
                 )
                 draw_opponent(self.screen, half.half, surf, crop)
             else:
-                if view.banner != STEP_HINT:
+                if not (view.banner or "").startswith(STEP_HINT):  # "STEP INTO VIEW · 12"
                     self._step_into_view(half.half, now)
             enemy = view.players[half.shows_slot]
             limit_x = half.selfview.x - 10
