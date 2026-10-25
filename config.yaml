@@ -267,6 +267,7 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
       fire_hot: [255, 230, 120]
       fire_core: [255, 240, 200]
     panel_alpha: 200
+    stars: {count: 140, brightness: [40, 140], blue: 40}  # scene backdrop
     radius_px: 14
   hud:                        # owner: Adetola
     pad_px: 14
@@ -290,6 +291,7 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
     effect_rgb: {shield: [255, 140, 50], empowered: [255, 225, 110], mana_slow: [150, 120, 255],
                  slow: [120, 200, 255]}
     timer_low_s: 10           # round timer turns red below this
+    zone_meter_m: [0.8, 3.5]  # distance span of the zone meter (ends clamp)
   fx:                         # owner: Adetola. hit flash, shake, numbers, particles
     max_particles: 160        # hard cap so the Jetson stays at 60 fps
     max_texts: 12
@@ -313,6 +315,17 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
     heal_rgb: [110, 255, 140]
     buff_rgb: [255, 220, 100]
     ko_rgb: [255, 60, 50]
+    glow_heal_s: 0.6          # edge glow lengths: heal, cast pulse, match start
+    glow_cast_s: 0.35
+    glow_start_s: 0.8
+    particle_gravity_px: 600  # px/s^2 on burst particles
+    speed_px: {hit: 520, hit_side: 300, graze: 320, dodge: 420, block: 380}  # px/s
+    ring_count: {dodge: 18, block: 26}
+    burst_size_px: [6, 14]    # particle radius ranges at spawn
+    ring_size_px: 10
+    sparkle_size_px: [5, 11]
+    sparkle_rise_px: [80, 220]  # px/s upward
+    sparkle_drift_px: 30      # px/s sideways (+-)
     spell_effect: {flame_wall: shield, holy_light: empowered, static_field: mana_slow, inferno: slow}  # buff fallback
   audio:                      # owner: Adetola. synthesized at startup; silent if the mixer cannot open
     enabled: true
@@ -320,6 +333,7 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
     sample_rate: 44100
     buffer: 512
     tick_last_s: 5            # fight: tick each second of the last N seconds
+    mix_channels: 16          # sounds that can overlap
   scenes:                     # owner: Adetola
     title_px: 96
     text_px: 36

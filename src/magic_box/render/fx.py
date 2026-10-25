@@ -89,9 +89,6 @@ def event_target(e: GameEvent) -> int | None:
     return None
 
 
-PARTICLE_SIZE_MAX = 14.0  # largest particle radius at spawn; drawn up to 1.6x that
-
-
 class Fx:
     def __init__(
         self, cfg: Mapping, theme: Theme, layout: Sequence[HalfLayout], seed: int = 3
@@ -172,12 +169,12 @@ class Fx:
             dmg = _num(data.get("damage"))
             if dmg is not None and dmg <= 0:  # e.g. Static Field: its buff event shows the rest
                 cx, cy = self._impact_point(target)
-                self._burst(cx, cy, color, int(f["burst_count"]) // 2, 320.0)
+                self._burst(cx, cy, color, int(f["burst_count"]) // 2, self._speed("graze"))
                 return
             self._flash(target, rgb(f["hit_rgb"]))
             self.halves[target].shake_left = float(f["shake_s"])
             cx, cy = self._impact_point(target)
-            self._burst(cx, cy, color, int(f["burst_count"]), 520.0)
+            self._burst(cx, cy, color, int(f["burst_count"]), self._speed("hit"))
             if dmg is not None:
                 hud = self.layout[target].hud
                 self._text(
@@ -185,14 +182,16 @@ class Fx:
                 )
                 ox, oy = self._opponent_point(1 - target)
                 self._text(f"{dmg:.0f}", "huge", rgb(f["damage_rgb"]), ox, oy)
-                self._burst(ox, oy, color, int(f["burst_count"]) // 2, 300.0)
+                self._burst(ox, oy, color, int(f["burst_count"]) // 2, self._speed("hit_side"))
         elif kind == "dodge":
             slot = e.slot if e.slot in (0, 1) else None
             if slot is None:
                 return
             cx, cy = self._impact_point(slot)
             self._text("DODGE!", "huge", rgb(f["dodge_rgb"]), cx, cy - 120)
-            self._ring(cx, cy, rgb(f["dodge_rgb"]), 18, 420.0)
+            self._ring(
+                cx, cy, rgb(f["dodge_rgb"]), int(f["ring_count"]["dodge"]), self._speed("dodge")
+            )
             ox, oy = self._opponent_point(1 - slot)
             self._text("MISS", "big", c["dim"], ox, oy)
         elif kind == "block":
@@ -202,7 +201,7 @@ class Fx:
             col = rgb(f["block_rgb"])
             self._flash(slot, col)
             cx, cy = self._impact_point(slot)
-            self._ring(cx, cy, col, 26, 380.0)
+            self._ring(cx, cy, col, int(f["ring_count"]["block"]), self._speed("block"))
             self._text("BLOCKED!", "huge", col, cx, cy - 120)
             ox, oy = self._opponent_point(1 - slot)
             self._text("BLOCKED", "big", col, ox, oy)
@@ -216,7 +215,7 @@ class Fx:
             amount = next((_num(data.get(k)) for k in ("amount", "hp", "heal") if k in data), None)
             label = f"+{amount:.0f}" if amount is not None else "HEAL"
             self._text(label, "huge", col, hud.x + hud.w * 0.55, hud.y - 30)
-            self._glow(slot, col, 0.6)
+            self._glow(slot, col, float(f["glow_heal_s"]))
         elif kind == "buff":
             slot = affected_slot(e)
             if slot is None:
@@ -234,7 +233,7 @@ class Fx:
             slot = e.slot if e.slot in (0, 1) else None
             if slot is None:
                 return
-            self._glow(slot, self._spell_rgb(data.get("spell_id")), 0.35)
+            self._glow(slot, self._spell_rgb(data.get("spell_id")), float(f["glow_cast_s"]))
         elif kind == "ko":
             self.ko_left = float(f["ko_s"])
             winner = data.get("winner")
@@ -243,7 +242,7 @@ class Fx:
                 self._flash(slot, c["white"])
         elif kind == "match_start":
             for slot in (0, 1):
-                self._glow(slot, c["gold"], 0.8)
+                self._glow(slot, c["gold"], float(f["glow_start_s"]))
 
     def glow_tints(self) -> list[tuple[RGB, bool, float]]:
         """Every particle glow tint (both core styles), for `Theme.prewarm`."""
@@ -251,8 +250,17 @@ class Fx:
         colors = {self._spell_rgb(s) for s in self.family} | {self._spell_rgb(None), c["gold"]}
         colors |= {rgb(f[k]) for k in ("dodge_rgb", "block_rgb", "heal_rgb", "buff_rgb")}
         colors |= set(self.effect_rgb.values())
-        top = PARTICLE_SIZE_MAX * 1.6
+        top = self.particle_size_max() * 1.6
         return [(col, core, top) for col in sorted(colors) for core in (True, False)]
+
+    def particle_size_max(self) -> float:
+        """Largest particle radius at spawn (drawn up to 1.6x that)."""
+        f = self.f
+        sizes = (*f["burst_size_px"], f["ring_size_px"], *f["sparkle_size_px"])
+        return float(max(sizes))
+
+    def _speed(self, kind: str) -> float:
+        return float(self.f["speed_px"][kind])
 
     # -- spawners ---------------------------------------------------------------
 
@@ -308,8 +316,8 @@ class Fx:
                     life * r.uniform(0.5, 1.0),
                     life,
                     color,
-                    r.uniform(6, 14),
-                    600.0,
+                    r.uniform(*self.f["burst_size_px"]),
+                    float(self.f["particle_gravity_px"]),
                 )
             )
         self._add_particles(out)
@@ -321,7 +329,14 @@ class Fx:
             a = 2 * math.pi * i / n
             out.append(
                 Particle(
-                    x, y, speed * math.cos(a), speed * math.sin(a) * 0.6, life, life, color, 10.0
+                    x,
+                    y,
+                    speed * math.cos(a),
+                    speed * math.sin(a) * 0.6,
+                    life,
+                    life,
+                    color,
+                    float(self.f["ring_size_px"]),
                 )
             )
         self._add_particles(out)
@@ -329,18 +344,19 @@ class Fx:
     def _sparkles(self, x: float, y: float, w: float, h: float, color: RGB, n: int) -> None:
         life = float(self.f["particle_s"]) * 1.4
         r = self.rng
+        drift, rise = float(self.f["sparkle_drift_px"]), self.f["sparkle_rise_px"]
         out = []
         for _ in range(n):
             out.append(
                 Particle(
                     x + r.uniform(0, w),
                     y + r.uniform(0, h),
-                    r.uniform(-30, 30),
-                    r.uniform(-220, -80),
+                    r.uniform(-drift, drift),
+                    -r.uniform(*rise),
                     life * r.uniform(0.6, 1.0),
                     life,
                     color,
-                    r.uniform(5, 11),
+                    r.uniform(*self.f["sparkle_size_px"]),
                 )
             )
         self._add_particles(out)

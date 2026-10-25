@@ -97,6 +97,7 @@ class Theme:
         self.title_px: dict[str, int] = {k: int(v) for k, v in t["title_px"].items()}
         self.glow_steps = glow_steps(render_cfg["projectiles"])
         self._scaled: dict[tuple, tuple[pygame.Surface, pygame.Surface]] = {}
+        self.stars: Mapping = t["stars"]
 
     def slot_rgb(self, slot: int | None) -> RGB:
         if slot is None:
@@ -458,11 +459,13 @@ def vertical_gradient(w: int, h: int, top: RGB, bottom: RGB) -> pygame.Surface:
 def make_background(w: int, h: int, theme: Theme, seed: int = 7) -> pygame.Surface:
     """Scene backdrop: vertical gradient, a soft vignette and a few faint stars."""
     surf = vertical_gradient(w, h, theme.c["bg_top"], theme.c["bg_bottom"])
+    stars = theme.stars
+    lo, hi = (int(v) for v in stars["brightness"])
     rng = np.random.default_rng(seed)
-    for _ in range(140):
+    for _ in range(int(stars["count"])):
         x, y = int(rng.integers(0, w)), int(rng.integers(0, h))
-        b = int(rng.integers(40, 140))
-        surf.set_at((x, y), (b, b, min(255, b + 40)))
+        b = int(rng.integers(lo, hi))
+        surf.set_at((x, y), (b, b, min(255, b + int(stars["blue"]))))
     return surf
 
 

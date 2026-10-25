@@ -38,7 +38,6 @@ EFFECT_LABELS = {"shield": "SHIELD", "empowered": "POWER", "mana_slow": "MANA-",
 LEFT_COL_W = 300
 SPELL_TEXT_X = 60  # spell row: text starts right of the cost badge
 INCANTATION_FONTS = ("text", "small", "tiny")
-DIST_MIN_M, DIST_MAX_M = 0.8, 3.5  # zone meter span
 
 
 def release_cue(release: str) -> str:
@@ -265,7 +264,8 @@ class Hud:
             pygame.draw.line(surface, th.c["text"], (mx, my - 3), (mx, my + mh + 2), 3)
 
     def _zone_pos(self, dist: float) -> float:
-        edges = (DIST_MIN_M, self.danger_max_m, self.far_min_m, DIST_MAX_M)
+        lo, hi = (float(v) for v in self.h["zone_meter_m"])
+        edges = (lo, self.danger_max_m, self.far_min_m, hi)
         dist = max(edges[0], min(edges[-1], dist))
         for i in range(3):
             lo, hi = edges[i], edges[i + 1]

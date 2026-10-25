@@ -150,7 +150,7 @@ class Audio:
             freq, _, channels = init
             vol = max(0.0, min(1.0, float(a["volume"])))
             self.sounds = {n: _to_sound(w, channels, vol) for n, w in synth_all(freq).items()}
-            pygame.mixer.set_num_channels(16)
+            pygame.mixer.set_num_channels(int(a["mix_channels"]))
             self.enabled = True
         except (pygame.error, OSError, ValueError, NotImplementedError):
             self.sounds = {}

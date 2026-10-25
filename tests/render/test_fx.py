@@ -89,6 +89,24 @@ def test_events_with_missing_data_are_ignored_quietly(fx):
     fx.draw(pygame.Surface((1920, 1080)))
 
 
+def test_particle_motion_and_glow_times_come_from_config():
+    import copy
+
+    cfg = copy.deepcopy(CFG)
+    f = cfg["render"]["fx"]
+    f["particle_gravity_px"], f["speed_px"]["hit"], f["glow_heal_s"] = 0.0, 0.0, 0.9
+    pygame.init()
+    try:
+        fx = Fx(cfg, Theme(cfg["render"]), compute_layout(1920, 1080, cfg["render"]))
+        fx.on_event(GameEvent(0.0, "hit", 0, {"target": 1}), make_view())
+        assert fx.particles and all(p.gravity == 0 and p.vx == 0 for p in fx.particles)
+        fx.on_event(GameEvent(0.0, "heal", 0, {"target": 0, "amount": 5}), make_view())
+        assert fx.halves[0].glow_left == 0.9
+        assert max(p.size for p in fx.particles) <= max(f["burst_size_px"])
+    finally:
+        pygame.quit()
+
+
 def test_fx_clears_when_the_scene_leaves_fight(fx):
     ko = (
         GameEvent(0.0, "hit", 0, {"target": 1, "damage": 30}),

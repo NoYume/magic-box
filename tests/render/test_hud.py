@@ -119,6 +119,18 @@ def test_charge_label_rounds_up():
     assert charge_label(0.0) == ""
 
 
+def test_zone_meter_span_comes_from_config():
+    import pygame
+
+    cfg, theme, hud = _hud()
+    try:
+        lo, hi = cfg["render"]["hud"]["zone_meter_m"]
+        assert hud._zone_pos(lo) == 0.0 and hud._zone_pos(hi) == 1.0
+        assert hud._zone_pos(lo - 1) == 0.0 and hud._zone_pos(hi + 1) == 1.0
+    finally:
+        pygame.quit()
+
+
 def test_affordable_and_charged_spell():
     from magic_box.render.hud import affordable, charged_spell
     from tests.factories import make_full_player
