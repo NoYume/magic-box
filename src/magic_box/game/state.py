@@ -37,6 +37,7 @@ class Charge:
 class HeldPush:
     action: Action
     until: float  # match clock
+    spell_only: bool = False  # held during the basic cooldown: dropped, not a basic, at expiry
 
 
 @dataclass
@@ -156,8 +157,9 @@ class MatchState:
             if p.charge is not None and self.clock >= p.charge.deadline:
                 self._refund(p)
             if p.held is not None and self.clock >= p.held.until:
-                held, p.held = p.held.action, None
-                self._basic(p, held, now)
+                held, p.held = p.held, None
+                if not held.spell_only:
+                    self._basic(p, held.action, now)
         for proj in sorted(self.projectiles, key=lambda pr: pr.launched + pr.travel_s):
             if self._result is not None:
                 break
@@ -278,14 +280,17 @@ class MatchState:
                 p.charge = None
                 self._cast(p, c, action, action.push.origin_px, action.push.speed, now)
                 return
-        if self.clock < p.basic_ready_at or p.held is not None:
-            return  # on cooldown, or a push is already held: ignored
+        if p.held is not None:
+            return  # a push is already held: ignored
+        on_cooldown = self.clock < p.basic_ready_at
         grace = self.cfg["game"]["release_grace_s"]
         if c is None and grace > 0 and self.mic_ok.get(p.slot, False):
-            # The voice charge lands ~0.4 s after speech: give it a chance to catch up.
-            p.held = HeldPush(action, self.clock + grace)
+            # The voice charge lands ~0.4 s after speech: give it a chance to catch up. On the
+            # basic cooldown the push can still release a late spell, but never a basic.
+            p.held = HeldPush(action, self.clock + grace, spell_only=on_cooldown)
             return
-        self._basic(p, action, now)
+        if not on_cooldown:
+            self._basic(p, action, now)
 
     @staticmethod
     def _releases(spell: SpellDef, push: Action) -> bool:

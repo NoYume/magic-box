@@ -117,13 +117,31 @@ def test_second_push_during_the_hold_is_ignored():
     assert proj.speed == 2.0
 
 
-def test_push_on_cooldown_is_not_held():
+def casts(ms):
+    return [e.data["spell_id"] for e in ms.take_events() if e.kind == "cast"]
+
+
+def test_push_on_cooldown_is_held_for_a_late_spell():
+    """Ruling (QA 1): during the basic cooldown a push still waits for a charge."""
     ms = new(mic=(False, True))
     ms.apply(push(0), STATES, 0.0)  # basic fires; cooldown starts
     ms.mic_ok[0] = True
-    ms.apply(push(0), STATES, 0.0)
+    ms.apply(push(0, speed=3.0), STATES, 0.0)
+    ms.advance(GRACE / 2, STATES, 0.0)
     ms.apply(charge(0, "fireball"), STATES, 0.0)
-    assert spell_ids(ms) == ["basic"] and ms.players[0].charge.spell.id == "fireball"
+    assert casts(ms) == ["basic", "fireball"] and ms.players[0].charge is None
+    assert ms.projectiles[-1].speed == 3.0
+
+
+def test_push_on_cooldown_with_no_charge_is_dropped_not_a_basic():
+    ms = new(mic=(False, True))
+    ms.apply(push(0), STATES, 0.0)
+    ready_at = ms.players[0].basic_ready_at
+    ms.mic_ok[0] = True
+    ms.apply(push(0), STATES, 0.0)
+    ms.advance(GRACE + 0.05, STATES, 0.0)
+    assert casts(ms) == ["basic"]
+    assert ms.players[0].held is None and ms.players[0].basic_ready_at == ready_at
 
 
 def test_without_advance_the_hold_never_expires_and_clearing_drops_it():

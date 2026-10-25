@@ -579,6 +579,30 @@ def test_push_just_before_a_late_charge_releases_the_spell(mic):
         assert [s.id for s in h.player(0).spells if s.charged] == ["fireball"]
 
 
+def test_a_push_on_the_basic_cooldown_still_releases_a_late_charge():
+    cfg = make_cfg()
+    grace = cfg["game"]["release_grace_s"]
+
+    def script(h: Harness):
+        h.mic(0, "connected")
+        yield from to_fight(h)
+        out["n"] = n = len(h.events)
+        yield from tap(KEYS[0]["push"])
+        yield from wait_for(h, "cast", n, slot=0, spell_id="basic", max_s=grace + 0.5)
+        assert h.player(0).cooldown_s > 0
+        yield from tap(KEYS[0]["push"])  # on cooldown: held for a spell only
+        yield from hold(NONE, grace / 2)
+        h.incant(0, "fireball", score=90.0)
+        yield from hold(NONE, grace + 0.3)
+
+    out: dict = {}
+    h = Harness(cfg).run(script)
+    assert [e.data["spell_id"] for e in h.find("cast", slot=0, since=out["n"])] == [
+        "basic",
+        "fireball",
+    ]
+
+
 @pytest.mark.parametrize(
     ("spell_id", "key"), [("holy_light", "hands_up"), ("heal", "hands_together")]
 )
