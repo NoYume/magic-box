@@ -11,10 +11,14 @@
 # On the Jetson (aarch64): fullscreen and `--env-file .env` (if .env exists).
 # Output: recordings/<timestamp>/ holds the session files and game.log. A restart records
 # to recordings/<timestamp>/restart-N. Esc (exit 0) ends the loop; a crash restarts the game,
-# at most 5 times per 60 s, then the launcher gives up with the game's exit code.
+# at most 5 times per 60 s, then the launcher gives up with the game's last exit code.
+# A game exit of 130 or 143 (Ctrl-C, SIGTERM) stops the launcher with that code.
 # Env: MAX_RESTARTS (5), RESTART_WINDOW_S (60), RESTART_DELAY_S (1), GAME_CMD (default: uv run).
 # Owner: Daniel
 set -euo pipefail
+
+# Ctrl-C or SIGTERM stops the launcher; it must never look like a game crash.
+trap 'exit 130' INT TERM
 
 cd "$(dirname "$0")/.."
 
@@ -30,7 +34,7 @@ while [ $# -gt 0 ]; do
     --no-record) record=0 ;;
     --dry-run) dry=1 ;;
     -h | --help)
-      sed -n '2,15p' "$0"
+      sed -n '2,16p' "$0"
       exit 0
       ;;
     --)
@@ -102,7 +106,7 @@ while true; do
   starts=("${recent[@]+"${recent[@]}"}")
   if [ "${#starts[@]}" -gt "$max_restarts" ]; then
     echo "run_demo: more than ${max_restarts} restarts in ${window_s}s, giving up" | tee -a "$log" >&2
-    exit 1
+    exit "${code:-1}"
   fi
   starts+=("$now")
 
@@ -117,6 +121,10 @@ while true; do
   "${cmd[@]}" 2>&1 | tee -a "$log"
   code="${PIPESTATUS[0]}"
   set -e
+  if [ "$code" -eq 130 ] || [ "$code" -eq 143 ]; then
+    echo "run_demo: game interrupted (${code}), stopping" | tee -a "$log" >&2
+    exit "$code"
+  fi
   if [ "$code" -eq 0 ]; then
     echo "run_demo: game exited cleanly" | tee -a "$log" >&2
     exit 0

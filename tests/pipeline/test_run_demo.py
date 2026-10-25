@@ -35,7 +35,7 @@ def test_script_is_executable_with_usage_header():
 
 
 def test_dry_run_passes_fake_record_and_extra_args():
-    out = run(["--dry-run", "--fake", "--", "--debug"]).stdout
+    out = run(["--dry-run", "--fake", "--windowed", "--", "--debug"]).stdout
     assert "python -m magic_box --fake --record recordings/" in out
     assert out.strip().endswith("--debug")
     assert "--env-file" not in out  # fake mode needs no key
@@ -48,13 +48,22 @@ def test_dry_run_no_record_and_unknown_flag():
 
 
 def test_clean_exit_stops_without_restart(clean_recordings):
-    done = run(["--no-record"], env={"GAME_CMD": "true"})
+    done = run(["--no-record", "--windowed"], env={"GAME_CMD": "true"})
     assert done.returncode == 0 and "restarting" not in done.stderr
+
+
+@pytest.mark.parametrize("code", [130, 143])
+def test_interrupt_exit_codes_stop_instead_of_restarting(tmp_path, code, clean_recordings):
+    stub = tmp_path / "game.sh"
+    stub.write_text(f"#!/bin/bash\nexit {code}\n")
+    stub.chmod(0o755)
+    done = run(["--no-record", "--windowed"], env={"GAME_CMD": str(stub)})
+    assert done.returncode == code and "restarting" not in done.stderr
 
 
 def test_crash_restarts_then_gives_up(clean_recordings):
     done = run(
-        ["--no-record"],
+        ["--no-record", "--windowed"],
         env={"GAME_CMD": "false", "MAX_RESTARTS": "2", "RESTART_DELAY_S": "0"},
     )
     assert done.returncode == 1
