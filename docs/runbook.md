@@ -49,7 +49,7 @@ If `bench_tracking.py` says NO-GO, fix that before anything else. It decides the
    ```bash
    uv run --env-file .env python scripts/check_env.py --network
    ```
-   If `.env` does not exist yet, do the first-time step in section 2 first, or run it without `--env-file .env --network`. One line per check: `OK`, `FAIL` (required) or `WARN` (optional). Exit 1 means a required check failed. `--network` adds a `meta_api` probe (`GET https://api.meta.ai/v1/models`). The `sounddevice` line lists the audio input devices; you need those names in step 4.
+   If `.env` does not exist yet, do the first-time step in section 2 first, or run it without `--env-file .env --network`. One line per check: `OK`, `FAIL` (required) or `WARN` (optional). Exit 1 means a required check failed. `--network` adds a `meta_api` probe (`GET https://api.meta.ai/v1/models`). The `sounddevice` line lists the audio input devices; you need those names in section 4.
 
    If `pyzed` fails with a numpy ABI error, see the Jetson quickstart in `README.md`.
 
