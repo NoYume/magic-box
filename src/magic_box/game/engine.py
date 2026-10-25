@@ -1,10 +1,11 @@
 """Game engine facade: Actions in, GameView and GameEvents out (spec section 8, game/).
 
 Owner: Adetola
-Thin placeholder rules (2026-10-24 phase); replace freely.
 
 Owns the SceneMachine and the current MatchState, routes actions, and builds
-the GameView that render draws.
+the GameView that render draws. Also owns what lives outside a match: boot
+checks, camera health, names and class picks, debounced hands-up, and the
+pause / abandon rule.
 """
 
 from collections.abc import Mapping, Sequence
@@ -12,26 +13,37 @@ from collections.abc import Mapping, Sequence
 from magic_box.core.config import Config
 from magic_box.core.contracts import (
     Action,
+    CheckView,
     GameEvent,
     GameView,
     PlayerState,
     PlayerView,
     SpellView,
 )
-from magic_box.game.scenes import SceneMachine, parse_name
+from magic_box.game.classes import class_prompt, class_views, parse_class
+from magic_box.game.scenes import Hold, SceneMachine, parse_name
 from magic_box.game.spells import SpellDef, load_spells
 from magic_box.game.state import MatchState
 
-LOBBY_BANNER = "SAY YOUR NAME · BOTH RAISE YOUR HANDS"
 PAUSE_BANNER = "STEP INTO VIEW"
+CAMERA_BANNER = "CAMERA RECONNECTING"
 SLOTS = (0, 1)
+CHECK_NAMES = ("camera", "mic P1", "mic P2", "network", "api key")
+UNKNOWN_CHECK = (False, "checking")
 
 
 class Engine:
     def __init__(self, cfg: Config) -> None:
         self.cfg = cfg
+        g = cfg["game"]
         self._scenes = SceneMachine(cfg)
         self._names: dict[int, str] = {s: f"P{s + 1}" for s in SLOTS}
+        self._classes: dict[int, str] = {s: g["default_classes"][s] for s in SLOTS}
+        self._spells: dict[str, list[SpellDef]] = {c: load_spells(cfg, c) for c in g["classes"]}
+        self._class_views = class_views(cfg)
+        self._lobby_banner = f"SAY NAME · {class_prompt(cfg)} · HANDS UP"
+        self._heard: dict[int, str] = {s: "" for s in SLOTS}
+        self._hands: dict[int, Hold] = {s: Hold(g["hands_up_hold_s"]) for s in SLOTS}
         self._incantations: dict[int, dict[str, str]] | None = None
         self._match: MatchState | None = None
         self._chronicle: str | None = None
@@ -39,8 +51,9 @@ class Engine:
         self._last_now: float | None = None
         self._untracked_since: dict[int, float] = {}
         self._result: tuple[int | None, str] | None = None
-        self._paused = False
-        self._camera_ok = True
+        self._pause: str | None = None  # None | "camera" | "tracking"
+        self._tracking_pause_since: float | None = None
+        self._camera_ok: bool | None = None  # None until the loop reports
         self._checks: dict[str, tuple[bool, str]] = {}
 
     # -- public API -------------------------------------------------------
@@ -52,6 +65,10 @@ class Engine:
         self._last_now = now
         events: list[GameEvent] = []
         self._track_presence(states, now)
+        ready = self._update_ready(states, now)
+        for a in actions:
+            if a.kind == "speech":
+                self._heard[a.slot] = a.text
         scene = self._scenes.scene
         if scene == "lobby":
             self._lobby_actions(actions)
@@ -62,19 +79,16 @@ class Engine:
         elif scene == "fight":
             events += self._fight(actions, states, dt, now)
 
-        both_ready = all(
-            (st := states.get(s)) is not None and st.tracking_ok and "hands_up" in st.pose_flags
-            for s in SLOTS
-        )
         changed = self._scenes.update(
             now,
-            both_ready=both_ready,
+            both_ready=all(ready.values()),
             incantations_ready=self._incantations is not None,
             match_over=self._match is not None and self._match.result() is not None,
+            camera_ok=self._check("camera")[0],
         )
         if changed:
             events += self._on_enter(now)
-        return self._build_view(states, now), events
+        return self._build_view(states, now, events), events
 
     def provide_incantations(self, incantations: dict[int, dict[str, str]]) -> None:
         if self._scenes.scene != "loading":
@@ -88,13 +102,15 @@ class Engine:
 
     def provide_mic_status(self, slot: int, ok: bool) -> None:
         self._mic_ok[slot] = ok
+        self._derived_check(f"mic P{slot + 1}", ok, "connected" if ok else "off")
 
     def provide_camera_status(self, ok: bool) -> None:
-        """Camera frames arriving (False while perception restarts). Stored only, for now."""
+        """Camera frames arriving; False while perception restarts (CAMERA RECONNECTING)."""
         self._camera_ok = ok
+        self._derived_check("camera", ok, "ok" if ok else "no frames")
 
     def provide_check(self, name: str, ok: bool, detail: str = "") -> None:
-        """One boot self-check result from the loop. Stored only, for now."""
+        """One boot self-check result (`camera`, `mic P1`, `mic P2`, `network`, `api key`)."""
         self._checks[name] = (ok, detail)
 
     # -- scene work -------------------------------------------------------
@@ -102,6 +118,15 @@ class Engine:
     @property
     def _g(self) -> dict:
         return self.cfg["game"]
+
+    def _check(self, name: str) -> tuple[bool, str]:
+        return self._checks.get(name, UNKNOWN_CHECK)
+
+    def _derived_check(self, name: str, ok: bool, detail: str) -> None:
+        """Status from a provide_* stream; keeps a provide_check detail while ok agrees."""
+        prev = self._checks.get(name)
+        if prev is None or prev[0] != ok:
+            self._checks[name] = (ok, detail)
 
     def _track_presence(self, states: Mapping[int, PlayerState], now: float) -> None:
         for s in SLOTS:
@@ -111,12 +136,26 @@ class Engine:
             else:
                 self._untracked_since.setdefault(s, now)
 
+    def _update_ready(self, states: Mapping[int, PlayerState], now: float) -> dict[int, bool]:
+        ready = {}
+        for s in SLOTS:
+            st = states.get(s)
+            raw = st is not None and st.tracking_ok and "hands_up" in st.pose_flags
+            ready[s] = self._hands[s].update(raw, now)
+        return ready
+
     def _lobby_actions(self, actions: Sequence[Action]) -> None:
+        """A transcript with a class keyword picks the class; otherwise it sets the name."""
         for a in actions:
-            if a.kind == "speech":
-                name = parse_name(a.text, self._g["name_max_chars"])
-                if name is not None:
-                    self._names[a.slot] = name
+            if a.kind != "speech":
+                continue
+            class_id = parse_class(a.text, self.cfg)
+            if class_id is not None:
+                self._classes[a.slot] = class_id
+                continue
+            name = parse_name(a.text, self._g["name_max_chars"])
+            if name is not None:
+                self._names[a.slot] = name
 
     def _fight(
         self,
@@ -127,9 +166,24 @@ class Engine:
     ) -> list[GameEvent]:
         match = self._match
         assert match is not None
-        limit = self._g["pause_after_s"]
-        self._paused = any(now - t > limit for t in self._untracked_since.values())
-        if not self._paused:
+        g = self._g
+        if self._camera_ok is False:
+            # Nobody is tracked while perception restarts; presence timers start over after.
+            self._untracked_since.clear()
+            self._pause = "camera"
+        elif any(now - t > g["pause_after_s"] for t in self._untracked_since.values()):
+            self._pause = "tracking"
+        else:
+            self._pause = None
+        if self._pause == "tracking":
+            if self._tracking_pause_since is None:
+                self._tracking_pause_since = now
+            elif now - self._tracking_pause_since >= g["abandon_after_s"]:
+                tracked = [s for s in SLOTS if s not in self._untracked_since]
+                match.abandon(now, tracked[0] if len(tracked) == 1 else None)
+        else:
+            self._tracking_pause_since = None
+        if self._pause is None:
             for a in actions:
                 match.apply(a, states, now)
             match.advance(dt, states, now)
@@ -139,7 +193,7 @@ class Engine:
         assert self._incantations is not None
         for s in SLOTS:
             inc = self._incantations.setdefault(s, {})
-            for sp in load_spells(self.cfg, self._g["default_classes"][s]):
+            for sp in self._spells[self._classes[s]]:
                 inc.setdefault(sp.id, sp.fallback.get(s, ""))
 
     def _on_enter(self, now: float) -> list[GameEvent]:
@@ -150,13 +204,15 @@ class Engine:
             self._chronicle = None
         elif scene == "fight":
             self._untracked_since.clear()
-            self._paused = False
-            self._match = MatchState(self.cfg, self._names, now)
+            self._pause = None
+            self._tracking_pause_since = None
+            self._match = MatchState(self.cfg, self._names, now, self._classes)
             events += self._match.take_events()
         elif scene == "victory":
             assert self._match is not None
             self._result = self._match.result()
             self._match.projectiles.clear()
+            self._pause = None
         elif scene == "lobby":
             self._match = None
             self._incantations = None
@@ -165,24 +221,35 @@ class Engine:
 
     # -- view -------------------------------------------------------------
 
-    def _build_view(self, states: Mapping[int, PlayerState], now: float) -> GameView:
+    def _build_view(
+        self, states: Mapping[int, PlayerState], now: float, events: Sequence[GameEvent]
+    ) -> GameView:
         scene = self._scenes.scene
         match = self._match if scene in ("fight", "victory") else None
+        camera_down = self._camera_ok is False
         banner: str | None = None
         timer: float | None = None
         projectiles = ()
-        if scene == "lobby":
-            banner = LOBBY_BANNER
+        if scene == "boot":
+            timer = max(0.0, self._g["boot_max_s"] - self._scenes.elapsed(now))
+        elif scene == "lobby":
+            banner = CAMERA_BANNER if camera_down else self._lobby_banner
         elif scene == "loading":
+            banner = CAMERA_BANNER if camera_down else None
             timer = max(0.0, self._g["loading_min_s"] - self._scenes.elapsed(now))
         elif scene == "fight":
             assert match is not None
-            banner = PAUSE_BANNER if self._paused else match.banner()
+            if self._pause == "camera":
+                banner = CAMERA_BANNER
+            elif self._pause == "tracking":
+                banner = PAUSE_BANNER
+            else:
+                banner = match.banner()
             timer = match.time_left
             projectiles = match.projectile_views()
         elif scene == "victory":
             banner = self._victory_banner()
-        players = tuple(self._player_view(s, states.get(s), match) for s in SLOTS)
+        players = tuple(self._player_view(s, states.get(s), match, scene) for s in SLOTS)
         return GameView(
             scene=scene,
             players=players,  # type: ignore[arg-type]
@@ -190,23 +257,30 @@ class Engine:
             banner=banner,
             timer_s=timer,
             chronicle=self._chronicle if scene == "victory" else None,
+            events=tuple(events),
+            classes=self._class_views,
+            checks=self._check_views(),
+            winner_slot=self._result[0] if scene == "victory" and self._result else None,
         )
+
+    def _check_views(self) -> tuple[CheckView, ...]:
+        extra = tuple(n for n in self._checks if n not in CHECK_NAMES)
+        return tuple(CheckView(n, *self._check(n)) for n in CHECK_NAMES + extra)
 
     def _victory_banner(self) -> str:
         winner = self._result[0] if self._result else None
         return "DRAW" if winner is None else f"{self._names[winner].upper()} WINS"
 
     def _player_view(
-        self, slot: int, state: PlayerState | None, match: MatchState | None
+        self, slot: int, state: PlayerState | None, match: MatchState | None, scene: str
     ) -> PlayerView:
         g = self._g
-        class_id = g["default_classes"][slot]
         pm = match.players[slot] if match is not None else None
+        class_id = pm.class_id if pm is not None else self._classes[slot]
         charged_id = pm.charge.spell.id if pm is not None and pm.charge is not None else None
         inc = (self._incantations or {}).get(slot, {})
-        spells = tuple(
-            self._spell_view(sp, inc, charged_id) for sp in load_spells(self.cfg, class_id)
-        )
+        spells = tuple(self._spell_view(sp, inc, charged_id) for sp in self._spells[class_id])
+        in_fight = match is not None and scene == "fight"
         return PlayerView(
             slot=slot,
             name=self._names[slot],
@@ -220,6 +294,12 @@ class Engine:
             dist=state.root[2] if state else 0.0,
             mic_ok=self._mic_ok[slot],
             tracking_ok=state.tracking_ok if state else False,
+            effects=match.effect_views(slot) if in_fight else (),
+            charge_s=match.charge_left(slot) if in_fight else 0.0,
+            cooldown_s=match.cooldown_left(slot) if in_fight else 0.0,
+            ready=self._hands[slot].value and scene in ("lobby", "victory"),
+            heard=self._heard[slot],
+            stats=match.stats(slot) if match is not None else {},
         )
 
     @staticmethod

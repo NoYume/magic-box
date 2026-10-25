@@ -1,7 +1,6 @@
-"""Scene state machine lobby -> loading -> fight -> victory -> lobby (spec section 8).
+"""Scene state machine boot -> lobby -> loading -> fight -> victory -> lobby (spec section 8).
 
 Owner: Adetola
-Thin placeholder rules (2026-10-24 phase); replace freely.
 """
 
 import string
@@ -23,30 +22,67 @@ def parse_name(text: str, max_chars: int) -> str | None:
     return s if any(c.isalpha() for c in s) else None
 
 
+class Hold:
+    """A debounced flag: it flips only after the raw input has held the new value for `hold_s`.
+
+    Body tracking on the Jetson flickers pose flags for a frame or two; this keeps a flicker
+    from starting a match (up) or re-arming the lobby start (down).
+    """
+
+    def __init__(self, hold_s: float) -> None:
+        self.hold_s = hold_s
+        self.value = False
+        self._since: float | None = None
+
+    def update(self, raw: bool, now: float) -> bool:
+        if raw == self.value:
+            self._since = None
+        else:
+            if self._since is None:
+                self._since = now
+            if now - self._since >= self.hold_s:
+                self.value, self._since = raw, None
+        return self.value
+
+
 class SceneMachine:
     """Scene flow. The lobby -> loading start is edge-triggered.
 
-    Entering the lobby disarms the start; any tick where the players are not both ready
-    re-arms it, so hands held up from victory don't start the next match. The first lobby
-    at startup starts armed.
+    Boot is first: it leaves for the lobby after `boot_min_s` once the camera is ok, or at
+    `boot_max_s` whatever the checks say. Entering the lobby from victory disarms the start;
+    any tick where the players are not both ready re-arms it, so hands held up from victory
+    don't start the next match. The first lobby, after boot, starts armed.
+
+    `entered_at` is stamped by the first `update` unless `now` is given.
     """
 
-    def __init__(self, cfg: Config, now: float = 0.0) -> None:
+    def __init__(self, cfg: Config, now: float | None = None) -> None:
         self.cfg = cfg
-        self.scene = "lobby"
+        self.scene = "boot"
         self.entered_at = now
         self._armed = True
 
     def elapsed(self, now: float) -> float:
-        return now - self.entered_at
+        return 0.0 if self.entered_at is None else now - self.entered_at
 
     def update(
-        self, now: float, *, both_ready: bool, incantations_ready: bool, match_over: bool
+        self,
+        now: float,
+        *,
+        both_ready: bool,
+        incantations_ready: bool,
+        match_over: bool,
+        camera_ok: bool = False,
     ) -> bool:
+        if self.entered_at is None:
+            self.entered_at = now
         g = self.cfg["game"]
         el = self.elapsed(now)
         nxt: str | None = None
-        if self.scene == "lobby":
+        if self.scene == "boot":
+            if el >= g["boot_max_s"] or (el >= g["boot_min_s"] and camera_ok):
+                nxt = "lobby"
+        elif self.scene == "lobby":
             if not both_ready:
                 self._armed = True
             elif self._armed:
@@ -62,7 +98,7 @@ class SceneMachine:
                 nxt = "lobby"
         if nxt is None:
             return False
-        self.scene, self.entered_at = nxt, now
         if nxt == "lobby":
-            self._armed = False
+            self._armed = self.scene == "boot"
+        self.scene, self.entered_at = nxt, now
         return True
