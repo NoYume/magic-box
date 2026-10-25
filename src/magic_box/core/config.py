@@ -216,6 +216,9 @@ def _check_pipeline_render(cfg: Config, problems: list[str]) -> None:
         quality = _get(cfg, "render", "camera_scale_quality")
         if quality not in ("fast", "smooth"):
             problems.append("render.camera_scale_quality: must be 'fast' or 'smooth'")
+        px = _get(cfg, "render", "crop_cache_px")
+        if isinstance(px, bool) or not isinstance(px, (int, float)) or px < 0:
+            problems.append("render.crop_cache_px: must be a number >= 0")
         for key in ("self_view", "crop_cache"):
             if not isinstance(_get(cfg, "render", key), bool):
                 problems.append(f"render.{key}: must be true or false")

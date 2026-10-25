@@ -62,6 +62,14 @@ def test_pipeline_stop_timeouts_must_be_positive(tmp_path, key, bad):
         load_config(_write(tmp_path, cfg))
 
 
+@pytest.mark.parametrize("bad", [-1, "x", True, None])
+def test_crop_cache_px_must_be_a_non_negative_number(tmp_path, bad):
+    cfg = _base()
+    cfg["render"]["crop_cache_px"] = bad
+    with pytest.raises(ConfigError, match="crop_cache_px"):
+        load_config(_write(tmp_path, cfg))
+
+
 def test_mics_must_cover_both_slots(tmp_path):
     cfg = _base()
     cfg["voice"]["mics"] = [{"slot": 0, "device": None, "channel": 0}]

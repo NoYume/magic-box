@@ -155,6 +155,7 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
   crop_smoothing: 0.25        # EMA alpha per drawn frame
   camera_scale_quality: fast  # fast = pygame scale | smooth = smoothscale (prettier, slower)
   self_view: true             # false skips the mirrored self-view (saves fps)
+  crop_cache_px: 2            # reuse a cached crop while the crop rect moved less than this (px)
   crop_cache: true            # reuse the scaled crop when frame_idx and crop are unchanged
   selfview_width_frac: 0.26
   margin_px: 16

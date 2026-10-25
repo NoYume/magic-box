@@ -74,39 +74,56 @@ def frame_to_surface(frame: Frame) -> pygame.Surface:
     return pygame.image.frombuffer(frame.image, (w, h), "BGRA")
 
 
-_opts = {"smooth": False, "self_view": True, "crop_cache": True}
-_cache: dict[tuple, pygame.Surface] = {}
+_opts: dict = {"smooth": False, "self_view": True, "crop_cache": True, "crop_cache_px": 2}
+# One entry per placement (dest rect and mirroring): (crop tuple, scaled surface). Tied to
+# `_cache_owner`, the frame surface they were cut from; a new frame surface empties it.
+_cache: dict[tuple, tuple[tuple[int, int, int, int], pygame.Surface]] = {}
 _cache_owner: pygame.Surface | None = None
+_CACHE_MAX_ENTRIES = 8  # safety net; normally at most 4 (two opponent crops, two self-views)
 
 
 def configure(render_cfg: Mapping) -> None:
-    """Apply the Jetson fps fallbacks (`render.camera_scale_quality`, `self_view`, `crop_cache`)."""
+    """Apply the Jetson fps fallbacks: `camera_scale_quality`, `self_view`, `crop_cache*`."""
     _opts["smooth"] = render_cfg["camera_scale_quality"] == "smooth"
     _opts["self_view"] = bool(render_cfg["self_view"])
     _opts["crop_cache"] = bool(render_cfg["crop_cache"])
+    _opts["crop_cache_px"] = render_cfg["crop_cache_px"]
     _cache.clear()
+
+
+def _crop_close(a: tuple[int, int, int, int], b: tuple[int, int, int, int], tol: float) -> bool:
+    moved = max(abs(p - q) for p, q in zip(a, b, strict=True))
+    return moved == 0 or moved < tol
 
 
 def _scaled_crop(
     frame_surf: pygame.Surface, dest: Rect, crop: Rect, flip: bool = False
 ) -> pygame.Surface:
-    """Scaled (and optionally mirrored) crop; cached while the same frame surface is drawn."""
+    """Scaled (and optionally mirrored) crop.
+
+    The smoothed crop rect drifts a little every drawn frame, so an exact-match key would
+    rarely hit. An entry is reused while the frame surface is the same and the crop moved
+    less than `render.crop_cache_px` in every coordinate.
+    """
     global _cache_owner
-    key = (crop.as_tuple(), dest.w, dest.h, flip)
+    key = (dest.x, dest.y, dest.w, dest.h, flip)
+    crop_t = crop.as_tuple()
     if _opts["crop_cache"]:
         if _cache_owner is not frame_surf:
             _cache.clear()
             _cache_owner = frame_surf
         hit = _cache.get(key)
-        if hit is not None:
-            return hit
-    clipped = pygame.Rect(crop.as_tuple()).clip(frame_surf.get_rect())
+        if hit is not None and _crop_close(hit[0], crop_t, _opts["crop_cache_px"]):
+            return hit[1]
+    clipped = pygame.Rect(crop_t).clip(frame_surf.get_rect())
     scale = pygame.transform.smoothscale if _opts["smooth"] else pygame.transform.scale
     out = scale(frame_surf.subsurface(clipped), (dest.w, dest.h))
     if flip:
         out = pygame.transform.flip(out, True, False)
     if _opts["crop_cache"]:
-        _cache[key] = out
+        if len(_cache) >= _CACHE_MAX_ENTRIES and key not in _cache:
+            _cache.clear()
+        _cache[key] = (crop_t, out)
     return out
 
 
