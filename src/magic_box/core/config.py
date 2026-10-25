@@ -222,6 +222,7 @@ GAME_TIMING_KEYS: tuple[str, ...] = (
     "loading_read_s",
     "pose_grace_s",
     "victory_read_s",
+    "howto_s",
     "parry_window_s",
     "parry_cooldown_s",
     "riposte_window_s",

@@ -7,9 +7,10 @@ import pytest
 from magic_box.core.config import load_config
 from magic_box.core.contracts import Action, CheckView, ClassView, Push
 from magic_box.game.engine import Engine
-from tests.factories import make_state
+from tests.factories import make_state, pin_pre_venue_tuning
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
+pin_pre_venue_tuning(CFG)
 # Written against fire vs lightning; config.yaml's own default puts the parry knight in slot 1.
 CFG["game"]["default_classes"] = {0: "fire_mage", 1: "lightning_mage"}
 G = CFG["game"]

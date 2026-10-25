@@ -191,3 +191,13 @@ def make_full_view(scene: str = "fight", **overrides: Any) -> GameView:
     }
     fields.update(overrides)
     return GameView(**fields)
+
+
+def pin_pre_venue_tuning(cfg: dict) -> dict:
+    """Restore the numbers these tests were written against, before the 2026-10-25 Jetson
+    tuning: wider zones and damage-distance span, start at 2.0 m, no how-to-play screen."""
+    cfg["perception"]["zones"].update(danger_max_m=1.6, far_min_m=2.4)
+    cfg["game"]["combat"].update(near_m=1.2, far_m=2.8)
+    cfg["game"]["howto_s"] = 0.0
+    cfg["fake"]["start_z_m"] = 2.0
+    return cfg

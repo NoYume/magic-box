@@ -5,9 +5,11 @@ import pytest
 
 from magic_box.core.config import load_config
 from magic_box.perception.tracker import PlayerTracker
+from tests.factories import pin_pre_venue_tuning
 from tests.perception.fakes import make_body, make_capture
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
+pin_pre_venue_tuning(CFG)
 
 
 def _one(body, **kw):

@@ -122,6 +122,7 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
   banner_s: 1.2
   loading_min_s: 3.0
   loading_max_s: 10.0
+  howto_s: 7.0                # loading opens with a how-to-play screen this long (Spark writes meanwhile); the spell cards' read time starts after it
   loading_read_s: 4.0         # loading also lasts this long after the incantations arrive (Spark takes 3.1-3.8 s), so players can read them
   victory_min_s: 5.0
   victory_max_s: 30.0

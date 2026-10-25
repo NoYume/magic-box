@@ -249,6 +249,7 @@ class GameView:
     classes: tuple[ClassView, ...] = ()  # lobby: classes on offer
     checks: tuple[CheckView, ...] = ()  # boot: self-check results
     winner_slot: int | None = None  # victory: winner, None for a draw
+    howto_s: float | None = None  # loading: seconds left on the how-to-play screen, else None
 
     def __post_init__(self) -> None:
         _check_in("scene", self.scene, SCENES)

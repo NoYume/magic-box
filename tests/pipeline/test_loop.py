@@ -9,9 +9,10 @@ from magic_box.game.engine import Engine
 from magic_box.intent.fusion import Intent
 from magic_box.pipeline.loop import GameLoop, latest_states
 from magic_box.pipeline.sources import FakeSources, KeyboardVoiceSource
-from tests.factories import make_state, make_view
+from tests.factories import make_state, make_view, pin_pre_venue_tuning
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
+pin_pre_venue_tuning(CFG)
 
 
 def test_latest_keeps_newest_per_slot():

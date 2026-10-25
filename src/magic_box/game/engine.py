@@ -218,11 +218,18 @@ class Engine:
         if self._incantations_at is None:
             return None
         g = self._g
+        # The read time starts once the how-to-play screen is over.
+        howto_end = now - self._scenes.elapsed(now) + g["howto_s"]
+        read_from = max(self._incantations_at, howto_end)
         left = max(
             g["loading_min_s"] - self._scenes.elapsed(now),
-            self._incantations_at + g["loading_read_s"] - now,
+            read_from + g["loading_read_s"] - now,
         )
         return max(0.0, left) if left > 1e-9 else 0.0
+
+    def _howto_left(self, now: float) -> float:
+        """Seconds left on loading's how-to-play screen (the first `howto_s` of loading)."""
+        return max(0.0, self._g["howto_s"] - self._scenes.elapsed(now))
 
     def _pause_banner(self, now: float) -> str:
         """'STEP INTO VIEW · 12': whole seconds left until the pause abandons the match."""
@@ -295,6 +302,7 @@ class Engine:
         camera_down = self._camera_ok is False
         banner: str | None = None
         timer: float | None = None
+        howto: float | None = None
         projectiles = ()
         if scene == "boot":
             # Counts down to when boot will really leave: boot_min_s once the camera is ok.
@@ -304,7 +312,9 @@ class Engine:
             banner = CAMERA_BANNER if camera_down else self._lobby_banner
         elif scene == "loading":
             banner = CAMERA_BANNER if camera_down else None
-            timer = self._loading_left(now)  # None until there is something to read
+            howto = self._howto_left(now) or None
+            # No countdown on the how-to-play screen, then None until there is something to read.
+            timer = None if howto else self._loading_left(now)
         elif scene == "fight":
             assert match is not None
             if self._pause == "camera":
@@ -324,6 +334,7 @@ class Engine:
             projectiles=projectiles,
             banner=banner,
             timer_s=timer,
+            howto_s=howto,
             chronicle=self._chronicle if scene == "victory" else None,
             events=tuple(events),
             classes=self._class_views,

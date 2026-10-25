@@ -25,9 +25,11 @@ from magic_box.intent.fusion import Intent
 from magic_box.pipeline.loop import GameLoop
 from magic_box.pipeline.sources import FakeSources, KeyboardVoiceSource, ReplaySources
 from magic_box.replay.record import SessionRecorder
+from tests.factories import pin_pre_venue_tuning
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_CFG = load_config(ROOT / "config.yaml")
+pin_pre_venue_tuning(BASE_CFG)
 # Written against fire vs lightning; config.yaml's own default puts the parry knight in slot 1.
 BASE_CFG["game"]["default_classes"] = {0: "fire_mage", 1: "lightning_mage"}
 FPS = 60

@@ -1,4 +1,5 @@
-"""Loading scene: a tutorial card per half (each spell's incantation and release) and a countdown.
+"""Loading scene: the how-to-play screen first (`scenes/howto.py`), then a tutorial card per half
+(each spell's incantation and release) and a countdown.
 
 Owner: Adetola
 
@@ -13,7 +14,7 @@ import pygame
 
 from magic_box.core.contracts import GameView, PlayerView
 from magic_box.render.hud import class_label, release_cue
-from magic_box.render.scenes import SceneStyle, card, family_rgb
+from magic_box.render.scenes import SceneStyle, card, family_rgb, howto
 from magic_box.render.style import draw_chip, draw_ring
 
 CARD_TOP = 150
@@ -27,6 +28,9 @@ PARRY_TIP = "PARRY: ARM FORWARD JUST BEFORE IT HITS, THEN PUSH"
 
 
 def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
+    if view.howto_s is not None:  # loading opens with the how-to-play screen
+        howto.draw(surface, view, style, t)
+        return
     th = style.theme
     assert th is not None
     w, _ = surface.get_size()

@@ -4,18 +4,21 @@ Owner: Adetola
 
 P1's card is on the left half, P2's on the right (each player reads their own side). Each card
 shows the name (said into the mic), the last heard transcript as a mic check, TRACKED, the class
-options with their spells (the pick highlighted) and a hands-up ready indicator.
+options with their spells (the pick highlighted) and a hands-up ready indicator. A how-to-play
+strip runs under the cards.
 """
 
 import pygame
 
 from magic_box.core.contracts import ClassView, GameView, PlayerView
 from magic_box.render.hud import class_label
-from magic_box.render.scenes import SceneStyle, card
+from magic_box.render.scenes import SceneStyle, card, howto
 from magic_box.render.style import draw_chip, draw_mark, lerp_rgb, pulse
 
 CARD_TOP = 200
 CLASS_ROW_H = 78
+STRIP_TOP = 806  # the how-to-play strip, between the cards and the banner ribbon
+STRIP_H = 130
 
 
 def class_keyword(cv: ClassView) -> str:
@@ -38,6 +41,7 @@ def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
     half = w // 2
     for p in view.players:
         _draw_card(surface, style, p, view, p.slot * half, half, t)
+    howto.draw_strip(surface, style, pygame.Rect(40, STRIP_TOP, w - 80, STRIP_H))
 
 
 def _draw_card(

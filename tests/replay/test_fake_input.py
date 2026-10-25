@@ -6,8 +6,10 @@ import pytest
 from magic_box.core.config import load_config
 from magic_box.core.contracts import KEYPOINT_NAMES
 from magic_box.replay.fake_input import FakePlayers
+from tests.factories import pin_pre_venue_tuning
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
+pin_pre_venue_tuning(CFG)
 K0 = CFG["keys"]["fake"][0]
 FAKE = CFG["fake"]
 

@@ -225,3 +225,13 @@ def test_draw_knight_guard_states_and_a_riposte(parry):
         assert w.screen.get_bounding_rect().size != (0, 0)
     finally:
         w.close()
+
+
+def test_draw_the_how_to_play_screen_and_the_lobby_strip():
+    w = Window(CFG, headless=True)
+    try:
+        for view in (make_full_view("loading", howto_s=5.2), make_full_view("lobby")):
+            w.render(dataclasses.replace(view, events=()), None, {}, 10.0)
+            assert w.screen.get_bounding_rect().size != (0, 0)
+    finally:
+        w.close()

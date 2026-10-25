@@ -6,8 +6,10 @@ from magic_box.core.config import load_config
 from magic_box.game.classes import class_ids, class_name
 from magic_box.game.combat import damage, dist_mult, speed_mult
 from magic_box.game.spells import load_spells
+from tests.factories import pin_pre_venue_tuning
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
+pin_pre_venue_tuning(CFG)
 
 
 @pytest.mark.parametrize(

@@ -9,9 +9,10 @@ from magic_box.core.config import load_config
 from magic_box.core.contracts import Action, EffectView, Push
 from magic_box.game.effects import Effects
 from magic_box.game.state import STAT_KEYS, MatchState
-from tests.factories import make_state
+from tests.factories import make_state, pin_pre_venue_tuning
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
+pin_pre_venue_tuning(CFG)
 G = CFG["game"]
 NAMES = {0: "Ada", 1: "Bo"}
 STATES = {0: make_state(0, root=(0.6, 0.0, 2.0)), 1: make_state(1, root=(-0.6, 0.0, 2.0))}
