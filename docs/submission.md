@@ -46,7 +46,7 @@ There are nine spells, three per class. Six do more than damage: a shield that b
   - **Game** is a pygame-ce loop that never blocks [TODO 08:00: add the measured fps on the Jetson]: fusion of body and voice into actions, the game rules, and the renderer. Muse Spark calls run on background threads with an 8 s deadline and a fallback.
 - **Contracts:** every message between processes is a typed dataclass that round-trips to JSON lines. That gave us `--fake` mode (keyboard players and a synthetic camera) to build the game on laptops, and `--record` / `--replay` to replay real sessions.
 - **Visuals and sound:** a HUD per player, five scenes, hit and K.O. effects, per-element projectiles with glows and trails, and sounds synthesized with numpy at startup. Titles use Cinzel Decorative (SIL Open Font License).
-- **Tests:** 865 automated tests, run headless in GitHub Actions with Ruff lint and format checks.
+- **Tests:** 949 automated tests, run headless in GitHub Actions with Ruff lint and format checks. They include 30 end-to-end tests that drive the real game loop through whole fake matches on a fake clock. A soak script plays random fake matches for as long as you ask and watches fps and memory.
 
 ### Challenges we ran into
 
@@ -96,7 +96,10 @@ Python 3.10, uv, pygame-ce, NumPy, Stereolabs ZED SDK (pyzed), ZED X, ZED Link, 
 | Spark chronicle | 1.6-1.7 s, 87-88 words | laptop Wi-Fi |
 | Fight frame render time | about 2 ms; about 3 ms with heavy effects (3.9 ms worst) | Apple M5 laptop, SDL dummy video, not the Jetson |
 | Quit with a Spark call in flight | 0.27 s | laptop |
-| Automated tests | 865 passed, 2 skipped | laptop, `dev` at 2026-10-25 04:15 |
+| Automated tests | 949 passed, 2 skipped | laptop, 2026-10-25 05:05 |
+| End-to-end tests (`tests/test_e2e.py`) | 30 passed in 15.6 s | laptop |
+| 10-minute soak (`scripts/soak.py --seconds 600`) | no crash; 13 matches (11 KO, 2 time-outs); RSS 190 MB at the end, max 204 MB; draw 1.8-4.1 ms per frame | macOS laptop, before the last fix wave; 48 fps there is a macOS sleep artifact, not a Jetson number |
+| Fast soak (`--fast`, fake clock) | about 34 minutes of game time in 5 min, 55 matches, no crash; RSS flat at 206-217 MB | macOS laptop |
 | Tracking fps, two-person share | `[TODO 08:00]` | Jetson, `bench_tracking.py` |
 | Render fps in a fight | `[TODO 08:00]` | Jetson, F1 overlay |
 | Muse latency with real voices | `[TODO 08:00]` | Jetson, `check_muse.py --record` |
