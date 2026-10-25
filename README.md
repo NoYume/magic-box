@@ -29,14 +29,22 @@ Each player watches their own half of a split screen, which shows a live close-u
 
 ## Laptop quickstart
 
-No camera needed. Python 3.10 and [uv](https://docs.astral.sh/uv/) are required.
+Python 3.10, [uv](https://docs.astral.sh/uv/), and a webcam are required for tracked mode.
 
 ```bash
 uv sync --extra laptop
-uv run python -m magic_box --fake
+uv run python -m magic_box --webcam
 ```
 
-Fake-mode keys (from `config.yaml`):
+`--webcam` uses your laptop camera for two-person body tracking, gesture releases,
+approximate monocular distance/push speed, and the configured laptop microphone(s). The
+Apache-2.0 OpenCV Zoo pose models (~17 MB) download once on first launch. Unlike the ZED,
+a normal webcam cannot measure true metric depth, so distance and forward thrust are estimates.
+`--fake` uses keyboard-controlled silhouettes and needs no camera. If camera 0 is not right,
+set `fake.webcam.device: 1` in `config.local.yaml`. For Muse speech, launch with
+`uv run --env-file .env python -m magic_box --webcam`; spell keys remain the offline fallback.
+
+Fake-mode keys (webcam mode uses body gestures; spell and utility keys still work):
 
 | Action | P1 | P2 |
 |---|---|---|
@@ -50,7 +58,7 @@ Fake-mode keys (from `config.yaml`):
 | Guard (Holy Knight parry) | `g` | `o` |
 | Spells (voice fallback, always on) | `1` `2` `3` | `8` `9` `0` |
 
-`F1` toggles the debug overlay. `Backspace` goes back to the lobby from any scene. On the end screen, saying "main menu" or "play again" does the same. `Esc` quits.
+`F1` toggles the debug overlay. `Backspace` goes back to the lobby from any scene. On the end screen, saying "main menu" or "play again" does the same. `Esc` quits. In webcam mode, stand two people side by side and use the mirrored camera preview in the upper-right to position yourselves. Raise both players' hands for 0.3 seconds to start; press `F1` to inspect estimated range and wrist velocity.
 
 Boot moves on after 2 s. In the lobby both players hold their hands up (`r` + `y`) for 0.3 s to start. The keyboard can't speak, so fake mode keeps the default classes (P1 Fire Mage, P2 Holy Knight). With a `.env` holding `META_MODEL_API_KEY`, `uv run --env-file .env python -m magic_box --fake` also calls Muse Spark for the incantations and the chronicle.
 

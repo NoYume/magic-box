@@ -169,6 +169,7 @@ These are team rules. `tests/test_boundaries.py` enforces the import ones.
 ## Working without the Jetson
 
 - **`--fake`:** keyboard-driven players and a synthetic camera frame (two silhouettes that follow fake root x and z). Runs on any laptop. This is how you develop render, game and intent work.
+- **`--webcam`:** laptop development mode using the real webcam, OpenCV Zoo MediaPipe body tracking (models download once), approximate monocular range/push depth, and the normal Muse microphone process. It preserves the live gesture/voice flow without `pyzed`, but metric depth is estimated rather than measured. Use `uv run --env-file .env python -m magic_box --webcam`; keyboard spell keys remain available.
 - **`--replay DIR`:** feeds a recorded session back with rebased timing. There is no video: the camera frame is redrawn as silhouettes from the recorded states. A missing session exits 2 with "replay: no session at DIR".
 - **`--record DIR`:** writes a session directory (`states.jsonl`, `voice.jsonl`, `events.jsonl`, `meta.json`). No `frames.mp4`: the Jetson already records SVO (`scripts/record_session.py`). A writer thread does the disk work, so the game loop never waits.
 - **Live mode** (no `--fake`/`--replay`) starts the perception and voice processes. On a laptop the perception process exits with "pyzed is not installed ... use --fake on a laptop", and the supervisor retries it 5 times before giving up. The window shows boot with the camera line at "no frames" for 8 s (`boot_max_s`), then the lobby with "CAMERA RECONNECTING".
@@ -210,9 +211,10 @@ Per-machine overrides go in `config.local.yaml` (gitignored, deep-merged over `c
 |---|---|
 | `uv sync --extra laptop` | Install on a laptop (adds `opencv-python`). On the Jetson use plain `uv sync`. |
 | `uv run python -m magic_box --fake` | Run with keyboard players. |
+| `uv run --env-file .env python -m magic_box --webcam` | Laptop webcam pose/depth approximation plus laptop mic/Muse voice. |
 | `uv run --env-file .env python -m magic_box` | Live mode; `.env` holds `META_MODEL_API_KEY`. |
 | `uv run python -m magic_box --web` | Browser output instead of a window (no monitor at the venue): the game draws off-screen and streams MJPEG on `display.web.port` (8000); keys typed in the page reach the game. `docker compose up` runs the demo this way. |
-| `uv run python -m magic_box --help` | Flags: `--fake`, `--replay DIR`, `--record DIR`, `--debug` (overlay on, perf printed to stderr), `--fullscreen`, `--headless`, `--config PATH`, `--max-ticks N`. |
+| `uv run python -m magic_box --help` | Flags: `--fake`, `--webcam`, `--web`, `--replay DIR`, `--record DIR`, `--debug` (overlay on, perf printed to stderr), `--fullscreen`, `--headless`, `--config PATH`, `--max-ticks N`. |
 | `scripts/run_demo.sh [--fake] [--windowed] [--no-record] [--dry-run] [-- GAME_ARGS...]` | Demo launcher. On the Jetson: fullscreen and `--env-file .env`. Records each run to `recordings/<timestamp>/` with `game.log`, restarts on a crash (at most 5 in 60 s). Exit code 3 means perception gave up (six deaths: the first run plus five restarts, after it had delivered frames): the launcher then starts the game again, with fresh camera and voice processes. A laptop with no `pyzed` never delivers a frame, so it keeps running with CAMERA RECONNECTING instead. `Esc` or Ctrl-C ends it. |
 | `docker compose build` / `docker compose run --rm magic-box <command>` / `DISPLAY=:0 docker compose up` | Jetson without a host ZED SDK: the image has the SDK, the repo is mounted at `/app`. Leave `DISPLAY` unset for headless runs (a refused display breaks the ZED X capture). README "Jetson with Docker". |
 | `uv run pytest` | Run all tests. |

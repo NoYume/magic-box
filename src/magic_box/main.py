@@ -15,8 +15,14 @@ from magic_box.core.config import load_config
 from magic_box.game.engine import Engine
 from magic_box.intent.fusion import Intent
 from magic_box.pipeline.loop import GameLoop
-from magic_box.pipeline.processes import LiveRuntime, start_live
-from magic_box.pipeline.sources import FakeSources, KeyboardVoiceSource, ReplaySources, Sources
+from magic_box.pipeline.processes import LiveRuntime, WebcamRuntime, start_live, start_webcam
+from magic_box.pipeline.sources import (
+    FakeSources,
+    KeyboardVoiceSource,
+    ReplaySources,
+    Sources,
+    WebcamError,
+)
 from magic_box.render.camera_view import configure as configure_camera_view
 from magic_box.render.web_display import WebDisplay
 from magic_box.render.window import Window
@@ -27,6 +33,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="magic_box", description="Magic Box game console")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--fake", action="store_true", help="keyboard-driven fake players")
+    mode.add_argument(
+        "--webcam",
+        action="store_true",
+        help="laptop webcam pose tracking and microphone mode",
+    )
     mode.add_argument("--replay", metavar="DIR", type=Path, help="replay a recorded session")
     parser.add_argument("--record", metavar="DIR", type=Path, help="record this session")
     parser.add_argument("--debug", action="store_true", help="show the debug overlay")
@@ -81,7 +92,7 @@ def run(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     sources: Sources | None = None
     display: Window | None = None
-    runtime: LiveRuntime | None = None
+    runtime: LiveRuntime | WebcamRuntime | None = None
     ai: AiWorker | None = None
     voice_control = None
     recorder: SessionRecorder | None = None
@@ -90,9 +101,20 @@ def run(argv: Sequence[str] | None = None) -> int:
         cfg = load_config(args.config)
         if args.fullscreen:
             cfg["display"]["fullscreen"] = True
+        if args.webcam:
+            cfg["render"]["scene_camera_preview"] = True
         configure_camera_view(cfg["render"])
         if args.fake:
             sources = FakeSources(cfg)
+        elif args.webcam:
+            try:
+                runtime = start_webcam(cfg)
+            except (WebcamError, OSError, RuntimeError) as exc:
+                print(f"webcam: {exc}", file=sys.stderr)
+                return 2
+            sources = runtime.sources
+            voice_control = runtime.control_q
+            on_tick = runtime.supervisor.poll
         elif args.replay is not None:
             try:
                 sources = ReplaySources(args.replay, cfg)
@@ -107,7 +129,15 @@ def run(argv: Sequence[str] | None = None) -> int:
         if cfg["ai"]["enabled"]:
             preload_openai()  # after start_live: overlaps the child spawn and the ZED open
         if args.record is not None:
-            mode = "fake" if args.fake else "replay" if args.replay is not None else "live"
+            mode = (
+                "fake"
+                if args.fake
+                else "webcam"
+                if args.webcam
+                else "replay"
+                if args.replay is not None
+                else "live"
+            )
             recorder = SessionRecorder(args.record, cfg, mode)
         ai = AiWorker(cfg)
         display = WebDisplay(cfg) if args.web else Window(cfg, headless=args.headless)
@@ -123,13 +153,17 @@ def run(argv: Sequence[str] | None = None) -> int:
             ai=ai,
             voice_control=voice_control,
             recorder=recorder,
-            live=runtime is not None,
+            live=isinstance(runtime, LiveRuntime),
             perception_alive=(
-                (lambda: runtime.supervisor.alive("perception")) if runtime is not None else None
+                (lambda: runtime.supervisor.alive("perception"))
+                if isinstance(runtime, LiveRuntime)
+                else None
             ),
             debug_print=args.debug,
             perception_gave_up=(
-                (lambda: runtime.supervisor.gave_up("perception")) if runtime is not None else None
+                (lambda: runtime.supervisor.gave_up("perception"))
+                if isinstance(runtime, LiveRuntime)
+                else None
             ),
             voice_alive=(
                 (lambda: runtime.supervisor.alive("voice"))

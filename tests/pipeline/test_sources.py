@@ -1,8 +1,18 @@
+import copy
+import time
 from pathlib import Path
+
+import numpy as np
 
 from magic_box.core.config import load_config
 from magic_box.pipeline.frame_bus import FrameBus
-from magic_box.pipeline.sources import FakeSources, KeyboardVoiceSource, LiveSources, ReplaySources
+from magic_box.pipeline.sources import (
+    FakeSources,
+    KeyboardVoiceSource,
+    LiveSources,
+    ReplaySources,
+    WebcamSources,
+)
 from magic_box.pipeline.streams import DropOldestQueue
 from magic_box.replay.record import SessionRecorder
 from tests.factories import make_state
@@ -15,6 +25,67 @@ def test_fake_sources_poll():
     inputs = FakeSources(CFG).poll(frozenset(), now=0.0, dt=0.0)
     assert sorted(s.slot for s in inputs.states) == [0, 1]
     assert inputs.voice == [] and inputs.frame is not None
+
+
+def test_webcam_sources_replace_synthetic_frame_without_blocking():
+    class Capture:
+        def __init__(self):
+            self.delivered = False
+            self.released = False
+
+        def isOpened(self):
+            return True
+
+        def set(self, prop, value):
+            return True
+
+        def read(self):
+            if not self.delivered:
+                self.delivered = True
+                return True, np.full((10, 20, 3), 17, dtype=np.uint8)
+            time.sleep(0.001)
+            return False, None
+
+        def release(self):
+            self.released = True
+
+    capture = Capture()
+    cfg = copy.deepcopy(CFG)
+    cfg["fake"]["webcam"]["pose_tracking"] = False
+
+    class Cv2:
+        CAP_PROP_FRAME_WIDTH = 1
+        CAP_PROP_FRAME_HEIGHT = 2
+        COLOR_BGR2BGRA = 3
+
+        @staticmethod
+        def VideoCapture(device):
+            assert device == cfg["fake"]["webcam"]["device"]
+            return capture
+
+        @staticmethod
+        def resize(image, size):
+            return np.full((size[1], size[0], 3), image[0, 0, 0], dtype=np.uint8)
+
+        @staticmethod
+        def cvtColor(image, code):
+            assert code == Cv2.COLOR_BGR2BGRA
+            alpha = np.full((*image.shape[:2], 1), 255, dtype=np.uint8)
+            return np.concatenate((image, alpha), axis=2)
+
+    src = WebcamSources(cfg, cv2_module=Cv2)
+    try:
+        deadline = time.monotonic() + 1
+        inputs = src.poll(frozenset(), now=0.0, dt=0.0)
+        while inputs.frame.image[0, 0, 0] != 17 and time.monotonic() < deadline:
+            time.sleep(0.005)
+            inputs = src.poll(frozenset(), now=0.0, dt=0.0)
+        assert inputs.frame.image.shape == (600, 960, 4)
+        assert tuple(inputs.frame.image[0, 0]) == (17, 17, 17, 255)
+        assert sorted(s.slot for s in inputs.states) == [0, 1]
+    finally:
+        src.close()
+    assert capture.released
 
 
 def test_keyboard_voice_edge_triggered():

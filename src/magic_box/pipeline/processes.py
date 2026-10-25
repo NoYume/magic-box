@@ -14,7 +14,7 @@ from multiprocessing.context import BaseContext
 from magic_box.core.config import Config
 from magic_box.perception.process import run as perception_run
 from magic_box.pipeline.frame_bus import FrameBus
-from magic_box.pipeline.sources import LiveSources
+from magic_box.pipeline.sources import LiveSources, WebcamSources
 from magic_box.pipeline.streams import DropOldestQueue, spawn_context
 from magic_box.voice.process import run as voice_run
 
@@ -131,6 +131,47 @@ class LiveRuntime:
         self.supervisor.stop(self.stop_timeout_s, self.terminate_timeout_s)
         self.frame_bus.close()
         self.frame_bus.unlink()
+
+
+@dataclass
+class WebcamRuntime:
+    """Laptop webcam in-process plus the normal supervised Muse voice child."""
+
+    supervisor: Supervisor
+    sources: WebcamSources
+    control_q: DropOldestQueue
+    stop_timeout_s: float = 2.0
+    terminate_timeout_s: float = 1.0
+
+    def close(self) -> None:
+        self.supervisor.stop(self.stop_timeout_s, self.terminate_timeout_s)
+
+
+def start_webcam(cfg: Config) -> WebcamRuntime:
+    """Start laptop camera pose tracking and mic/STT without starting pyzed."""
+    ctx = spawn_context()
+    pipe = cfg["pipeline"]
+    voice_q = DropOldestQueue(pipe["voice_queue_size"], ctx)
+    control_q = DropOldestQueue(pipe["control_queue_size"], ctx)
+    specs = []
+    if cfg["voice"]["enabled"]:
+        specs.append(ProcSpec("voice", voice_run, (cfg, voice_q, control_q)))
+    supervisor = Supervisor(
+        specs, ctx, pipe["restart_backoff_s"], pipe["max_restarts"], pipe["restart_reset_s"]
+    )
+    try:
+        sources = WebcamSources(cfg, voice_q)
+        supervisor.start()
+    except BaseException:
+        supervisor.stop(0, 0)
+        raise
+    return WebcamRuntime(
+        supervisor,
+        sources,
+        control_q,
+        pipe["stop_timeout_s"],
+        pipe["terminate_timeout_s"],
+    )
 
 
 def start_live(cfg: Config) -> LiveRuntime:

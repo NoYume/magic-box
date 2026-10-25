@@ -6,13 +6,19 @@ pygame key names, so this module never imports pygame.
 Owner: Nikhil
 """
 
+import sys
+import threading
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from magic_box.core.config import Config
 from magic_box.core.contracts import Frame, PlayerState, VoiceEvent
+from magic_box.perception.raw import Capture
+from magic_box.perception.tracker import PlayerTracker
+from magic_box.perception.webcam_source import WebcamPoseEstimator
 from magic_box.pipeline.frame_bus import FrameBus
 from magic_box.pipeline.streams import DropOldestQueue
 from magic_box.replay.fake_input import FakePlayers
@@ -45,6 +51,106 @@ class FakeSources:
 
     def close(self) -> None:
         pass
+
+
+class WebcamError(RuntimeError):
+    """The laptop webcam backend could not be loaded or opened."""
+
+
+class WebcamSources:
+    """Laptop camera frames, monocular pose states, and Muse voice events.
+
+    Capture and inference run on a daemon thread because neither may block the game loop.
+    Keyboard fake states are used only before the first camera inference, or when pose
+    tracking is explicitly disabled in config.
+    """
+
+    def __init__(
+        self,
+        cfg: Config,
+        voice_q: DropOldestQueue | None = None,
+        cv2_module: Any = None,
+        pose_estimator: Any = None,
+    ) -> None:
+        if cv2_module is None:
+            try:
+                import cv2 as cv2_module
+            except (ImportError, OSError) as exc:
+                raise WebcamError(
+                    "OpenCV is unavailable; run `uv sync --extra laptop` before using --webcam"
+                ) from exc
+        self._cv2 = cv2_module
+        self._players = FakePlayers(cfg)  # immediate keyboard fallback until the first pose
+        self._tracker = PlayerTracker(cfg)
+        self._voice_q = voice_q
+        self._width = int(cfg["camera"]["image_width"])
+        self._height = int(cfg["camera"]["image_height"])
+        webcam_cfg = cfg["fake"]["webcam"]
+        device = webcam_cfg["device"]
+        self._capture = cv2_module.VideoCapture(device)
+        if not self._capture.isOpened():
+            self._capture.release()
+            raise WebcamError(
+                f"cannot open webcam device {device!r}; set fake.webcam.device in config.local.yaml"
+            )
+        self._capture.set(cv2_module.CAP_PROP_FRAME_WIDTH, self._width)
+        self._capture.set(cv2_module.CAP_PROP_FRAME_HEIGHT, self._height)
+        self._pose = (
+            pose_estimator
+            if pose_estimator is not None
+            else WebcamPoseEstimator(cfg, cv2_module)
+            if webcam_cfg["pose_tracking"]
+            else None
+        )
+        self._pose_error_logged = False
+        self._lock = threading.Lock()
+        self._latest: tuple[Frame, list[PlayerState]] | None = None
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._capture_loop, name="webcam", daemon=True)
+        self._thread.start()
+
+    def _capture_loop(self) -> None:
+        frame_idx = 0
+        while not self._stop.is_set():
+            ok, image = self._capture.read()
+            if not ok or image is None:
+                self._stop.wait(0.05)
+                continue
+            if image.shape[:2] != (self._height, self._width):
+                image = self._cv2.resize(image, (self._width, self._height))
+            cam_t = time.monotonic()
+            try:
+                bodies = self._pose.estimate(image) if self._pose is not None else []
+            except Exception as exc:
+                bodies = []
+                if not self._pose_error_logged:
+                    print(f"webcam: pose inference failed: {exc}", file=sys.stderr, flush=True)
+                    self._pose_error_logged = True
+            bgra = self._cv2.cvtColor(image, self._cv2.COLOR_BGR2BGRA)
+            frame = Frame(frame_idx=frame_idx, cam_t=cam_t, image=bgra)
+            states = (
+                self._tracker.step(Capture(frame, bodies), cam_t) if self._pose is not None else []
+            )
+            with self._lock:
+                self._latest = (frame, states)
+            frame_idx += 1
+
+    def poll(self, keys: frozenset[str], now: float, dt: float) -> Inputs:
+        fallback_states, fallback_frame = self._players.step(keys, now, dt)
+        with self._lock:
+            latest = self._latest
+        frame, states = latest if latest is not None else (fallback_frame, fallback_states)
+        # No pose model is the explicit keyboard-only webcam fallback.
+        if self._pose is None:
+            states = fallback_states
+        voice = self._voice_q.drain() if self._voice_q is not None else []
+        dropped = self._voice_q.dropped if self._voice_q is not None else 0
+        return Inputs(states, voice, frame, dropped)
+
+    def close(self) -> None:
+        self._stop.set()
+        self._capture.release()
+        self._thread.join(timeout=1.0)
 
 
 class LiveSources:

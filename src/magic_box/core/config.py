@@ -97,6 +97,25 @@ def _check_push_peak_wait(cfg: Config, problems: list[str]) -> None:
         )
 
 
+def _check_webcam(cfg: Config, problems: list[str]) -> None:
+    webcam = _get(cfg, "fake", "webcam")
+    if not isinstance(webcam, dict):
+        problems.append("fake.webcam: missing or not a mapping")
+        return
+    device = webcam.get("device")
+    if isinstance(device, bool) or not isinstance(device, (int, str)):
+        problems.append("fake.webcam.device: must be an integer index or device path")
+    if not isinstance(webcam.get("pose_tracking"), bool):
+        problems.append("fake.webcam.pose_tracking: must be true or false")
+    for key in ("detection_confidence", "pose_confidence", "landmark_confidence"):
+        value = webcam.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+            problems.append(f"fake.webcam.{key}: must be a number from 0 to 1")
+    shoulder = webcam.get("shoulder_width_m")
+    if isinstance(shoulder, bool) or not isinstance(shoulder, (int, float)) or shoulder <= 0:
+        problems.append("fake.webcam.shoulder_width_m: must be a number > 0")
+
+
 def _check_camera(cfg: Config, problems: list[str]) -> None:
     if "camera" not in cfg:
         return
@@ -335,9 +354,16 @@ def _check_pipeline_render(cfg: Config, problems: list[str]) -> None:
         px = _get(cfg, "render", "crop_cache_px")
         if isinstance(px, bool) or not isinstance(px, (int, float)) or px < 0:
             problems.append("render.crop_cache_px: must be a number >= 0")
-        for key in ("self_view", "crop_cache"):
+        for key in ("self_view", "crop_cache", "scene_camera_preview"):
             if not isinstance(_get(cfg, "render", key), bool):
                 problems.append(f"render.{key}: must be true or false")
+        preview_w = _get(cfg, "render", "scene_camera_preview_width_frac")
+        if (
+            isinstance(preview_w, bool)
+            or not isinstance(preview_w, (int, float))
+            or not 0 < preview_w <= 1
+        ):
+            problems.append("render.scene_camera_preview_width_frac: must be a number from 0 to 1")
     if "display" in cfg and not isinstance(_get(cfg, "display", "vsync"), bool):
         problems.append("display.vsync: must be true or false")
 
@@ -559,6 +585,7 @@ def validate(cfg: Config) -> list[str]:
     _check_zones(cfg, problems)
     _check_push_peak_wait(cfg, problems)
     _check_camera(cfg, problems)
+    _check_webcam(cfg, problems)
     _check_mics(cfg, problems)
     _check_key_spells(cfg, problems)
     _check_game(cfg, problems)

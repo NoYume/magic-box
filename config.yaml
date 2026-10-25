@@ -211,6 +211,8 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
   crop_padding: 0.15
   crop_smoothing: 0.25        # EMA alpha per drawn frame
   camera_scale_quality: fast  # fast = pygame scale | smooth = smoothscale (prettier, slower)
+  scene_camera_preview: false # main enables this for --webcam lobby/loading positioning
+  scene_camera_preview_width_frac: 0.25 # mirrored setup-scene picture-in-picture
   self_view: true             # false skips the mirrored self-view (saves fps)
   crop_cache_px: 2            # reuse a cached crop while the crop rect moved less than this (px)
   crop_cache: true            # reuse the scaled crop when frame_idx and crop are unchanged
@@ -378,7 +380,14 @@ keys:               # owner: Nikhil. pygame key names
     0: {left: a, right: d, closer: w, farther: s, push: f, duck: c, hands_up: r, hands_together: t, two_hand_push: v, guard: g}
     1: {left: j, right: l, closer: i, farther: k, push: h, duck: n, hands_up: y, hands_together: u, two_hand_push: m, guard: o}
 
-fake:               # owner: Nikhil. --fake mode players
+fake:               # owner: Nikhil. --fake mode and laptop webcam fallback
+  webcam:
+    device: 0                   # OpenCV camera index
+    pose_tracking: true         # OpenCV Zoo MediaPipe models; downloaded once (~17 MB)
+    detection_confidence: 0.35
+    pose_confidence: 0.35
+    landmark_confidence: 0.45
+    shoulder_width_m: 0.38      # monocular range calibration (guess; tune per players)
   start_x_m: 0.6              # slot 0 at +x (image right), slot 1 at -x
   start_z_m: 1.6               # neutral, between the zones
   min_z_m: 0.8

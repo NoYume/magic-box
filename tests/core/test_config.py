@@ -70,6 +70,14 @@ def test_crop_cache_px_must_be_a_non_negative_number(tmp_path, bad):
         load_config(_write(tmp_path, cfg))
 
 
+@pytest.mark.parametrize("bad", [-0.1, 1.1, "x", True])
+def test_webcam_confidences_must_be_probabilities(tmp_path, bad):
+    cfg = _base()
+    cfg["fake"]["webcam"]["pose_confidence"] = bad
+    with pytest.raises(ConfigError, match="fake.webcam.pose_confidence"):
+        load_config(_write(tmp_path, cfg))
+
+
 def test_mics_must_cover_both_slots(tmp_path):
     cfg = _base()
     cfg["voice"]["mics"] = [{"slot": 0, "device": None, "channel": 0}]

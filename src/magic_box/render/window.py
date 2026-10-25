@@ -87,6 +87,7 @@ class Window:
         self.debug = False
         self._debug_overlay = DebugOverlay(cfg)
         self._surf_cache: tuple[int, pygame.Surface] | None = None
+        self._scene_preview_cache: tuple[int, pygame.Surface, tuple[int, int]] | None = None
         self._quit_key = pygame.key.key_code(cfg["keys"]["quit"])
         self._debug_key = pygame.key.key_code(cfg["keys"]["debug_overlay"])
         self._last_draw_t: float | None = None
@@ -146,9 +147,37 @@ class Window:
         else:
             self.screen.blit(self.background, (0, 0))
             draw_scene(self.screen, view, self.scene_style, now)
+            if (
+                self.render_cfg["scene_camera_preview"]
+                and view.scene in ("boot", "lobby", "loading")
+                and frame is not None
+            ):
+                self._draw_scene_camera(frame)
         self._draw_banner(view, now)
         if view.scene == "fight":
             self.fx.draw_overlay(self.screen)
+
+    def _draw_scene_camera(self, frame: Frame) -> None:
+        """Draw a clear mirrored camera picture-in-picture during setup scenes."""
+        if self._scene_preview_cache is None or self._scene_preview_cache[0] != frame.frame_idx:
+            source = self._frame_surface(frame)
+            width = round(self.width * self.render_cfg["scene_camera_preview_width_frac"])
+            scale = width / source.get_width()
+            size = (width, round(source.get_height() * scale))
+            transform = (
+                pygame.transform.smoothscale
+                if self.render_cfg["camera_scale_quality"] == "smooth"
+                else pygame.transform.scale
+            )
+            preview = pygame.transform.flip(transform(source, size), True, False)
+            margin = int(self.render_cfg["margin_px"])
+            position = (self.width - size[0] - margin, margin)
+            self._scene_preview_cache = (frame.frame_idx, preview, position)
+        _, preview, position = self._scene_preview_cache
+        border = int(self.render_cfg["divider_px"])
+        rect = preview.get_rect(topleft=position).inflate(border * 2, border * 2)
+        pygame.draw.rect(self.screen, tuple(self.render_cfg["divider_rgb"]), rect)
+        self.screen.blit(preview, position)
 
     # -- banner -------------------------------------------------------------
 
