@@ -4,6 +4,7 @@ Owner: Adetola + Nikhil
 """
 
 import os
+import time
 from collections.abc import Mapping
 
 import pygame
@@ -17,18 +18,17 @@ from magic_box.render.camera_view import (
     frame_to_surface,
 )
 from magic_box.render.debug_overlay import DebugOverlay
-from magic_box.render.hud import draw_enemy_bar, draw_hud
+from magic_box.render.hud import Hud
 from magic_box.render.layout import Rect, compute_layout
 from magic_box.render.projectiles import draw_projectiles
 from magic_box.render.scenes import draw_scene, make_style
+from magic_box.render.style import Theme, lerp_rgb, make_background, pulse
 
 ALL_KEY_CODES = tuple(
     getattr(pygame, name) for name in dir(pygame) if name.startswith("K_") and name != "K_"
 )
-TEXT_RGB = (240, 240, 240)
-BANNER_SIZE = 96
-HUD_FONT_SIZE = 32
-HINT_FONT_SIZE = 56
+BANNER_PX = 110
+MAX_DT_S = 0.1
 
 
 class Window:
@@ -48,12 +48,12 @@ class Window:
         )
         pygame.display.set_caption("Magic Box")
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.Font(None, HUD_FONT_SIZE)
-        self.hint_font = pygame.font.Font(None, HINT_FONT_SIZE)
-        self.banner_font = pygame.font.Font(None, BANNER_SIZE)
-        self.scene_style = make_style(self.render_cfg["scenes"])
+        self.theme = Theme(self.render_cfg)
+        self.hud = Hud(cfg, self.theme)
+        self.scene_style = make_style(self.render_cfg["scenes"], self.theme, cfg)
         self.proj_font = pygame.font.Font(None, self.render_cfg["projectiles"]["font_px"])
         self.layout = compute_layout(self.width, self.height, self.render_cfg)
+        self.background = make_background(self.width, self.height, self.theme)
         self.opp_smoothers = (
             CropSmoother(self.render_cfg["crop_smoothing"]),
             CropSmoother(self.render_cfg["crop_smoothing"]),
@@ -67,6 +67,9 @@ class Window:
         self._surf_cache: tuple[int, pygame.Surface] | None = None
         self._quit_key = pygame.key.key_code(cfg["keys"]["quit"])
         self._debug_key = pygame.key.key_code(cfg["keys"]["debug_overlay"])
+        self._last_draw_t: float | None = None
+        self._banner_text: str | None = None
+        self._banner_since = 0.0
 
     def pump(self) -> tuple[frozenset[str], bool]:
         quit_requested = False
@@ -93,10 +96,6 @@ class Window:
             self._surf_cache = (frame.frame_idx, frame_to_surface(frame))
         return self._surf_cache[1]
 
-    def _centered_text(self, text: str, font, rect: Rect) -> None:
-        img = font.render(text, True, TEXT_RGB)
-        self.screen.blit(img, img.get_rect(center=(rect.x + rect.w // 2, rect.y + rect.h // 2)))
-
     def draw(
         self,
         view: GameView,
@@ -105,20 +104,70 @@ class Window:
         fps: float,
         dropped: int = 0,
     ) -> None:
-        self.screen.fill(tuple(self.render_cfg["background_rgb"]))
-        if view.scene == "fight":
-            self._draw_fight(view, frame, states)
-        else:
-            draw_scene(self.screen, view, self.scene_style)
-        if view.banner:
-            img = self.banner_font.render(view.banner, True, TEXT_RGB)
-            self.screen.blit(img, img.get_rect(center=(self.width // 2, self.height // 2)))
+        self.render(view, frame, states, time.monotonic())
         if self.debug:
             self._debug_overlay.draw(self.screen, states, fps, dropped)
         pygame.display.flip()
 
+    def render(
+        self, view: GameView, frame: Frame | None, states: Mapping[int, PlayerState], now: float
+    ) -> None:
+        """Draw one frame into `self.screen` at time `now` (no flip; tests call this)."""
+        dt = 0.0 if self._last_draw_t is None else min(MAX_DT_S, max(0.0, now - self._last_draw_t))
+        self._last_draw_t = now
+        self.hud.update(view, dt)
+        if view.scene == "fight":
+            self.screen.fill(tuple(self.render_cfg["background_rgb"]))
+            self._draw_fight(view, frame, states, now)
+        else:
+            self.screen.blit(self.background, (0, 0))
+            draw_scene(self.screen, view, self.scene_style, now)
+        self._draw_banner(view, now)
+
+    # -- banner -------------------------------------------------------------
+
+    def _draw_banner(self, view: GameView, now: float) -> None:
+        if view.banner != self._banner_text:
+            self._banner_text, self._banner_since = view.banner, now
+        if not view.banner or view.scene == "victory":
+            return  # the victory scene draws the banner as its headline
+        th = self.theme
+        if view.scene != "fight":
+            img = th.text(view.banner, "big", th.c["gold"])
+            band = th.panel(self.width - 160, img.get_height() + 30, th.c["panel"], 210)
+            y = self.height - band.get_height() - 30
+            self.screen.blit(band, (80, y))
+            self.screen.blit(
+                img, img.get_rect(center=(self.width // 2, y + band.get_height() // 2))
+            )
+            return
+        pop = self.render_cfg["fx"]["banner_pop_s"]
+        age = now - self._banner_since
+        scale = 1.0 + 0.5 * max(0.0, 1.0 - age / pop) if pop > 0 else 1.0
+        for half in self.layout:
+            self._half_banner(view.banner, half.half, scale)
+
+    def _half_banner(self, text: str, half: Rect, scale: float) -> None:
+        th = self.theme
+        max_w = half.w - 60
+        font = th.font_px(BANNER_PX)
+        w = font.size(text)[0]
+        if w > max_w:
+            font = th.font_px(max(24, int(BANNER_PX * max_w / w)))
+        img = th.text(text, font, th.c["text"])
+        cx, cy = half.x + half.w // 2, int(half.h * 0.42)
+        band = th.panel(half.w - 20, img.get_height() + 36, th.c["panel"], 170)
+        self.screen.blit(band, band.get_rect(center=(cx, cy)))
+        if scale > 1.001:
+            img = pygame.transform.smoothscale(
+                img, (round(img.get_width() * scale), round(img.get_height() * scale))
+            )
+        self.screen.blit(img, img.get_rect(center=(cx, cy)))
+
+    # -- fight --------------------------------------------------------------
+
     def _draw_fight(
-        self, view: GameView, frame: Frame | None, states: Mapping[int, PlayerState]
+        self, view: GameView, frame: Frame | None, states: Mapping[int, PlayerState], now: float
     ) -> None:
         rc = self.render_cfg
         surf = self._frame_surface(frame) if frame is not None else None
@@ -137,8 +186,10 @@ class Window:
                 )
                 draw_opponent(self.screen, half.half, surf, crop)
             else:
-                self._centered_text("STEP INTO VIEW", self.hint_font, half.half)
-            draw_enemy_bar(self.screen, half.enemy_bar, view.players[half.shows_slot], self.font)
+                self._step_into_view(half.half, now)
+            enemy = view.players[half.shows_slot]
+            limit_x = half.selfview.x - 10
+            self.hud.draw_enemy(self.screen, half.enemy_bar, enemy, limit_x, now)
             me = states.get(half.viewer_slot)
             if surf is not None and me is not None and me.tracking_ok:
                 sv_crop = self.self_smoothers[half.viewer_slot].update(
@@ -151,7 +202,7 @@ class Window:
                     )
                 )
                 draw_selfview(self.screen, half.selfview, surf, sv_crop, me.keypoints_px)
-            draw_hud(self.screen, half.hud, view.players[half.viewer_slot], self.font)
+            self.hud.draw_panel(self.screen, half.hud, view.players[half.viewer_slot], now)
             if crop is None and surf is not None:
                 crop = Rect(0, 0, surf.get_width(), surf.get_height())
             if crop is not None:
@@ -163,10 +214,25 @@ class Window:
                     half.viewer_slot,
                     rc["projectiles"],
                     self.proj_font,
+                    self.theme,
+                    now,
                 )
         div = rc["divider_px"]
         pygame.draw.rect(
             self.screen,
             tuple(rc["divider_rgb"]),
             (self.width // 2 - div // 2, 0, div, self.height),
+        )
+        self.hud.draw_timer(self.screen, self.width // 2, view.timer_s, now)
+
+    def _step_into_view(self, half: Rect, now: float) -> None:
+        th = self.theme
+        col = lerp_rgb(th.c["dim"], th.c["text"], pulse(now, 3.0))
+        th.blit_text(
+            self.screen,
+            "STEP INTO VIEW",
+            "huge",
+            col,
+            "center",
+            (half.x + half.w // 2, half.h // 3),
         )

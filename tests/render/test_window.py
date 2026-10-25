@@ -1,3 +1,4 @@
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -6,7 +7,7 @@ from magic_box.core.config import load_config
 from magic_box.core.contracts import ProjectileView
 from magic_box.render.window import Window
 from magic_box.replay.fake_input import FakePlayers
-from tests.factories import make_view
+from tests.factories import make_full_view, make_view
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
 
@@ -51,8 +52,8 @@ def test_draw_with_the_debug_overlay_on():
         w.close()
 
 
-@pytest.mark.parametrize("scene", ["lobby", "loading", "victory"])
-def test_draw_each_placeholder_scene(scene):
+@pytest.mark.parametrize("scene", ["boot", "lobby", "loading", "victory"])
+def test_draw_each_scene_with_default_fields(scene):
     w = Window(CFG, headless=True)
     try:
         w.draw(
@@ -68,5 +69,42 @@ def test_draw_fight_with_projectiles():
         states, frame = FakePlayers(CFG).step(frozenset(), 0.0, 0.0)
         view = make_view(projectiles=(ProjectileView("fireball", 0, (480.0, 300.0), 0.5, True),))
         w.draw(view, frame, {s.slot: s for s in states}, fps=60.0)
+    finally:
+        w.close()
+
+
+@pytest.mark.parametrize("scene", ["boot", "lobby", "loading", "fight", "victory"])
+def test_draw_each_scene_fully_populated(scene):
+    w = Window(CFG, headless=True)
+    try:
+        states, frame = FakePlayers(CFG).step(frozenset(), 0.0, 0.0)
+        smap = {s.slot: s for s in states}
+        view = make_full_view(scene)
+        quiet = dataclasses.replace(view, events=())
+        for i in range(5):
+            w.render(view if i == 0 else quiet, frame, smap, 10 + i / 60)
+        w.draw(view, frame, smap, fps=60.0)
+    finally:
+        w.close()
+
+
+def test_draw_scenes_with_empty_lists_and_long_names():
+    w = Window(CFG, headless=True)
+    try:
+        long = "W" * 40
+        for scene in ("boot", "lobby", "loading", "victory", "fight"):
+            view = make_full_view(scene, checks=(), classes=(), events=(), chronicle="word " * 400)
+            p0 = dataclasses.replace(
+                view.players[0], name=long, heard=long * 3, effects=(), stats={}
+            )
+            w.render(dataclasses.replace(view, players=(p0, view.players[1])), None, {}, 1.0)
+    finally:
+        w.close()
+
+
+def test_victory_draws_a_draw_without_banner():
+    w = Window(CFG, headless=True)
+    try:
+        w.render(make_full_view("victory", banner=None, winner_slot=None), None, {}, 1.0)
     finally:
         w.close()

@@ -4,9 +4,14 @@ from typing import Any
 
 from magic_box.core.contracts import (
     KEYPOINT_NAMES,
+    CheckView,
+    ClassView,
+    EffectView,
+    GameEvent,
     GameView,
     PlayerState,
     PlayerView,
+    ProjectileView,
     SpellView,
 )
 
@@ -64,6 +69,121 @@ def make_view(**overrides: Any) -> GameView:
         "banner": None,
         "timer_s": 90.0,
         "chronicle": None,
+    }
+    fields.update(overrides)
+    return GameView(**fields)
+
+
+# -- fully populated views (render tests and scene previews) ------------------
+
+FULL_SPELLS = {
+    0: (
+        ("fireball", "Fireball", "embers of the forty acres burn", 25.0, "push"),
+        ("flame_wall", "Flame Wall", "rise crimson rampart", 30.0, "two_hand_push"),
+        ("inferno", "Inferno", "let the whole sky catch fire", 60.0, "push"),
+    ),
+    1: (
+        ("bolt", "Bolt", "lightning answer my call", 20.0, "push"),
+        ("chain", "Chain", "chain the storm across the river", 35.0, "push"),
+        ("static_field", "Static Field", "hum of the restless grid", 30.0, "two_hand_push"),
+    ),
+}
+
+
+def make_full_player(slot: int, **overrides: Any) -> PlayerView:
+    """A PlayerView with every optional field set (effects, charge, stats, ...)."""
+    spells = tuple(
+        SpellView(sid, name, inc, cost, slot == 0 and i == 0, release)
+        for i, (sid, name, inc, cost, release) in enumerate(FULL_SPELLS[slot])
+    )
+    effects = (
+        (EffectView("shield", 3.2), EffectView("empowered", 5.5))
+        if slot == 0
+        else (EffectView("mana_slow", 4.1), EffectView("slow", 1.4))
+    )
+    fields: dict[str, Any] = {
+        "slot": slot,
+        "name": ("Daniel", "Adetola")[slot],
+        "class_id": ("fire_mage", "lightning_mage")[slot],
+        "hp": (72.0, 23.0)[slot],
+        "hp_max": 100.0,
+        "mana": (55.0, 25.0)[slot],
+        "mana_max": 100.0,
+        "spells": spells,
+        "zone": ("danger", "far")[slot],
+        "dist": (1.3, 2.7)[slot],
+        "mic_ok": slot == 0,
+        "tracking_ok": True,
+        "effects": effects,
+        "charge_s": 2.1 if slot == 0 else 0.0,
+        "cooldown_s": 0.0 if slot == 0 else 0.5,
+        "ready": slot == 0,
+        "heard": ("call me daniel", "fire")[slot],
+        "stats": {
+            "damage": (77.0, 28.0)[slot],
+            "hits": (6.0, 3.0)[slot],
+            "casts": (5.0, 4.0)[slot],
+            "dodges": (2.0, 1.0)[slot],
+            "blocks": (1.0, 0.0)[slot],
+            "heals": (0.0, 1.0)[slot],
+            "best_push_mps": (3.4, 2.6)[slot],
+        },
+    }
+    fields.update(overrides)
+    return PlayerView(**fields)
+
+
+def make_full_events(t: float = 0.0) -> tuple[GameEvent, ...]:
+    """One GameEvent of every kind, with the data the engine logs."""
+    return (
+        GameEvent(t, "match_start", None, {"names": {0: "Daniel", 1: "Adetola"}}),
+        GameEvent(t, "cast", 0, {"spell_id": "fireball", "release": "push", "two_hand": False}),
+        GameEvent(t, "hit", 0, {"spell_id": "fireball", "damage": 18.4, "target": 1}),
+        GameEvent(t, "dodge", 1, {"spell_id": "bolt", "dodge": "duck"}),
+        GameEvent(t, "block", 0, {"spell_id": "bolt", "attacker": 1}),
+        GameEvent(t, "heal", 1, {"spell_id": "heal", "amount": 25}),
+        GameEvent(t, "buff", 0, {"spell_id": "holy_light", "effect": "empowered"}),
+        GameEvent(t, "ko", None, {"winner": 0}),
+        GameEvent(t, "match_end", None, {"winner": 0, "reason": "ko"}),
+    )
+
+
+CHRONICLE = (
+    "Under the tower's orange glow, Daniel called the embers of the forty acres and Adetola "
+    "answered with lightning across the river. Three fireballs found their mark; one bolt was "
+    "ducked at the last instant. When the smoke cleared, the crowd on Speedway knew the name of "
+    "the new champion of the box."
+)
+
+
+def make_full_view(scene: str = "fight", **overrides: Any) -> GameView:
+    """A GameView with every optional field populated (events, classes, checks, winner)."""
+    fields: dict[str, Any] = {
+        "scene": scene,
+        "players": (make_full_player(0), make_full_player(1)),
+        "projectiles": (
+            ProjectileView("fireball", 1, (300.0, 250.0), 0.55, False),
+            ProjectileView("bolt", 0, (650.0, 260.0), 0.8, True),
+            ProjectileView("judgment", 0, (600.0, 240.0), 0.3, False),
+            ProjectileView("basic", 1, (320.0, 280.0), 0.2, False),
+        ),
+        "banner": "FIREBALL!" if scene == "fight" else None,
+        "timer_s": {"fight": 42.3, "loading": 2.4}.get(scene),
+        "chronicle": CHRONICLE if scene == "victory" else None,
+        "events": make_full_events(),
+        "classes": (
+            ClassView("fire_mage", "Fire Mage", ("Fireball", "Flame Wall", "Inferno")),
+            ClassView("lightning_mage", "Lightning Mage", ("Bolt", "Chain", "Static Field")),
+            ClassView("holy_knight", "Holy Knight", ("Holy Light", "Heal", "Judgment")),
+        ),
+        "checks": (
+            CheckView("camera", True, "ZED X SVGA 30 fps"),
+            CheckView("mic P1", True, "USB lav"),
+            CheckView("mic P2", False, "no device"),
+            CheckView("network", True),
+            CheckView("api key", False, "META_MODEL_API_KEY not set"),
+        ),
+        "winner_slot": 0 if scene == "victory" else None,
     }
     fields.update(overrides)
     return GameView(**fields)

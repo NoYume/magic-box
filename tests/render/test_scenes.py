@@ -42,3 +42,29 @@ def test_wrap_text_fits_width():
         assert len(lines) > 1 and all(font.size(line)[0] <= 600 for line in lines)
     finally:
         pygame.quit()
+
+
+def test_headline_uses_banner_then_winner_slot_then_draw():
+    from magic_box.render.scenes import headline
+    from tests.factories import make_full_view
+
+    assert headline(make_full_view("victory", banner="DANIEL WINS")) == "DANIEL WINS"
+    assert headline(make_full_view("victory", winner_slot=1)) == "ADETOLA WINS"
+    assert headline(make_full_view("victory", winner_slot=None)) == "DRAW"
+
+
+def test_stat_lines_show_only_present_keys():
+    from magic_box.render.scenes import stat_lines
+    from tests.factories import make_full_player
+
+    p = make_full_player(0, stats={"damage": 41.6, "best_push_mps": 3.25, "junk": "x"})
+    assert stat_lines(p) == [("DAMAGE DEALT", "42"), ("FASTEST PUSH", "3.2 m/s")]
+    assert stat_lines(make_full_player(0, stats={})) == []
+
+
+def test_class_keyword_is_the_first_word():
+    from magic_box.core.contracts import ClassView
+    from magic_box.render.scenes.lobby import class_keyword
+
+    assert class_keyword(ClassView("holy_knight", "Holy Knight", ())) == "HOLY"
+    assert class_keyword(ClassView("x", "", ())) == "X"

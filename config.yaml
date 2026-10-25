@@ -213,7 +213,7 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
     slot_rgb: {0: [255, 140, 40], 1: [40, 140, 255]}
     threshold_rgb: [230, 60, 60]
     zone_rgb: {danger: [110, 30, 30], neutral: [70, 70, 40], far: [30, 50, 90]}
-  projectiles:                # owner: Nikhil
+  projectiles:                # owner: Nikhil (sprites: Adetola)
     start_radius_px: 18
     end_radius_px: 140
     end_y_frac: 0.85
@@ -222,11 +222,100 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
     dodge_rgb: [230, 50, 50]
     rgb: {basic: [240, 240, 240], fireball: [255, 120, 30], inferno: [255, 60, 0],
           bolt: [120, 180, 255], chain: [160, 140, 255], judgment: [255, 230, 120]}
-  scenes:                     # owner: Adetola (placeholder text scenes)
+    family: {basic: basic, fireball: fire, inferno: fire, flame_wall: fire, bolt: lightning,
+             chain: lightning, static_field: lightning, judgment: holy, holy_light: holy, heal: holy}
+    glow_scale: 2.4           # glow radius / core radius
+    glow_max_px: 240          # glow sprites are cached per 8 px step up to this radius
+    trail_steps: 6            # ghost copies behind the projectile
+    trail_spacing: 0.04       # progress between trail copies
+    dodge_ring_px: 10
+  theme:                      # owner: Adetola. shared colors and font sizes (pygame default font)
+    font_px: {tiny: 22, small: 28, text: 34, big: 46, huge: 72, giant: 180}
+    shadow_px: 3
+    text_cache_max: 1024
+    colors:
+      text: [245, 242, 235]
+      dim: [150, 146, 165]
+      faint: [95, 90, 110]
+      shadow: [0, 0, 0]
+      gold: [236, 192, 72]
+      ok: [80, 225, 120]
+      bad: [240, 70, 70]
+      warn: [255, 196, 64]
+      panel: [12, 9, 26]
+      panel_edge: [201, 162, 39]
+      card: [26, 20, 48]
+      card_hi: [52, 38, 92]
+      p1: [255, 140, 40]      # slot 0
+      p2: [70, 165, 255]      # slot 1
+      bg_top: [24, 14, 44]
+      bg_bottom: [6, 4, 12]
+      fire: [255, 120, 30]
+      lightning: [120, 180, 255]
+      holy: [255, 225, 120]
+      basic: [235, 235, 255]
+      mana: [70, 120, 255]
+    panel_alpha: 200
+    radius_px: 14
+  hud:                        # owner: Adetola
+    pad_px: 14
+    hp_bar_h_px: 38
+    mana_bar_h_px: 24
+    enemy_bar_h_px: 40
+    ease_per_s: 10.0          # bar easing rate toward the target value
+    ghost_hold_s: 0.45        # the damage ghost waits this long, then drains
+    ghost_per_s: 3.0
+    low_hp_frac: 0.3          # HP bar turns low_hp color and pulses below this
+    spell_row_h_px: 58
+    effect_icon_px: 44
+    hp_rgb: [70, 215, 95]
+    hp_low_rgb: [235, 60, 60]
+    ghost_rgb: [255, 240, 200]
+    mana_rgb: [70, 120, 255]
+    bar_back_rgb: [28, 24, 40]
+    charge_rgb: [255, 220, 90]
+    cooldown_rgb: [170, 170, 190]
+    zone_rgb: {danger: [235, 70, 60], neutral: [235, 200, 70], far: [80, 150, 240]}
+    effect_rgb: {shield: [255, 140, 50], empowered: [255, 225, 110], mana_slow: [150, 120, 255],
+                 slow: [120, 200, 255]}
+    timer_low_s: 10           # round timer turns red below this
+  fx:                         # owner: Adetola. hit flash, shake, numbers, particles
+    max_particles: 160        # hard cap so the Jetson stays at 60 fps
+    max_texts: 12
+    shake_px: 16
+    shake_s: 0.3
+    flash_s: 0.3
+    flash_alpha: 150
+    number_s: 1.1
+    number_rise_px: 140
+    sparkle_count: 28
+    burst_count: 24
+    particle_s: 0.9
+    glow_s: 1.2
+    ko_s: 2.4
+    ko_slowmo: 0.35           # FX time runs at this rate during the KO banner
+    banner_pop_s: 0.22
+    hit_rgb: [255, 50, 40]
+    damage_rgb: [255, 235, 120]
+    dodge_rgb: [120, 255, 200]
+    block_rgb: [120, 200, 255]
+    heal_rgb: [110, 255, 140]
+    buff_rgb: [255, 220, 100]
+    ko_rgb: [255, 60, 50]
+  audio:                      # owner: Adetola. synthesized at startup; silent if the mixer cannot open
+    enabled: true
+    volume: 0.6
+    sample_rate: 44100
+    buffer: 512
+    tick_last_s: 5            # fight: tick each second of the last N seconds
+  scenes:                     # owner: Adetola
     title_px: 96
     text_px: 36
     text_rgb: [240, 240, 240]
     dim_rgb: [150, 150, 160]
+    card_w_frac: 0.86         # card width / half width
+    countdown_px: 260
+    chronicle_w_frac: 0.7
 
 keys:               # owner: Nikhil. pygame key names
   spells: {0: ["1", "2", "3"], 1: ["8", "9", "0"]}   # keyboard fallback, always active
