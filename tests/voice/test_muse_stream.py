@@ -30,6 +30,13 @@ def test_handshake_fields():
     assert "keywords" not in handshake("k", "m", [])
 
 
+def test_handshake_drops_keywords_over_the_live_length_limit():
+    # The live API rejects the whole handshake for one keyword over 30 characters.
+    long = "chain the storm across the river"  # 32 characters
+    assert handshake("k", "m", ["embers", long, "x" * 30])["keywords"] == ["embers", "x" * 30]
+    assert "keywords" not in handshake("k", "m", [long])
+
+
 def test_connect_reads_session_id():
     async def go():
         async with FakeMuse([("send", {"sessionId": "abc"}), ("sleep", 0.2)]) as srv:

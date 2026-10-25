@@ -21,6 +21,10 @@ from websockets.protocol import State
 CLOSE_TIMEOUT_S = 1.0
 PING_INTERVAL_S = 5.0
 PING_TIMEOUT_S = 5.0
+# Live API limit (2026-10-25): a longer keyword fails the handshake with "ASR keyword N exceeds
+# the maximum length of 30 characters", which would keep the slot reconnecting all match.
+# 120 keywords were accepted; no count limit was found.
+MAX_KEYWORD_CHARS = 30
 
 _T = TypeVar("_T")
 
@@ -54,7 +58,11 @@ async def _end_and_close(ws: ClientConnection) -> None:
 
 
 def handshake(api_key: str, model: str, keywords: Sequence[str]) -> dict:
-    """Build the first text frame; `keywords` is omitted when empty."""
+    """Build the first text frame (shape verified live 2026-10-25).
+
+    Keywords longer than MAX_KEYWORD_CHARS are dropped; `keywords` is omitted when none is left.
+    """
+    keywords = [k for k in keywords if len(k) <= MAX_KEYWORD_CHARS]
     frame: dict = {
         "authorization": {"accessToken": f"Bearer {api_key}"},
         "audioEncoding": "PCM_16KHZ",
