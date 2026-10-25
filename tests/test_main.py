@@ -32,3 +32,25 @@ def test_preload_openai_is_safe_without_the_package(monkeypatch):
     assert preload_openai() in (True, False)
     monkeypatch.setitem(sys.modules, "openai", None)  # makes `import openai` raise ImportError
     assert preload_openai() is False
+
+
+def test_openai_is_preloaded_after_the_live_children_start(monkeypatch):
+    import pytest
+
+    from magic_box import main
+
+    order = []
+
+    def fake_start_live(cfg):
+        order.append("start_live")
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(main, "start_live", fake_start_live)
+    monkeypatch.setattr(main, "preload_openai", lambda: order.append("preload"))
+    with pytest.raises(RuntimeError):
+        main.run(["--headless", "--max-ticks", "1"])
+    assert order == ["start_live"]  # preload runs after start_live, not before
+
+    order.clear()
+    assert main.run(["--fake", "--headless", "--max-ticks", "2"]) == 0
+    assert order == ["preload"]

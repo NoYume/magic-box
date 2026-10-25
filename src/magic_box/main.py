@@ -87,8 +87,6 @@ def run(argv: Sequence[str] | None = None) -> int:
         if args.fullscreen:
             cfg["display"]["fullscreen"] = True
         configure_camera_view(cfg["render"])
-        if cfg["ai"]["enabled"]:
-            preload_openai()
         if args.fake:
             sources = FakeSources(cfg)
         elif args.replay is not None:
@@ -102,6 +100,8 @@ def run(argv: Sequence[str] | None = None) -> int:
             voice_control = runtime.control_q
             sources = runtime.sources
             on_tick = runtime.supervisor.poll
+        if cfg["ai"]["enabled"]:
+            preload_openai()  # after start_live: overlaps the child spawn and the ZED open
         if args.record is not None:
             mode = "fake" if args.fake else "replay" if args.replay is not None else "live"
             recorder = SessionRecorder(args.record, cfg, mode)
