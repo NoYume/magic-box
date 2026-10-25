@@ -39,6 +39,10 @@ class PlayerMatch:
     charge: Charge | None = None
     basic_ready_at: float = 0.0
     last_dist: float = 0.0
+    guard_at: float = float("-inf")
+    guard_ready_at: float = 0.0
+    riposte_until: float = 0.0
+    parried_at: float = float("-inf")
 
 
 @dataclass
@@ -194,6 +198,23 @@ class MatchState:
                 p.charge = None
                 self._cast(p, c, action, action.push.origin_px, action.push.speed, now)
                 return
+        if c is None and self.clock < p.riposte_until:
+            g = self.cfg["game"]
+            p.riposte_until = 0.0
+            p.basic_ready_at = self.clock + g["basic_attack_cooldown_s"]
+            riposte = SpellDef(
+                "riposte",
+                "Riposte",
+                0,
+                g["riposte_damage"],
+                g["riposte_travel_s"],
+                "push",
+                {},
+            )
+            self._cast(
+                p, Charge(riposte, 0.0, 0.0), action, action.push.origin_px, action.push.speed, now
+            )
+            return
         if self.clock >= p.basic_ready_at:
             g = self.cfg["game"]
             p.basic_ready_at = self.clock + g["basic_attack_cooldown_s"]
@@ -212,6 +233,11 @@ class MatchState:
 
     def _pose(self, action: Action, states: Mapping[int, PlayerState], now: float) -> None:
         p = self.players[action.slot]
+        if action.pose == "guard":
+            if self._can_parry(p) and self.clock >= p.guard_ready_at:
+                p.guard_at = self.clock
+                p.guard_ready_at = self.clock + self.cfg["game"]["parry_cooldown_s"]
+            return
         c = p.charge
         if c is None or POSE_RELEASES.get(action.pose or "") != c.spell.release:
             return
@@ -278,6 +304,15 @@ class MatchState:
 
     def _impact(self, proj: Projectile, now: float) -> None:
         target = self.players[proj.target]
+        if (
+            self._can_parry(target)
+            and self.clock - self.cfg["game"]["parry_window_s"] <= target.guard_at <= self.clock
+        ):
+            target.guard_at = float("-inf")
+            target.riposte_until = self.clock + self.cfg["game"]["riposte_window_s"]
+            target.parried_at = self.clock
+            self._log(now, "block", target.slot, spell_id=proj.spell_id, parry=True)
+            return
         dmg = damage(
             proj.base_damage,
             proj.speed,
@@ -299,6 +334,9 @@ class MatchState:
         if target.hp <= 0:
             self._log(now, "ko", None, winner=proj.attacker)
             self._end(now, proj.attacker, "ko")
+
+    def _can_parry(self, player: PlayerMatch) -> bool:
+        return player.class_id in self.cfg["game"]["parry_classes"]
 
     def _time_out(self, now: float) -> None:
         h0, h1 = self.players[0].hp, self.players[1].hp

@@ -33,13 +33,13 @@ def new(cfg=CFG0):
 def test_match_starts_full_and_logs_match_start():
     ms = MatchState(CFG, NAMES, now=5.0)
     p0, p1 = ms.players
-    assert (p0.hp, p0.mana, p0.class_id, p1.class_id) == (100, 100, "fire_mage", "lightning_mage")
+    assert (p0.hp, p0.mana, p0.class_id, p1.class_id) == (100, 100, "fire_mage", "holy_knight")
     assert ms.time_left == 90 and ms.banner() == "FIGHT!"
     [ev] = ms.take_events()
     assert (ev.kind, ev.t) == ("match_start", 5.0)
     assert ev.data == {
         "names": {0: "Ada", 1: "Bo"},
-        "classes": {0: "fire_mage", 1: "lightning_mage"},
+        "classes": {0: "fire_mage", 1: "holy_knight"},
     }
 
 

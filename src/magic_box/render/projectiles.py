@@ -45,16 +45,40 @@ def draw_projectiles(
     target_slot: int,
     cfg_proj: Mapping,
     font,
+    can_parry: bool = False,
 ) -> None:
     for p in projectiles:
         if p.target_slot != target_slot:
             continue
         center, radius, rgb = projectile_screen(p, half, crop, cfg_proj)
-        pygame.draw.circle(surface, rgb, (round(center[0]), round(center[1])), round(radius))
+        rounded_center = (round(center[0]), round(center[1]))
+        rounded_radius = round(radius)
+        if p.spell_id == "riposte":
+            _draw_blade_wave(surface, rounded_center, rounded_radius, rgb, cfg_proj)
+        else:
+            pygame.draw.circle(surface, rgb, rounded_center, rounded_radius)
         if p.in_dodge_window:
             tx = half.x + half.w / 2
             ty = half.y + cfg_proj["end_y_frac"] * half.h
-            img = font.render("DODGE!", True, tuple(cfg_proj["dodge_rgb"]))
+            cue = "PARRY / DODGE!" if can_parry else "DODGE!"
+            img = font.render(cue, True, tuple(cfg_proj["dodge_rgb"]))
             surface.blit(
                 img, img.get_rect(center=(round(tx), round(ty - radius - img.get_height())))
             )
+
+
+def _draw_blade_wave(surface, center, radius: int, rgb, cfg_proj: Mapping) -> None:
+    """Draw the knight's riposte as a horizontal crescent."""
+    x, y = center
+    width, height = radius * 3, max(4, radius)
+    outer = pygame.Rect(x - width // 2, y - height, width, 2 * height)
+    pygame.draw.arc(surface, rgb, outer, 0.15, 2.99, max(3, radius // 2))
+    inner = outer.inflate(-width // 6, -height // 2)
+    pygame.draw.arc(
+        surface,
+        tuple(cfg_proj["riposte_core_rgb"]),
+        inner,
+        0.3,
+        2.84,
+        max(2, radius // 6),
+    )

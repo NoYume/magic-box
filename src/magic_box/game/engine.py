@@ -197,6 +197,8 @@ class Engine:
         spells = tuple(
             self._spell_view(sp, inc, charged_id) for sp in load_spells(self.cfg, class_id)
         )
+        clock = match.clock if match is not None else 0.0
+        can_parry = class_id in g["parry_classes"]
         return PlayerView(
             slot=slot,
             name=self._names[slot],
@@ -210,6 +212,11 @@ class Engine:
             dist=state.root[2] if state else 0.0,
             mic_ok=self._mic_ok[slot],
             tracking_ok=state.tracking_ok if state else False,
+            can_parry=can_parry,
+            guard_s=max(0.0, pm.guard_at + g["parry_window_s"] - clock) if pm else 0.0,
+            guard_cooldown_s=max(0.0, pm.guard_ready_at - clock) if pm else 0.0,
+            riposte_s=max(0.0, pm.riposte_until - clock) if pm else 0.0,
+            parry_flash_s=max(0.0, pm.parried_at + g["parry_flash_s"] - clock) if pm else 0.0,
         )
 
     @staticmethod

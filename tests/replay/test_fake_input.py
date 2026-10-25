@@ -82,3 +82,11 @@ def test_two_hand_key_pushes_with_both_wrists():
     assert p1.wrist_vz == {"L": -FAKE["push_speed_mps"], "R": -FAKE["push_speed_mps"]}
     states, _ = fp.step(frozenset({K0["two_hand_push"]}), now=0.016, dt=0.016)
     assert _p1(states).push is None  # edge-triggered
+
+
+def test_guard_key_holds_right_wrist_toward_camera():
+    fp = FakePlayers(CFG)
+    p1 = _p1(fp.step(frozenset({K0["guard"]}), now=0.0, dt=0.0)[0])
+    assert "guard" in p1.pose_flags
+    assert p1.wrists["R"][2] == pytest.approx(FAKE["start_z_m"] - FAKE["guard_reach_m"])
+    assert "guard" not in _p1(fp.step(frozenset(), now=0.1, dt=0.1)[0]).pose_flags

@@ -77,7 +77,7 @@ def test_loading_countdown_then_fight_with_provided_and_fallback_incantations():
     )
     inc0 = {s.id: s.incantation for s in view.players[0].spells}
     assert inc0["fireball"] == "a b c" and inc0["inferno"] == "let the whole sky catch fire"
-    assert view.players[1].spells[0].incantation == "lightning answer my call"
+    assert view.players[1].spells[0].incantation == "dawn breaks upon my sword"
     assert [ev.kind for ev in events] == ["match_start"]
 
 

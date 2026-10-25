@@ -28,6 +28,8 @@
 | Lightning Mage | Bolt, 12 damage, 0.9 s travel (20) · Chain, 3 hits of 7 (35) · Static Field, slows opponent mana regen 5 s (30) | push · push · two-hand push |
 | Holy Knight | Holy Light, ×1.5 damage for 6 s (30) · Heal, +25 HP (40) · Judgment, 25-damage sword wave (45) | arm overhead · hands together · push |
 
+The Holy Knight can hold one wrist toward the camera to guard. Raising guard during the 0.4 s before impact parries one projectile, takes no damage, and arms a 1.5 s riposte; the next uncharged push launches a fast 20-damage blade wave. Guard then has a 1.5 s cooldown. These values are untuned.
+
 ## Resources and match
 
 100 HP, 100 mana, mana regenerates at 8 per second. One 90 s round. A KO, or higher HP at time-out, wins.

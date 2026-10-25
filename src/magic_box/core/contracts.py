@@ -177,6 +177,12 @@ class PlayerView:
     dist: float
     mic_ok: bool
     tracking_ok: bool
+    # Parry state. Durations are seconds remaining; zero means inactive.
+    can_parry: bool = False
+    guard_s: float = 0.0
+    guard_cooldown_s: float = 0.0
+    riposte_s: float = 0.0
+    parry_flash_s: float = 0.0
 
     def __post_init__(self) -> None:
         _check_in("slot", self.slot, SLOTS)

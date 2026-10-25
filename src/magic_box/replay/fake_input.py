@@ -102,6 +102,7 @@ class FakePlayers:
         duck = fake["duck_m"] if k["duck"] in keys else 0.0
         hands_up = k["hands_up"] in keys
         hands_together = k["hands_together"] in keys
+        guard = k["guard"] in keys and not hands_up
         wrist_y = _HANDS_UP_Y if hands_up else _SHOULDER_Y
         wrist_dx = 0.0 if hands_together else _WRIST_DX
         flags = set()
@@ -109,6 +110,9 @@ class FakePlayers:
             flags.add("hands_up")
         if hands_together:
             flags.add("hands_together")
+        if guard:
+            flags.add("guard")
+        guard_z = z - float(fake["guard_reach_m"]) if guard else z
 
         # Ducking lowers the whole upper body; pelvis and ankles stay put.
         pts = {
@@ -118,7 +122,7 @@ class FakePlayers:
             "l_shoulder": (x + _SHOULDER_DX, _SHOULDER_Y + duck, z),
             "r_shoulder": (x - _SHOULDER_DX, _SHOULDER_Y + duck, z),
             "l_wrist": (x + wrist_dx, wrist_y + duck, z),
-            "r_wrist": (x - wrist_dx, wrist_y + duck, z),
+            "r_wrist": (x - wrist_dx, wrist_y + duck, guard_z),
             "l_ankle": (x + _ANKLE_DX, _ANKLE_Y, z),
             "r_ankle": (x - _ANKLE_DX, _ANKLE_Y, z),
         }

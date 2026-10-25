@@ -14,7 +14,7 @@ Pure game rules: classes, spells, HP and mana, charge and dodge windows, combat,
 - Scene flow `lobby → loading → fight → victory → lobby` (it starts in `lobby`; there is no `boot`).
 - Lobby: `speech` Actions set the player's name (`parse_name`, up to `name_max_chars`); both players raising hands starts the match. The start is edge-triggered: after a match the players must lower their hands, then raise them again (the first lobby at startup starts on the first both-hands-up tick). Names persist across matches.
 - Loading: waits for the incantations from `ai/` (config fallback fills any gap), `loading_min_s` to `loading_max_s`.
-- Fight: own match clock (starts at 0; `now` is only the timestamp on `GameEvent.t`). `round_s` round, mana regen, charge (`charge_window_s`), a release (push, two-hand push, arm overhead, hands together) fires the charged spell, a basic attack on an uncharged push. Damage is Appendix A (`combat.py`). The attacker's distance is the releasing Action's `dist` (else the last known). A dodge inside `dodge_window_s` of impact avoids the hit.
+- Fight: own match clock (starts at 0; `now` is only the timestamp on `GameEvent.t`). `round_s` round, mana regen, charge (`charge_window_s`), a release (push, two-hand push, arm overhead, hands together) fires the charged spell, a basic attack on an uncharged push. Damage is Appendix A (`combat.py`). The attacker's distance is the releasing Action's `dist` (else the last known). A dodge inside `dodge_window_s` of impact avoids the hit. Classes in `parry_classes` can guard near impact to negate one projectile and arm a riposte.
 - Spells with 0 damage (Flame Wall, Static Field, Holy Light, Heal) spend mana, log a `cast` event and show a banner. Nothing more.
 - Pause: if a player has been untracked for `pause_after_s`, everything freezes and the banner reads "STEP INTO VIEW".
 - Victory: ends on KO or time-out. Back to the lobby when both raise hands after `victory_min_s`, or at `victory_max_s`. Hands still held up then keep the lobby open (names can change); lowering and raising them starts the next loading.
@@ -29,7 +29,7 @@ Pure game rules: classes, spells, HP and mana, charge and dodge windows, combat,
 ## Files
 - `engine.py`: `Engine` facade (`step`, `provide_incantations`, `provide_chronicle`, `provide_mic_status`); builds the `GameView`.
 - `scenes.py`: `SceneMachine` for lobby → loading → fight → victory; `parse_name`.
-- `state.py`: `MatchState` (HP, mana, charges, cooldowns, projectiles in flight, round timer, banner, event log).
+- `state.py`: `MatchState` (HP, mana, charges, guard/parry/riposte, cooldowns, projectiles in flight, round timer, banner, event log).
 - `combat.py`: `speed_mult`, `dist_mult`, `damage` (spec Appendix A).
 - `spells.py`: `SpellDef` and `load_spells` from config.
 - `classes.py`: `class_ids`, `class_name` from config.
@@ -39,7 +39,7 @@ Pure game rules: classes, spells, HP and mana, charge and dodge windows, combat,
 uv run pytest tests/game
 uv run python -m magic_box --fake
 ```
-In fake mode the whole match plays: raise hands (`r` + `y`), charge with the spell keys, push with `f` / `h`, two-hand spells with `v` / `m`.
+In fake mode the whole match plays: raise hands (`r` + `y`), charge with the spell keys, push with `f` / `h`, two-hand spells with `v` / `m`, and guard as a Holy Knight with `g` / `o`.
 
 ## Open TODOs
 - `TODO(Adetola)`: spell effects for 0-damage spells (Flame Wall block, Static Field slow, Holy Light buff, Heal; Chain hits once today).

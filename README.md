@@ -24,6 +24,7 @@ Fake-mode keys (from `config.yaml`):
 | Hands up | `r` | `y` |
 | Hands together | `t` | `u` |
 | Two-hand push | `v` | `m` |
+| Guard (Holy Knight parry) | `g` | `o` |
 | Spells (voice fallback, always on) | `1` `2` `3` | `8` `9` `0` |
 
 `F1` toggles the debug overlay. `Esc` quits.

@@ -70,3 +70,24 @@ def test_draw_fight_with_projectiles():
         w.draw(view, frame, {s.slot: s for s in states}, fps=60.0)
     finally:
         w.close()
+
+
+def test_draw_parry_flash_and_riposte():
+    import dataclasses
+
+    w = Window(CFG, headless=True)
+    try:
+        states, frame = FakePlayers(CFG).step(frozenset(), 0.0, 0.0)
+        plain = make_view()
+        knight = dataclasses.replace(
+            plain.players[0], can_parry=True, riposte_s=1.0, parry_flash_s=0.5
+        )
+        view = dataclasses.replace(
+            plain,
+            players=(knight, plain.players[1]),
+            projectiles=(ProjectileView("riposte", 1, (300.0, 200.0), 0.9, True),),
+        )
+        w.draw(view, frame, {s.slot: s for s in states}, fps=60.0)
+        assert w.screen.get_bounding_rect().size != (0, 0)
+    finally:
+        w.close()

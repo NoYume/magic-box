@@ -72,6 +72,8 @@ More in `docs/hardware.md`.
 
 All cross-owner types live in `src/magic_box/core/contracts.py`: `Push`, `PlayerState`, `VoiceEvent`, `Action`, `GameEvent`, `GameView`, `PlayerView`, `SpellView`, `ProjectileView`, `VoiceConfig`, `Frame`. They round-trip to JSON lines via `core/serde.py`.
 
+`PlayerView` carries the knight's parry state (`can_parry`, `guard_s`, `guard_cooldown_s`, `riposte_s`, `parry_flash_s`). A parry is logged as a `block` event with `data["parry"]`; its riposte projectile has `spell_id="riposte"`. Pose flags include `hands_up`, `hands_together` and `guard`.
+
 **Change rule:** changing a contract needs a heads-up to every owner who produces or consumes it, and an update to this file in the same change.
 
 | Boundary | Contract | From → To |
@@ -165,7 +167,7 @@ These are team rules. `tests/test_boundaries.py` enforces the import ones.
 - **Voice and Spark need `META_MODEL_API_KEY`** (in `.env`, run with `--env-file`). Without it the voice process reports `"no api key"` (HUD: MIC OFF), and Spark falls back at once to the config incantations and a template chronicle. With `ai.enabled: false`, Spark falls back the same way; voice is unaffected. Without a usable mic the voice process reports `"no mic"` and idles.
 - **Muse and Spark are not verified live.** They are implemented against Meta's documented API (checked 2026-10-24) and tested only with fakes; partial-transcript latency is unmeasured. Verify on the Jetson with a real key.
 - Spell keys always work as a voice fallback, so you can test casting with no mic and no Wi-Fi.
-- The engine in `game/` is thin: it plays the whole match flow with Appendix A damage, but spells that do 0 damage (Flame Wall, Static Field, Holy Light, Heal) only spend mana, log a `cast` event and show a banner. Classes are fixed from `game.default_classes`, and there is no boot scene. Adetola replaces it.
+- The engine in `game/` is thin: it plays the whole match flow with Appendix A damage and the Holy Knight's guard/parry/riposte, but spells that do 0 damage (Flame Wall, Static Field, Holy Light, Heal) only spend mana, log a `cast` event and show a banner. Classes are fixed from `game.default_classes`, and there is no boot scene. Adetola replaces it.
 
 **Fake-mode keys** (from `config.yaml` `keys:`)
 
@@ -177,6 +179,7 @@ These are team rules. `tests/test_boundaries.py` enforces the import ones.
 | Duck | `c` | `n` |
 | Hands up / together | `r` / `t` | `y` / `u` |
 | Two-hand push | `v` | `m` |
+| Guard (Holy Knight parry) | `g` | `o` |
 | Spells | `1` `2` `3` | `8` `9` `0` |
 
 `F1` toggles the debug overlay. `Esc` quits.
@@ -184,7 +187,7 @@ These are team rules. `tests/test_boundaries.py` enforces the import ones.
 **Fake match walkthrough** (`uv run python -m magic_box --fake`):
 1. Lobby: both players raise their hands (`r` + `y`) to start.
 2. Loading: a countdown, with each player's incantations and release cues on their half.
-3. Fight: charge with `1`, push with `f`. A projectile flies on P2's half and P2's HP drops. Ducking (`n`) during the red window avoids it. Two-hand spells need `v` / `m`.
+3. Fight: charge with `1`, push with `f`. A projectile flies on P2's half and P2's HP drops. Ducking (`n`) during the red window avoids it. Two-hand spells need `v` / `m`; a Holy Knight can guard with `g` / `o` near impact and push to riposte.
 4. KO or time-out: the victory scene shows a chronicle.
 5. Both raise hands again (after `victory_min_s`): back to the lobby. Names persist across matches, and new ones can be said here. Release the keys and raise hands again to start the next match: hands held up from victory don't start it.
 
