@@ -47,7 +47,7 @@ Effects don't stack: casting one again keeps the longer timer. Effect timers sto
 
 ## Incantations
 
-Muse Spark writes 3–7 words per spell, themed by class with an Austin or HackTX flavor, and keeps each player's set clearly different from the other's. The prompt asks for common words a speech recognizer spells reliably (no acronyms such as "HackTX") and a different first word per spell. A match score of 95 or more gives the ×1.15 "perfect incantation" bonus (**decided overnight, Adetola to confirm**: the bonus stays). If Spark fails or takes longer than 8 s, fixed incantations from `config.yaml` are used.
+Muse Spark writes 1–3 words per spell (`words` per spell in config: the cheapest spell of each class 1, the middle one 2, the strongest 3; Heal is 2), themed by class with an Austin or HackTX flavor, and keeps each player's set clearly different from the other's. The prompt asks for common words a speech recognizer spells reliably (no acronyms such as "HackTX") and a different first word per spell. A match score of 95 or more gives the ×1.15 "perfect incantation" bonus (**decided overnight, Adetola to confirm**: the bonus stays). If Spark fails or takes longer than 8 s, fixed incantations from `config.yaml` are used.
 
 ## Scene flow
 

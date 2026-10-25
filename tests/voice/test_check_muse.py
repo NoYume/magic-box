@@ -12,10 +12,12 @@ import numpy as np
 import pytest
 
 from magic_box.core.config import load_config
+from tests.factories import pin_pre_venue_tuning
 from tests.voice.fake_sd import FakeSD
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "check_muse.py"
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
+pin_pre_venue_tuning(CFG)
 PHRASE = "embers of the forty acres burn"
 PREFIX = "embers of the forty acres"
 
@@ -185,7 +187,7 @@ def test_record_captures_the_slot_mic_through_mic_hub():
 def test_main_record_mode_saves_the_wav_and_charges(tmp_path, monkeypatch, capsys):
     mod = _load()
     monkeypatch.setattr(mod, "SCRATCH", tmp_path)
-    phrase = "lightning answer my call"
+    phrase = "shock"  # P2's Bolt fallback
     events = [
         (6, {"type": "speechStart", "turnId": 0}),
         (11, {"type": "transcript", "transcript": phrase, "final": False}),
@@ -196,7 +198,7 @@ def test_main_record_mode_saves_the_wav_and_charges(tmp_path, monkeypatch, capsy
     factory = lambda c, k: ScriptedStream(events)  # noqa: E731
     assert mod.main(argv, env=env, stream_factory=factory, sd=SpeakingSD()) == 0
     assert "bolt score 100" in capsys.readouterr().out
-    assert [p.name for p in tmp_path.iterdir()] == ["rec-p2-lightning_answer_my_call.wav"]
+    assert [p.name for p in tmp_path.iterdir()] == ["rec-p2-shock.wav"]
 
 
 def test_main_rejects_silent_audio(capsys):

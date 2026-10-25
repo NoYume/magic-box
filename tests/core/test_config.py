@@ -184,7 +184,7 @@ def test_repo_config_has_phase_tunables():
         "audio_queue_chunks",
     ):
         assert key in cfg["voice"], key
-    assert cfg["ai"]["model"] == "muse-spark-1.3" and cfg["ai"]["min_words"] == 3
+    assert cfg["ai"]["model"] == "muse-spark-1.3" and cfg["ai"]["min_words"] == 1
     for key in (
         "basic_attack_damage",
         "basic_attack_travel_s",

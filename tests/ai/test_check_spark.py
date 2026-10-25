@@ -11,7 +11,6 @@ import pytest
 
 from magic_box.ai.spark_client import SparkClient
 from tests.ai.fakes import FakeOpenAI
-from tests.ai.test_incantations import GOOD
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "check_spark.py"
 KEY = "sk-secret-123"
@@ -28,6 +27,30 @@ def _factory(fake, key=KEY):
     return lambda cfg: SparkClient(cfg, env={"META_MODEL_API_KEY": key}, openai_factory=fake)
 
 
+def _good() -> dict:
+    """A valid short reply for the repo config: each spell's exact word count, distinct sets."""
+    import copy  # noqa: PLC0415
+
+    from magic_box.core.config import load_config  # noqa: PLC0415
+
+    cfg = load_config(SCRIPT.parents[1] / "config.yaml")
+    words = {
+        0: ["amber", "brisk", "cedar", "dusty", "eager", "fable"],
+        1: ["mesa", "noble", "opal", "prairie", "quartz", "river"],
+    }
+    out = {}
+    for slot, cls in cfg["game"]["default_classes"].items():
+        pool = copy.copy(words[slot])
+        out[str(slot)] = {
+            sp["id"]: " ".join(pool.pop(0) for _ in range(sp["words"]))
+            for sp in cfg["game"]["classes"][cls]["spells"]
+        }
+    return out
+
+
+GOOD = _good()
+
+
 class KeyEchoError(Exception):
     status_code = 401
 
@@ -37,7 +60,7 @@ def test_good_reply_prints_latency_model_and_sources(capsys):
     assert _load().main(["--chronicle"], client_factory=_factory(fake)) == 0
     out = capsys.readouterr().out
     assert "reply model muse-spark-1.3" in out and "incantations: " in out
-    assert "[spark] embers dance on the drag" in out and "chronicle: " in out
+    assert f"[spark] {GOOD['0']['fireball']}" in out and "chronicle: " in out
     assert fake.calls[0]["reasoning_effort"] == "minimal"
 
 

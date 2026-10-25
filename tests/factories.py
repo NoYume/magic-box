@@ -200,4 +200,23 @@ def pin_pre_venue_tuning(cfg: dict) -> dict:
     cfg["game"]["combat"].update(near_m=1.2, far_m=2.8)
     cfg["game"]["howto_s"] = 0.0
     cfg["fake"]["start_z_m"] = 2.0
+    # Long incantations (3-7 words, no per-spell count) from before the short-spell change.
+    cfg["ai"].update(min_words=3, max_words=7)
+    for cls in cfg["game"]["classes"].values():
+        for spell in cls["spells"]:
+            spell.pop("words", None)
+            spell["fallback"] = dict(zip((0, 1), OLD_FALLBACKS[spell["id"]], strict=True))
     return cfg
+
+
+OLD_FALLBACKS = {
+    "fireball": ("embers of the forty acres burn", "ignite the longhorn flame"),
+    "flame_wall": ("rise crimson rampart", "wall of burning cedar"),
+    "inferno": ("let the whole sky catch fire", "summon the sixth street inferno"),
+    "bolt": ("storm of speedway strike", "lightning answer my call"),
+    "chain": ("thunder binds the tower", "chain the storm across the river"),
+    "static_field": ("static fills the air", "hum of the restless grid"),
+    "holy_light": ("light of the tower guide my blade", "dawn breaks upon my sword"),
+    "heal": ("mend me gentle light", "breath of the hill country heal"),
+    "judgment": ("judgment falls from above", "steel and sunlight strike true"),
+}

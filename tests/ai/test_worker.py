@@ -18,8 +18,10 @@ from magic_box.ai.worker import AiWorker
 from magic_box.core.config import load_config
 from tests.ai.fakes import FakeClient
 from tests.ai.test_incantations import GOOD
+from tests.factories import pin_pre_venue_tuning
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
+pin_pre_venue_tuning(CFG)
 CLASSES, NAMES = {0: "fire_mage", 1: "lightning_mage"}, {0: "Ada", 1: "Bo"}
 
 

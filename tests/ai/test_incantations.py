@@ -17,8 +17,10 @@ from magic_box.ai.incantations import (
 from magic_box.ai.spark_client import SparkClient
 from magic_box.core.config import load_config
 from tests.ai.fakes import FakeClient, FakeOpenAI
+from tests.factories import pin_pre_venue_tuning
 
 CFG = load_config(Path(__file__).resolve().parents[2] / "config.yaml")
+pin_pre_venue_tuning(CFG)
 CLASSES = {0: "fire_mage", 1: "lightning_mage"}
 NAMES = {0: "Ada", 1: "Bo"}
 GOOD = {

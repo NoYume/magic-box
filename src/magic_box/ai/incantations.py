@@ -40,11 +40,15 @@ def _normalize(text: object) -> str | None:
     return " ".join(text.split())
 
 
-def _valid(text: str | None, cfg: Config) -> bool:
+def _valid(text: str | None, cfg: Config, words: int | None = None) -> bool:
+    """Allowed characters, and exactly the spell's `words` (else ai.min_words..max_words)."""
     if not text or not _ALLOWED.match(text):
         return False
+    n = len(text.split())
+    if words is not None:
+        return n == words
     ai = cfg["ai"]
-    return ai["min_words"] <= len(text.split()) <= ai["max_words"]
+    return ai["min_words"] <= n <= ai["max_words"]
 
 
 def _slot_entries(raw: Mapping, slot: int) -> Mapping:
@@ -68,7 +72,7 @@ def validate_incantations(
         for spell in _spells(classes, cfg, slot):
             sid = spell["id"]
             text = _normalize(entries.get(sid))
-            ok = _valid(text, cfg)
+            ok = _valid(text, cfg, spell.get("words"))
             if ok:
                 key = default_process(text)
                 ok = key not in seen
@@ -95,11 +99,14 @@ def _prompt(classes: Mapping[int, str], names: Mapping[int, str], cfg: Config) -
     for slot in sorted(classes):
         lines.append(f'Player {slot}: name "{names.get(slot, "")}", class {classes[slot]}. Spells:')
         for s in _spells(classes, cfg, slot):
-            lines.append(f"- {s['id']} ({s['name']}, damage {s['damage']})")
+            n = s.get("words")
+            size = f", exactly {n} word{'s' if n != 1 else ''}" if n else ""
+            lines.append(f"- {s['id']} ({s['name']}, damage {s['damage']}{size})")
     lines += [
         "",
         'Reply with only JSON: {"0": {spell_id: incantation, ...}, "1": {spell_id: text, ...}}.',
-        f"Each incantation is {ai['min_words']} to {ai['max_words']} words, using only letters, "
+        f"Each incantation has exactly the word count given for its spell "
+        f"({ai['min_words']} to {ai['max_words']} words), using only letters, "
         "spaces and apostrophes (no digits or punctuation), and easy to say aloud.",
         "Use common English words a speech recognizer spells reliably: no acronyms, "
         "brand names or made-up words.",
