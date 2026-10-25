@@ -27,9 +27,10 @@ def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
     col = th.slot_rgb(win) if win is not None else c["gold"]
     blit_glow(surface, th, (w // 2, 120), 240, lerp_rgb(col, c["black"], 0.55), core=False)
     text = headline(view)
-    font = th.font_px(150, display=True)
+    px = th.title_px["headline"]
+    font = th.font_px(px, display=True)
     if font.size(text)[0] > w - 120:
-        font = th.font_px(max(40, int(150 * (w - 120) / font.size(text)[0])), display=True)
+        font = th.font_px(max(40, int(px * (w - 120) / font.size(text)[0])), display=True)
     th.blit_text(surface, text, font, col, "center", (w // 2, 120))
     half = w // 2
     for p in view.players:

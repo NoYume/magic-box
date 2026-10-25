@@ -346,6 +346,7 @@ THEME_COLORS: tuple[str, ...] = (
     "fire_core",
 )
 THEME_FONTS: tuple[str, ...] = ("tiny", "small", "text", "big", "huge", "giant")
+THEME_TITLES: tuple[str, ...] = ("boot", "lobby", "headline", "ko", "banner")
 
 
 def _check_render(cfg: Config, problems: list[str]) -> None:
@@ -355,6 +356,10 @@ def _check_render(cfg: Config, problems: list[str]) -> None:
     missing = [k for k in THEME_COLORS if not isinstance(colors, dict) or k not in colors]
     if missing:
         problems.append(f"render.theme.colors: missing {', '.join(missing)}")
+    titles = _get(cfg, "render", "theme", "title_px")
+    missing = [k for k in THEME_TITLES if not isinstance(titles, dict) or k not in titles]
+    if missing:
+        problems.append(f"render.theme.title_px: missing {', '.join(missing)}")
     fonts = _get(cfg, "render", "theme", "font_px")
     missing = [k for k in THEME_FONTS if not isinstance(fonts, dict) or k not in fonts]
     if missing:

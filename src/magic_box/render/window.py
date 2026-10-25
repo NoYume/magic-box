@@ -29,7 +29,6 @@ from magic_box.render.style import Theme, lerp_rgb, make_background, pulse
 ALL_KEY_CODES = tuple(
     getattr(pygame, name) for name in dir(pygame) if name.startswith("K_") and name != "K_"
 )
-BANNER_PX = 110
 MAX_DT_S = 0.1
 STEP_HINT = "STEP INTO VIEW"
 
@@ -158,10 +157,11 @@ class Window:
     def _half_banner(self, text: str, half: Rect, scale: float) -> None:
         th = self.theme
         max_w = half.w - 140
-        font = th.font_px(BANNER_PX)
+        banner_px = th.title_px["banner"]
+        font = th.font_px(banner_px)
         w = font.size(text)[0]
         if w > max_w:
-            font = th.font_px(max(24, int(BANNER_PX * max_w / w)))
+            font = th.font_px(max(24, int(banner_px * max_w / w)))
         img = th.text(text, font, th.c["text"])
         cx, cy = half.x + half.w // 2, int(half.h * 0.42)
         band = th.panel(half.w - 20, img.get_height() + 36, th.c["panel"], 170)

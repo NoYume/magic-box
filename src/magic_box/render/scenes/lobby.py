@@ -28,7 +28,12 @@ def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
     assert th is not None
     w, _ = surface.get_size()
     th.blit_text(
-        surface, "MAGIC BOX", th.font_px(130, display=True), th.c["gold"], "midtop", (w // 2, 8)
+        surface,
+        "MAGIC BOX",
+        th.font_px(th.title_px["lobby"], display=True),
+        th.c["gold"],
+        "midtop",
+        (w // 2, 8),
     )
     half = w // 2
     for p in view.players:

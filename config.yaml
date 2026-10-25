@@ -231,7 +231,8 @@ render:             # owner: Adetola (hud, scenes) + Nikhil (camera_view, projec
     dodge_ring_px: 10
   theme:                      # owner: Adetola. shared colors and font sizes (pygame default font)
     font_px: {tiny: 22, small: 28, text: 34, big: 46, huge: 72, giant: 180}
-    display_font: assets/fonts/CinzelDecorative-Bold.ttf   # titles and banners (OFL); missing = default font
+    display_font: assets/fonts/CinzelDecorative-Bold.ttf   # titles, headline, KO (OFL); missing = default font
+    title_px: {boot: 150, lobby: 130, headline: 150, ko: 240, banner: 110}
     shadow_px: 3
     text_cache_max: 1024
     colors:

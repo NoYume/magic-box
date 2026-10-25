@@ -21,7 +21,12 @@ def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
     c = th.c
     w = surface.get_width()
     th.blit_text(
-        surface, "MAGIC BOX", th.font_px(150, display=True), c["gold"], "midtop", (w // 2, 30)
+        surface,
+        "MAGIC BOX",
+        th.font_px(th.title_px["boot"], display=True),
+        c["gold"],
+        "midtop",
+        (w // 2, 30),
     )
     th.blit_text(surface, "SYSTEM CHECK", "big", c["dim"], "midtop", (w // 2, 240))
     rows = max(1, len(view.checks))

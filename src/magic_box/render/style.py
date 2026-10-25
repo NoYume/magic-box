@@ -75,6 +75,7 @@ class Theme:
         self._glows: dict[tuple, pygame.Surface] = {}
         self._sized_fonts: dict[tuple, pygame.font.Font] = {}
         self.display_path = display_font_path(t.get("display_font"))
+        self.title_px: dict[str, int] = {k: int(v) for k, v in t["title_px"].items()}
 
     def slot_rgb(self, slot: int | None) -> RGB:
         if slot is None:
