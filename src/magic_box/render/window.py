@@ -235,6 +235,7 @@ class Window:
             if crop is None and surf is not None:
                 crop = Rect(0, 0, surf.get_width(), surf.get_height())
             if crop is not None:
+                viewer = view.players[half.viewer_slot]
                 draw_projectiles(
                     self.screen,
                     half.half,
@@ -245,6 +246,7 @@ class Window:
                     self.proj_font,
                     self.theme,
                     now,
+                    can_parry=viewer.can_parry and viewer.guard_cooldown_s <= 0,
                 )
         self.fx.draw(self.screen)
         for half in self.layout:

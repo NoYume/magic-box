@@ -7,7 +7,8 @@ Owner: Nikhil (procedural sprites: Adetola)
 Each projectile is drawn per spell family (`render.projectiles.family`): fire (flickering
 flame tongues), lightning (jagged arcs), holy (rotating rays) or basic, with an additive glow
 and a stateless trail (ghost copies at earlier progress values). In the dodge window a red ring
-pulses around it with "DODGE!" above the impact point.
+pulses around it with "DODGE!" above the impact point ("PARRY / DODGE!" for a knight whose guard is
+ready).
 """
 
 import math
@@ -182,6 +183,7 @@ def draw_projectiles(
     font,
     theme: Theme | None = None,
     t: float = 0.0,
+    can_parry: bool = False,
 ) -> None:
     """Draw the projectiles aimed at `target_slot` on its half (plain circles without a theme)."""
     for p in projectiles:
@@ -201,10 +203,9 @@ def draw_projectiles(
                 )
             tx = half.x + half.w / 2
             ty = half.y + cfg_proj["end_y_frac"] * half.h
+            cue = "PARRY / DODGE!" if can_parry else "DODGE!"
             img = (
-                theme.text("DODGE!", font, dodge)
-                if theme is not None
-                else font.render("DODGE!", True, dodge)
+                theme.text(cue, font, dodge) if theme is not None else font.render(cue, True, dodge)
             )
             surface.blit(
                 img, img.get_rect(center=(round(tx), round(ty - radius - img.get_height())))

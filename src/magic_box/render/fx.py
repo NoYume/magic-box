@@ -198,13 +198,14 @@ class Fx:
             slot = e.slot if e.slot in (0, 1) else event_target(e)
             if slot is None:
                 return
-            col = rgb(f["block_rgb"])
+            parry = bool(data.get("parry"))
+            col = c["gold"] if parry else rgb(f["block_rgb"])
             self._flash(slot, col)
             cx, cy = self._impact_point(slot)
             self._ring(cx, cy, col, int(f["ring_count"]["block"]), self._speed("block"))
-            self._text("BLOCKED!", "huge", col, cx, cy - 120)
+            self._text("PARRIED!" if parry else "BLOCKED!", "huge", col, cx, cy - 120)
             ox, oy = self._opponent_point(1 - slot)
-            self._text("BLOCKED", "big", col, ox, oy)
+            self._text("PARRIED" if parry else "BLOCKED", "big", col, ox, oy)
         elif kind == "heal":
             slot = affected_slot(e)
             if slot is None:

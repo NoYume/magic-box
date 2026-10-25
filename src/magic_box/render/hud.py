@@ -2,11 +2,12 @@
 
 Owner: Adetola
 
-Per half: the viewer's own panel at the bottom (name, MIC and TRACKED, distance with a zone
-meter, basic-attack cooldown, eased HP and mana bars with a damage ghost, the spell list with
-costs, incantations and release cues, a charge ring on the charged spell, effect icons), and the
-opponent's HP bar at the top with their effects and a "CHARGING" warning. Draws only the
-`GameView`; colors and sizes come from `cfg.render.hud` and `cfg.render.theme`.
+Per half: the viewer's own panel at the bottom (name, MIC and TRACKED, a knight's GUARD chip,
+distance with a zone meter, basic-attack cooldown (a knight's armed riposte in its place), eased
+HP and mana bars with a damage ghost, the spell list with costs, incantations and release cues, a
+charge ring on the charged spell, effect icons), and the opponent's HP bar at the top with their
+effects and a "CHARGING" warning. Draws only the `GameView`; colors and sizes come from
+`cfg.render.hud` and `cfg.render.theme`.
 """
 
 import math
@@ -108,6 +109,7 @@ class Hud:
         game = cfg.get("game", {})
         self.charge_window_s = float(game.get("charge_window_s", 3.0))
         self.cooldown_max_s = float(game.get("basic_attack_cooldown_s", 0.8))
+        self.riposte_window_s = float(game.get("riposte_window_s", 1.5))
         zones = cfg.get("perception", {}).get("zones", {})
         self.danger_max_m = float(zones.get("danger_max_m", 1.6))
         self.far_min_m = float(zones.get("far_min_m", 2.4))
@@ -183,7 +185,7 @@ class Hud:
             (x, y + 46),
             c["ok"] if me.mic_ok else c["bad"],
         )
-        draw_chip(
+        chip = draw_chip(
             surface,
             th,
             "TRACKED" if me.tracking_ok else "LOST",
@@ -191,6 +193,9 @@ class Hud:
             (chip.right + 8, y + 46),
             c["ok"] if me.tracking_ok else c["bad"],
         )
+        if me.can_parry:
+            guard = self._guard_rgb(me, t)
+            draw_chip(surface, th, "GUARD", "tiny", (chip.right + 8, y + 46), guard)
         self._draw_distance(surface, x, y + 86, col_w, me)
         self._draw_cooldown(surface, x, rect.y + rect.h - pad - 40, col_w, me)
         rx = rect.x + LEFT_COL_W
@@ -273,8 +278,21 @@ class Hud:
                 return (i + (dist - lo) / max(hi - lo, 1e-6)) / 3.0
         return 1.0
 
+    def _guard_rgb(self, me: PlayerView, t: float) -> tuple[int, int, int]:
+        """Gold while the guard is up, ok when a raise would count, dim while cooling down."""
+        c = self.theme.c
+        if me.guard_s > 0:
+            return lerp_rgb(c["gold"], c["white"], 0.4 * pulse(t, 12.0))
+        return c["dim"] if me.guard_cooldown_s > 0 else c["ok"]
+
     def _draw_cooldown(self, surface, x: int, y: int, w: int, me: PlayerView) -> None:
         th, c = self.theme, self.c
+        if me.riposte_s > 0:  # the next push is the riposte, whatever the basic cooldown says
+            gold = th.c["gold"]
+            th.blit_text(surface, "RIPOSTE! PUSH NOW", "tiny", gold, "topleft", (x, y))
+            f = frac(me.riposte_s, self.riposte_window_s)
+            self._bar(surface, pygame.Rect(x, y + 22, w, 12), f, gold, c["bar_back_rgb"], radius=4)
+            return
         ready = me.cooldown_s <= 0
         label = "BASIC PUSH READY" if ready else f"BASIC PUSH {me.cooldown_s:.1f}s"
         th.blit_text(

@@ -133,3 +133,12 @@ def test_fx_clears_when_the_scene_leaves_fight(fx):
 def test_events_outside_the_fight_spawn_nothing(fx):
     fx.update(make_full_view("victory"), 0.016)
     assert fx.ko_left == 0 and not fx.particles and not fx.texts
+
+
+def test_a_parry_flashes_gold_and_a_block_in_the_block_color(fx):
+    parry = GameEvent(0.0, "block", 0, {"spell_id": "fireball", "attacker": 1, "parry": True})
+    block = GameEvent(0.0, "block", 1, {"spell_id": "bolt", "attacker": 0})
+    fx.update(make_view(events=(parry, block)), 0.0)
+    assert fx.halves[0].flash_rgb == fx.theme.c["gold"]
+    assert fx.halves[1].flash_rgb == tuple(CFG["render"]["fx"]["block_rgb"])
+    assert len(fx.texts) == 4  # PARRIED! / PARRIED and BLOCKED! / BLOCKED

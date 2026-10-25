@@ -199,3 +199,29 @@ def test_fullscreen_always_uses_scaled(monkeypatch, fullscreen, vsync, scaled):
     assert bool(flags & pygame.SCALED) is scaled
     assert bool(flags & pygame.FULLSCREEN) is fullscreen
     assert vsync_arg == (1 if vsync else 0)
+
+
+@pytest.mark.parametrize(
+    "parry",
+    [
+        {"guard_s": 0.3, "guard_cooldown_s": 1.2},
+        {"guard_cooldown_s": 0.8},
+        {"riposte_s": 1.0},
+        {},
+    ],
+)
+def test_draw_knight_guard_states_and_a_riposte(parry):
+    w = Window(CFG, headless=True)
+    try:
+        states, frame = FakePlayers(CFG).step(frozenset(), 0.0, 0.0)
+        plain = make_view()
+        knight = dataclasses.replace(plain.players[0], can_parry=True, **parry)
+        view = dataclasses.replace(
+            plain,
+            players=(knight, plain.players[1]),
+            projectiles=(ProjectileView("riposte", 0, (300.0, 200.0), 0.9, True),),
+        )
+        w.draw(view, frame, {s.slot: s for s in states}, fps=60.0)
+        assert w.screen.get_bounding_rect().size != (0, 0)
+    finally:
+        w.close()

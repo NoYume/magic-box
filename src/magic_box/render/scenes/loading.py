@@ -3,7 +3,8 @@
 Owner: Adetola
 
 P1's card is on the left half. Each spell row shows the name and cost, what to say, and how to
-release it. Basic attack and dodge tips sit under the spells; the countdown ring is bottom center.
+release it. Basic attack and dodge tips (and a knight's parry tip) sit under the spells; the
+countdown ring is bottom center.
 """
 
 import math
@@ -22,6 +23,7 @@ TIPS = (
     "BASIC ATTACK: PUSH WITH NO SPELL CHARGED",
     "DODGE: STEP ASIDE OR DUCK WHEN IT TURNS RED",
 )
+PARRY_TIP = "PARRY: ARM FORWARD JUST BEFORE IT HITS, THEN PUSH"
 
 
 def draw(surface, view: GameView, style: SceneStyle, t: float = 0.0) -> None:
@@ -87,7 +89,7 @@ def _draw_card(
             ly += th.font(font).get_linesize()
         y += SPELL_ROW_H
     y += 4
-    for tip in TIPS:
+    for tip in TIPS + ((PARRY_TIP,) if me.can_parry else ()):
         r = th.blit_text(
             surface, th.fit_text(tip, "small", cw), "small", c["dim"], "topleft", (rx, y)
         )
