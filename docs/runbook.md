@@ -4,7 +4,7 @@
 
 The 08:00 hardware session on Sunday 2026-10-25, in order. Submission deadline: **11:30 CDT**.
 
-Every command runs from the repo root on the Jetson (`~/magic-box`) unless it says "laptop". Commands that need the Meta key use `--env-file .env`. Never type or paste the key into a command line.
+Every command runs from the repo root on the Jetson (`~/magic-box`) unless it says "laptop". Without the ZED SDK on the host, prefix it with `docker compose run --rm magic-box` (README: "Jetson with Docker"). Commands that need the Meta key use `--env-file .env`. Never type or paste the key into a command line.
 
 > **GMSL2 is not hot-pluggable.** Never unplug or re-plug the ZED X cable while the Jetson is on. If it was re-plugged, run `sudo systemctl restart zed_x_daemon` (or reboot with the camera plugged in), then rerun `check_env.py`.
 

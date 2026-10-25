@@ -57,6 +57,9 @@ Other commands: `uv run pytest`, `uv run ruff check`, `uv run python scripts/che
 
 ## Jetson quickstart
 
+No ZED SDK on the Jetson's host (ours only has the ZED Link driver)? Skip steps 0-4 and use
+Docker instead: see [Jetson with Docker](#jetson-with-docker).
+
 0. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 1. Install the ZED SDK, the ZED X driver (for the ZED Link capture card) and the Python API (`pyzed`) into the system Python. Check that the camera daemon runs: `systemctl is-active zed_x_daemon`.
 2. `sudo apt install libportaudio2`
@@ -73,6 +76,26 @@ Never re-plug the ZED X while the Jetson is on (GMSL2 is not hot-pluggable). Aft
 If `import pyzed.sl` fails with a numpy ABI error, change the numpy pin in `pyproject.toml`, run `uv lock`, and commit the lock file (CI uses `--locked`).
 
 Per-machine settings (real mic devices, camera fallbacks) go in `config.local.yaml`, which is gitignored. See `docs/hardware.md` and `docs/runbook.md`. From a laptop, `scripts/sync_to_jetson.sh` copies the repo to the Jetson.
+
+## Jetson with Docker
+
+The image (`docker/Dockerfile`) carries the ZED SDK 5.5, `pyzed`, PortAudio and uv, and builds the
+venv like the quickstart (`--system-site-packages`, `uv sync` from `uv.lock`). `compose.yaml` mounts
+the repo at `/app`, so `.env`, `config.local.yaml`, `recordings/` and code edits work as on the host.
+The host needs JetPack, the ZED X driver (`zed_x_daemon`) and Docker with the `nvidia` runtime.
+
+```bash
+docker compose build                      # once, and again after pyproject.toml or uv.lock change
+docker compose run --rm magic-box uv run --env-file .env python scripts/check_env.py --network
+docker compose run --rm magic-box uv run python scripts/bench_tracking.py --seconds 30
+DISPLAY=:0 docker compose up              # scripts/run_demo.sh, fullscreen on the Jetson's display
+docker compose down
+```
+
+Any runbook command works as `docker compose run --rm magic-box <command>`. `DISPLAY` reaches the
+container only when you set it; with a `DISPLAY` that X refuses, the ZED X capture fails (Argus EGL
+errors), so leave it unset for headless runs. Only one process can open the ZED X at a time. The
+first body-tracking run optimizes the AI model for a few minutes; the `zed-resources` volume keeps it.
 
 ## Docs
 
