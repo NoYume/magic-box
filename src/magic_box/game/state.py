@@ -54,6 +54,7 @@ class PlayerMatch:
     effects: Effects = field(default_factory=Effects)
     stats: dict[str, float] = field(default_factory=lambda: dict.fromkeys(STAT_KEYS, 0.0))
     held: HeldPush | None = None  # an uncharged push waiting for a late voice charge
+    pose_rise: dict[str, float] = field(default_factory=dict)  # pose flag -> match clock it rose
 
 
 @dataclass
@@ -259,12 +260,17 @@ class MatchState:
             assert held.push is not None
             self._cast(p, c, held, held.push.origin_px, held.push.speed, now)
             return
-        # The voice charge lands ~0.4 s after speech: a release pose already held (the arm is
-        # up) releases it now, rather than waiting for the player to lower and raise again.
+        # The voice charge lands ~0.4 s (worst ~0.8 s) after speech: a release pose that rose
+        # within pose_grace_s and is still held releases it now, rather than waiting for the
+        # player to lower and raise again. An older pose (hands up since the lobby) doesn't.
         st = states.get(p.slot)
         if st is not None and st.tracking_ok:
+            recent = self.clock - self.cfg["game"]["pose_grace_s"]
             for flag in sorted(st.pose_flags):
-                if POSE_RELEASES.get(flag) == spell.release:
+                if (
+                    POSE_RELEASES.get(flag) == spell.release
+                    and p.pose_rise.get(flag, float("-inf")) >= recent
+                ):
                     c, p.charge = p.charge, None
                     pose = Action("pose", p.slot, action.t, pose=flag, dist=st.root[2])
                     self._cast(p, c, pose, self._pose_origin(p.slot, states), None, now)
@@ -315,6 +321,7 @@ class MatchState:
 
     def _pose(self, action: Action, states: Mapping[int, PlayerState], now: float) -> None:
         p = self.players[action.slot]
+        p.pose_rise[action.pose or ""] = self.clock
         c = p.charge
         if c is None or POSE_RELEASES.get(action.pose or "") != c.spell.release:
             return

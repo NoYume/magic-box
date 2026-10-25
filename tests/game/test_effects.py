@@ -342,25 +342,72 @@ def test_a_knockout_blow_puts_no_effect_on_the_loser():
     assert ms.effect_views(1) == ()
 
 
+def holding(flag):
+    held = dict(STATES)
+    held[0] = make_state(0, root=(0.6, 0.0, 2.0), pose_flags=frozenset({flag}))
+    return held
+
+
+def casts(ms):
+    return [e.data["spell_id"] for e in ms.take_events() if e.kind == "cast"]
+
+
 @pytest.mark.parametrize(
     ("spell", "flag"), [("holy_light", "hands_up"), ("heal", "hands_together")]
 )
-def test_a_charge_landing_while_its_pose_is_held_releases_it(spell, flag):
-    """The voice charge lands ~0.4 s after speech; an arm already raised (a held pose, not a
-    new edge) must still release the spell instead of waiting for a second raise."""
+def test_a_charge_landing_soon_after_its_pose_rose_releases_it(spell, flag):
+    """The voice charge lands ~0.4 s (worst ~0.8 s) after speech; an arm raised on the last
+    word (the pose edge came first) still releases the spell, once."""
     ms = new(classes=("holy_knight", "lightning_mage"))
     ms.players[0].hp = 50.0
-    held = dict(STATES)
-    held[0] = make_state(0, root=(0.6, 0.0, 2.0), pose_flags=frozenset({flag}))
+    held = holding(flag)
+    ms.apply(pose(0, flag), held, 0.0)  # the rise: no charge yet
+    ms.advance(0.5, held, 0.0)
     ms.apply(charge(0, spell), held, 0.0)
     assert ms.players[0].charge is None
-    assert "cast" in kinds(ms)
+    assert casts(ms) == [spell]
+    ms.advance(0.5, held, 0.0)
+    assert casts(ms) == []
+
+
+def test_a_pose_held_longer_than_the_pose_grace_does_not_release_a_charge():
+    """Hands still up from the lobby, or held through the whole incantation, don't fire;
+    lowering and raising again (a new edge) does."""
+    ms = new(classes=("holy_knight", "lightning_mage"))
+    held = holding("hands_up")
+    ms.apply(pose(0, "hands_up"), held, 0.0)
+    ms.advance(G["pose_grace_s"] + 1.0, held, 0.0)
+    ms.apply(charge(0, "holy_light"), held, 0.0)
+    assert ms.players[0].charge is not None and casts(ms) == []
+    ms.apply(pose(0, "hands_up"), held, 0.0)  # lowered and raised again
+    assert casts(ms) == ["holy_light"] and ms.players[0].charge is None
+
+
+def test_a_pose_held_since_before_the_match_does_not_release_a_charge():
+    ms = new(classes=("holy_knight", "lightning_mage"))
+    ms.apply(charge(0, "holy_light"), holding("hands_up"), 0.0)  # no rise seen this match
+    assert ms.players[0].charge is not None and casts(ms) == []
+
+
+@pytest.mark.parametrize("pose_first", [True, False])
+def test_a_charge_and_its_pose_edge_on_the_same_tick_cast_once(pose_first):
+    ms = new(classes=("holy_knight", "lightning_mage"))
+    held = holding("hands_up")
+    actions = [charge(0, "holy_light"), pose(0, "hands_up")]
+    for a in reversed(actions) if pose_first else actions:
+        ms.apply(a, held, 0.0)
+    assert casts(ms) == ["holy_light"]
+
+
+def test_pose_grace_is_configured():
+    assert G["pose_grace_s"] == pytest.approx(1.0)
 
 
 def test_a_held_pose_does_not_release_a_spell_it_does_not_match():
     ms = new(classes=("holy_knight", "lightning_mage"))
     held = dict(STATES)
     held[0] = make_state(0, root=(0.6, 0.0, 2.0), pose_flags=frozenset({"hands_together"}))
+    ms.apply(pose(0, "hands_together"), held, 0.0)
     ms.apply(charge(0, "holy_light"), held, 0.0)
     assert ms.players[0].charge is not None and kinds(ms) == []
 
@@ -371,5 +418,6 @@ def test_a_lost_player_pose_flags_do_not_release_a_charge():
     held[0] = make_state(
         0, root=(0.6, 0.0, 2.0), pose_flags=frozenset({"hands_up"}), tracking_ok=False
     )
+    ms.apply(pose(0, "hands_up"), holding("hands_up"), 0.0)
     ms.apply(charge(0, "holy_light"), held, 0.0)
     assert ms.players[0].charge is not None

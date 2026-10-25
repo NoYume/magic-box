@@ -136,6 +136,7 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
   mana_slow_mult: 0.25        # Static Field: the target's mana regen x this while slowed
   slow_charge_mult: 0.6       # Inferno: the target's next charge window x this
   release_grace_s: 0.6        # (guess, Task 5 measured charge landing +0.4 s, worst +0.6 s after speech) mic on: a push with no charge waits this long for one
+  pose_grace_s: 1.0           # (guess) covers the measured ~0.8 s worst charge latency: a charge releases a pose already held only if it rose this recently
   combat:
     speed_ref_mps: 2.0
     speed_mult_min: 0.6
