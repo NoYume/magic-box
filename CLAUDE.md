@@ -4,14 +4,14 @@ Read this first. Each package folder under `src/magic_box/` has its own short `C
 
 ## What this is
 
-A game console built from a ZED 2 stereo camera, a Jetson Orin Nano and an external monitor. It runs a 1v1 magic duel for HackTX 2026 (Hardware, Meta and Best Overall tracks). Two players stand side by side. Each watches their own half of a split screen showing a live close-up of the *opponent*. Players speak a Muse Spark-written incantation into their own clip-on mic to charge a spell, then release it with a body gesture (usually a fast push toward the camera). The defender dodges by stepping aside or ducking. Real distance to the camera scales damage.
+A game console built from a ZED X stereo camera, a Jetson Orin Nano and an external monitor. It runs a 1v1 magic duel for HackTX 2026 (Hardware, Meta and Best Overall tracks). Two players stand side by side. Each watches their own half of a split screen showing a live close-up of the *opponent*. Players speak a Muse Spark-written incantation into their own clip-on mic to charge a spell, then release it with a body gesture (usually a fast push toward the camera). The defender dodges by stepping aside or ducking. Real distance to the camera scales damage.
 
 ## Why ZED + Jetson
 
 1. Depth is load-bearing: push speed (m/s along Z), distance zones and dodges are measured in meters. If a feature works as well on a webcam, it is not a headline feature.
 2. Body tracking gives two skeletons with IDs, so no hand-rolled pose model.
 3. Everything runs on one small box, with no laptop in the loop at the demo.
-4. The ZED 2 has an IMU and works with the Jetson's CUDA stack.
+4. The ZED X has an IMU, connects over GMSL2 through a ZED Link capture card, and works with the Jetson's CUDA stack.
 5. The debug overlay (top-down meters view, `wrist_vz` graph) proves the depth story to judges.
 
 Speech-to-text (Muse Voice Transcribe) and Muse Spark run in Meta's cloud. Video never leaves the box.
@@ -20,7 +20,7 @@ Speech-to-text (Muse Voice Transcribe) and Muse Spark run in Meta's cloud. Video
 
 | Part | Notes |
 |---|---|
-| ZED 2 | USB 3, has an IMU, so body tracking works. |
+| ZED X | GMSL2 via a ZED Link capture card, has an IMU, so body tracking works. Not hot-pluggable: after re-plugging, run `sudo systemctl restart zed_x_daemon` or reboot. |
 | Jetson Orin Nano | RAM and JetPack unconfirmed; `scripts/check_env.py` is step 1. Video out is DisplayPort, so use a DP-to-HDMI adapter if the monitor needs HDMI. |
 | Monitor | External, 1920x1080 assumed. |
 | Mics | One clip-on lav mic per player: two USB lav mics, or a dual-transmitter wireless kit whose USB receiver puts P1 on L and P2 on R. A USB mic is the spare. |
@@ -32,7 +32,7 @@ More in `docs/hardware.md`.
 
 ```
                 ┌──────────── Jetson Orin Nano ─────────────────────────────┐
- ZED 2 ──USB──▶ │ [perception proc]  only module that imports pyzed         │
+ ZED X ─GMSL2─▶ │ [perception proc]  only module that imports pyzed         │
                 │   grab → depth + body tracking (2 people, IDs)            │
                 │   → slot assign → push/pose/motion → PlayerState ×2/frame │
                 │   → left frame into shared memory (double buffer)         │
@@ -79,6 +79,13 @@ All cross-owner types live in `src/magic_box/core/contracts.py`: `Push`, `Player
 | Intent → game rules | `Action` | Nikhil → Adetola |
 | Game → render | `GameView` | Adetola → Adetola + Nikhil |
 
+**`PlayerState` field notes** (Enoch produces, Nikhil consumes):
+1. `wrist_vz` is the wrist's velocity relative to the neck (the root when there is no neck), in m/s, negative toward the camera. `Push.speed` is a positive number. `Push.speed` is the window-average speed at the moment the push threshold is crossed. For most punches that is just above `push_speed_mps` (about 1.5-1.7 m/s), not the punch's peak speed. Whether to report peak speed instead is an open decision for Adetola (game balance) and Enoch. Walking toward the camera does not fire a push.
+2. `wrists` and `keypoints_px` hold only valid points, so read them with `.get()`. `wrist_vz` always has `"L"` and `"R"`.
+3. A two-hand push arrives as one `Push` (the faster hand). Intent recognises it when the other hand's `wrist_vz` crosses `-push_speed_mps` within ~100 ms of the push (`wrist_vz` is published every frame). A push gives one event: a cooldown and a re-arm stop repeats.
+4. `player_id` is the ZED tracking id.
+5. A player who leaves is republished at once with `tracking_ok=False`, carrying the last pose flags and zone, with `push=None`. Consumers (intent) must gate on `tracking_ok`.
+
 ## Team and ownership
 
 ```
@@ -88,7 +95,7 @@ docs/game-design.md       Adetola          docs/hardware.md   Daniel + Enoch
 src/magic_box/
   main.py, __main__.py    Nikhil           CLI entry
   core/        Nikhil     contracts.py, serde.py, config.py, geometry.py
-  perception/  Enoch      process.py, zed_source.py, bodies.py, push.py, poses.py, motion.py, hands.py
+  perception/  Enoch      process.py, zed_source.py, raw.py, keypoints.py, kinematics.py, bodies.py, tracker.py, push.py, poses.py, motion.py, hands.py
   pipeline/    Nikhil     processes.py, frame_bus.py, streams.py, sources.py, loop.py
   intent/      Nikhil     fusion.py, dodge.py
   voice/       Nikhil     process.py, mic.py, muse_stream.py, matcher.py   (mic devices: Daniel)
@@ -144,7 +151,7 @@ These are team rules. `tests/test_boundaries.py` enforces the import ones.
 - **`--fake`:** keyboard-driven players and a synthetic camera frame (two silhouettes that follow fake root x and z). Runs on any laptop. This is how you develop render, game and intent work.
 - **`--replay DIR`:** feeds a recorded session back with original timing. **Not implemented yet** (exits 2; TODO Nikhil).
 - **`--record DIR`:** writes a session directory (`states.jsonl`, `voice.jsonl`, `events.jsonl`, `frames.mp4`, `meta.json`). **Not implemented yet** (exits 2; TODO Nikhil).
-- **Live mode** (no `--fake`/`--replay`) starts the perception and voice processes. Both are stubs today, so on a laptop the window shows "STEP INTO VIEW".
+- **Live mode** (no `--fake`/`--replay`) starts the perception and voice processes. On a laptop the perception process exits with "pyzed is not installed ... use --fake on a laptop" and the window shows "STEP INTO VIEW". The supervisor retries the perception process a few times before giving up. The voice process is still a stub.
 - Spell keys always work as a voice fallback, so you can test casting with no mic and no Wi-Fi.
 
 **Fake-mode keys** (from `config.yaml` `keys:`)
@@ -172,10 +179,12 @@ Per-machine overrides go in `config.local.yaml` (gitignored, deep-merged over `c
 | `uv run python -m magic_box --help` | Flags: `--fake`, `--replay DIR`, `--record DIR`, `--debug`, `--headless`, `--config PATH`, `--max-ticks N`. |
 | `uv run pytest` | Run all tests. |
 | `uv run ruff check` / `uv run ruff format --check` | Lint and format check. |
-| `uv run python scripts/check_env.py [--laptop]` | Environment check (Python, JetPack, RAM, pyzed, CUDA, cv2, audio, API key). |
+| `uv run python scripts/check_env.py [--laptop]` | Environment check (Python, JetPack, RAM, pyzed, ZED camera and `zed_x_daemon`, CUDA, cv2, audio, API key). |
+| `uv run python scripts/bench_tracking.py [--seconds N] [--body-format F] [--resolution R] [--svo PATH] [--min-fps X] [--min-two S]` | Two-person tracking benchmark on the Jetson. Prints GO or NO-GO. |
+| `uv run python scripts/record_session.py [--seconds N] [--out PATH]` | Record the live ZED X to an SVO2 file in `recordings/`. |
 | `scripts/sync_to_jetson.sh` | rsync the repo from a laptop to the Jetson (`JETSON_HOST`, `JETSON_DIR` override the defaults). |
 
-`scripts/bench_tracking.py` and `scripts/record_session.py` are stubs today (TODO Enoch). `bench_tracking.py` is the hour-1 go/no-go for two-person tracking.
+`bench_tracking.py` is the hour-1 go/no-go for two-person tracking. It prints GO or NO-GO from the measured fps and the share of frames with two people. On NO-GO, retry with `--body-format BODY_18`. To tune offline, record an SVO with `record_session.py`, then set `camera.svo_path` in `config.local.yaml` and run the game as usual (playback loops; perception handles the `cam_t` rewind).
 
 ## Milestones
 
@@ -186,16 +195,17 @@ Per-machine overrides go in `config.local.yaml` (gitignored, deep-merged over `c
 - **M4:** voice charge + push release with fixed incantations; poses (Holy Light, Heal); dodges.
 - **M5:** Spark incantations, full scene flow, lobby name capture.
 - **M6:** Duel Chronicle, polish, demo video.
-- **Cut first:** MediaPipe finger gestures.
+- Finger gestures are out. `perception/hands.py` stays a stub.
 
 ## Risks
 
-- **Orin Nano fps** with two bodies, depth, 60 fps render and crops. Benchmark first. Fallbacks: `BODY_18`, lower camera resolution, GPU crops via pygame-ce's SDL2 `Texture` API.
+- **Orin Nano fps** with two bodies, depth, 60 fps render and crops. Benchmark first. Fallbacks: `BODY_18` with body fitting off (`camera.body_fitting: false`; BODY_34/38 need fitting), a lower camera resolution, GPU crops via pygame-ce's SDL2 `Texture` API.
 - **numpy ABI mismatch** between the venv and the system `pyzed` build. Pin to whatever works on the device.
 - **Venue Wi-Fi.** Keyboard spell keys, config incantations and a template chronicle keep the demo alive. A phone hotspot is the backup.
 - **Lav-mic crosstalk** at 1–2 m. Each mic matches only its own player's incantations, and the two sets are kept clearly different.
 - **Muse partial-transcript latency** is unmeasured. Measure it at M4 and size the charge window from it.
-- **Crop upscaling blur:** HD720 scaled about 2.4x to fill a half. Resolution is a config tunable.
+- **Crop upscaling blur:** SVGA (960x600) is scaled about 1.8x to fill a half. HD1200 is the fallback if it looks too soft, at a cost in fps. Resolution is a config tunable.
+- **GMSL2 is not hot-pluggable.** Never re-plug the camera while the system runs. See the ZED X troubleshooting section in `docs/hardware.md`.
 - **Lighting, crowds and thermals** if the hardware goes in an enclosure.
 
 ## Open decisions
@@ -206,7 +216,7 @@ Per-machine overrides go in `config.local.yaml` (gitignored, deep-merged over `c
 | Scene flow details and lobby interactions | Adetola |
 | Mic hardware model and channel routing | Daniel |
 | JetPack, Python, RAM, ZED SDK version (confirm, then pin) | Daniel |
-| Body model (`BODY_18`/`34`/`38`) and camera resolution after the benchmark | Enoch |
+| Body format (defaults to `BODY_34`) and camera resolution (defaults to SVGA), confirmed by `bench_tracking.py` | Enoch |
 | Muse Spark `base_url` and model id (verify against dev.meta.ai docs) | Nikhil |
+| `Push.speed`: threshold speed (today) or peak speed, for damage scaling | Adetola + Enoch |
 | Enclosure (Hardware track) | Daniel |
-| MediaPipe finger gestures in or out | Enoch |

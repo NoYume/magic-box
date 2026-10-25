@@ -87,7 +87,7 @@ These types stay inside `perception/` (and the scripts); they are not cross-owne
 - Over the last `perception.push_window_s` of `cam_t`: `v = (d_last − d_first) / (t_last − t_first)` and `travel = d_first − d_last`. With fewer than two samples, `v = 0` and nothing fires.
 - **Fires** when the hand is armed, `−v ≥ push_speed_mps`, `travel ≥ push_min_travel_m`, and at least `push_cooldown_s` has passed since this player's last push (either hand).
 - After firing, that hand is disarmed until `−v < push_speed_mps × push_rearm_ratio` (the hand slowed or came back). One push gives one event.
-- If both hands fire on the same frame, `Push.hand` is the faster one and both are disarmed. Both `wrist_vz` values are then past the threshold, which is how intent can recognize a two-hand push.
+- If both hands fire on the same frame, `Push.hand` is the faster one and both are disarmed. A two-hand push is therefore one `Push`; intent recognises it when the other hand's `wrist_vz` crosses `−push_speed_mps` within ~100 ms of the push (`wrist_vz` is published every frame).
 - `Push(hand, speed=−v, origin_px=kp2d wrist)`. `wrist_vz[hand] = v` (0.0 without enough samples). Both keys are always present.
 
 **7.6 Poses (`detect_poses(kp3d, perception_cfg)`).** IMAGE coordinates, so +y is down.
@@ -212,7 +212,7 @@ render:
 
 - `PlayerState.wrist_vz` is the wrist's velocity **relative to the neck** (m/s, negative toward the camera), the same signal pushes fire on. `Push.speed` is that speed as a positive number.
 - `wrists` and `keypoints_px` contain only valid points; read them with `.get()`. `wrist_vz` always has both `"L"` and `"R"`.
-- A two-hand push is one `Push` (the faster hand) on a frame where both `wrist_vz` values are past `−push_speed_mps`.
+- A two-hand push arrives as one `Push` (the faster hand). Intent recognises it when the other hand's `wrist_vz` crosses `−push_speed_mps` within ~100 ms of the push (`wrist_vz` is published every frame).
 - `player_id` is the ZED tracking id.
 - A player who leaves is republished at once with `tracking_ok=False` (§7.8).
 

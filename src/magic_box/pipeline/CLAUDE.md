@@ -37,4 +37,4 @@ uv run python -m magic_box --fake --headless --max-ticks 120
 - `TODO(Nikhil)` in `main.py`: `--record` builds a `SessionRecorder` but nothing feeds it; hook it into `GameLoop` (states, voice, events, frames).
 - `ReplaySources` waits on `replay/` (`--replay` exits 2 today).
 - The frame-bus seqlock has no explicit memory fences. Re-run `MAGIC_BOX_STRESS=1 uv run pytest tests/pipeline/test_frame_bus.py` on the Jetson (aarch64; the stress test free-runs 1280x720 writes for ~3 s) before relying on it.
-- Live mode starts perception and voice, both stubs today; on a laptop the window shows "STEP INTO VIEW".
+- Live mode starts perception and voice; voice is still a stub. On a laptop without pyzed the perception process fails (the supervisor retries a few times) and the window shows "STEP INTO VIEW".

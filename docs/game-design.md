@@ -55,5 +55,4 @@ Muse Spark writes 3–7 words per spell, themed by class with an Austin or HackT
 - Does a player leaving the frame pause the round after 2 s, or end it?
 - Is the single 90 s round right, or best of three?
 - Is the "perfect incantation" bonus worth the extra rule?
-- Which gestures are reliable enough with BODY_18 keypoints (Enoch can say after the benchmark)?
-- Is MediaPipe finger gesture input in or out?
+- Which gestures are reliable with the default `BODY_34` keypoints (Enoch confirms after the benchmark)?

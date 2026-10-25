@@ -6,7 +6,7 @@
 
 | Part | Notes |
 |---|---|
-| ZED 2 | USB 3. Has an IMU, so body tracking is supported. |
+| ZED X | GMSL2 through a ZED Link capture card. Has an IMU, so body tracking is supported. GMSL2 is not hot-pluggable. |
 | Jetson Orin Nano | RAM and JetPack version unconfirmed. Checking them is step 1 on the device (`uv run python scripts/check_env.py`). The dev kit's video output is **DisplayPort**, so use a DP-to-HDMI adapter if the monitor needs HDMI. |
 | Monitor | External, 1920x1080 assumed. This is the console's main display. |
 | Mics | One clip-on lav mic per player (better in a noisy room than one big mic). Either two USB lav mics, or a dual-transmitter wireless kit whose USB receiver puts P1 on the L channel and P2 on R. An external USB mic is a spare. |
@@ -28,7 +28,8 @@ For a dual-transmitter wireless kit with one USB receiver, use the same device f
 
 ## ZED placement and play area
 
-- Mount the ZED 2 under or above the monitor, centered, pointing at the players. Keep it level; tilt changes depth readings.
+- Mount the ZED X under or above the monitor, centered, pointing at the players. Keep it level; tilt changes depth readings.
+- The GMSL2 cable runs to the ZED Link card on the Jetson. Plug it in before powering on, and strain-relieve it so nobody tugs it mid-demo.
 - P1 stands on the left from the players' view, P2 on the right. P1 appears on the image's right.
 - Tape marks on the floor at the `perception.zones` distances (from the camera, in `config.yaml`):
   - **Danger zone:** closer than 1.6 m (`danger_max_m`).
@@ -43,6 +44,14 @@ For a dual-transmitter wireless kit with one USB receiver, use the same device f
 2. Lock clocks to max: `sudo jetson_clocks`.
 3. Follow the Jetson quickstart in `README.md`, then run `uv run python scripts/check_env.py` and confirm `pyzed` imports inside the venv.
 4. Watch thermals during long runs, especially in an enclosure.
+
+## ZED X troubleshooting
+
+- Camera not detected, or `check_env.py` shows `zed_x_daemon` not active: `sudo systemctl restart zed_x_daemon`. If that fails, reboot with the camera plugged in.
+- Check the driver bound both sensors: `sudo dmesg | grep zedx`. Both cameras' entries should say "bound".
+- `ZED_Diagnostic` (installed with the ZED SDK) tests the camera and the SDK.
+- Never re-plug the GMSL2 cable while the Jetson runs. After any re-plug, restart `zed_x_daemon` or reboot.
+- The perception process retries opening the camera every `perception.open_retry_s` and logs `ZED X not detected?` with the restart hint.
 
 ## Network
 

@@ -1,6 +1,6 @@
 # magic-box
 
-A 1v1 magic duel on a ZED 2 camera, a Jetson Orin Nano and a monitor. Two players cast spells by speaking an AI-written incantation, then push toward the camera to release them. The defender dodges by stepping aside or ducking, and real distance scales damage. Built at HackTX 2026.
+A 1v1 magic duel on a ZED X camera, a Jetson Orin Nano and a monitor. Two players cast spells by speaking an AI-written incantation, then push toward the camera to release them. The defender dodges by stepping aside or ducking, and real distance scales damage. Built at HackTX 2026.
 
 New here? Read `CLAUDE.md` (architecture, contracts, rules) and the `CLAUDE.md` in the folder you work in.
 
@@ -32,11 +32,11 @@ Other commands: `uv run pytest`, `uv run ruff check`, `uv run python scripts/che
 ## Jetson quickstart
 
 0. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-1. Install the ZED SDK and its Python API (`pyzed`) into the system Python.
+1. Install the ZED SDK, the ZED X driver (for the ZED Link capture card) and the Python API (`pyzed`) into the system Python. Check that the camera daemon runs: `systemctl is-active zed_x_daemon`.
 2. `sudo apt install libportaudio2`
 3. `uv venv --system-site-packages --python /usr/bin/python3`
 4. `uv sync` (no `--extra laptop`: the Jetson uses JetPack's OpenCV)
-5. `uv run python scripts/check_env.py`
+5. `uv run python scripts/check_env.py`, then `uv run python scripts/bench_tracking.py` with two people standing 1 to 3 m away. It prints GO or NO-GO.
 6. `cp .env.example .env` and set `META_MODEL_API_KEY`
 7. `uv run --env-file .env python -m magic_box`
 

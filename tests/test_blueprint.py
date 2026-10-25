@@ -35,3 +35,11 @@ def test_shared_claude_settings():
 @pytest.mark.parametrize("doc", ["README.md", "docs/game-design.md", "docs/hardware.md"])
 def test_docs_exist(doc):
     assert (ROOT / doc).read_text().strip()
+
+
+@pytest.mark.parametrize(
+    "doc", ["CLAUDE.md", "README.md", "docs/hardware.md", "src/magic_box/perception/CLAUDE.md"]
+)
+def test_docs_name_the_zed_x(doc):
+    text = (ROOT / doc).read_text()
+    assert "ZED X" in text and "ZED 2" not in text

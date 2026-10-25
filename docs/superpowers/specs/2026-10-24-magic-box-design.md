@@ -7,7 +7,7 @@
 
 ## 1. Summary
 
-magic-box is a game console built from a ZED 2 stereo camera, a Jetson Orin Nano, and an external monitor. It runs a 1v1 magic duel. Two players stand side by side facing the monitor. Each player watches their own half of the split screen, which shows a live close-up of the *opponent*. Players cast spells by speaking a Muse Spark-generated incantation into their own clip-on mic and then releasing the spell with a body gesture, usually a fast push toward the camera. Spells fly out of the opponent's hand on the defender's half and grow as they approach. The defender dodges by physically stepping aside or ducking. Real distance to the camera scales damage dealt and taken.
+magic-box is a game console built from a ZED X stereo camera, a Jetson Orin Nano, and an external monitor. It runs a 1v1 magic duel. Two players stand side by side facing the monitor. Each player watches their own half of the split screen, which shows a live close-up of the *opponent*. Players cast spells by speaking a Muse Spark-generated incantation into their own clip-on mic and then releasing the spell with a body gesture, usually a fast push toward the camera. Spells fly out of the opponent's hand on the defender's half and grow as they approach. The defender dodges by physically stepping aside or ducking. Real distance to the camera scales damage dealt and taken.
 
 All vision, depth, game logic and rendering run on the Jetson. Speech-to-text (Muse Voice Transcribe) and text generation (Muse Spark) are cloud APIs called from the Jetson.
 
@@ -33,7 +33,7 @@ All vision, depth, game logic and rendering run on the Jetson. Speech-to-text (M
 
 | Part | Notes |
 |---|---|
-| ZED 2 | USB 3. Has an IMU, so body tracking is supported. |
+| ZED X | GMSL2 through a ZED Link capture card. Has an IMU, so body tracking is supported. Changed 2026-10-24 from the ZED 2; see `2026-10-24-perception-zedx-design.md`. |
 | Jetson Orin Nano | RAM and JetPack version unconfirmed. Checking them is step 1 on the device (`scripts/check_env.py`). The dev kit's video output is DisplayPort, so use a DP-to-HDMI adapter if the monitor needs HDMI. |
 | Monitor | External, 1920×1080 assumed. This is the console's main display. |
 | Mics | One clip-on lav mic per player, which works better in a noisy room than one big mic. Either two USB lav mics or a dual-transmitter wireless kit whose USB receiver puts P1 on the L channel and P2 on R. An external USB mic is a spare. |
@@ -55,7 +55,7 @@ All vision, depth, game logic and rendering run on the Jetson. Speech-to-text (M
 
 ```
                 ┌──────────── Jetson Orin Nano ─────────────────────────────┐
- ZED 2 ──USB──▶ │ [perception proc]  only module that imports pyzed         │
+ ZED X ─GMSL2─▶ │ [perception proc]  only module that imports pyzed         │
                 │   grab → depth + body tracking (2 people, IDs)            │
                 │   → slot assign → push/pose/motion → PlayerState ×2/frame │
                 │   → left frame into shared memory (double buffer)         │
@@ -219,7 +219,7 @@ class ProjectileView:
 
 | Package | Owner | Input → Output | Responsibilities |
 |---|---|---|---|
-| `perception/` | Enoch | ZED 2 → `PlayerState`, frames | Open the camera (live or SVO); body tracking; keep only bodies within `max_range` and, if there are more than two, the 2 closest; bind bodies to slots by x position at round start and re-bind by side after loss; smooth wrist Z velocity and detect pushes with a cooldown; detect pose flags; compute motion features (`root_vx`, head); compute zone. **Only package that imports `pyzed`.** |
+| `perception/` | Enoch | ZED X → `PlayerState`, frames | Open the camera (live or SVO); body tracking; keep only bodies within `max_range` and, if there are more than two, the 2 closest; bind bodies to slots by x position at round start and re-bind by side after loss; smooth wrist Z velocity and detect pushes with a cooldown; detect pose flags; compute motion features (`root_vx`, head); compute zone. **Only package that imports `pyzed`.** Details: `2026-10-24-perception-zedx-design.md`. |
 | `pipeline/` | Nikhil | processes ↔ queues and shared memory | Launcher with `spawn` and restart on crash, shared-memory frame bus, bounded drop-oldest stream queues, the source interface (live / replay / fake, plus keyboard voice), the game-process loop, the `VoiceConfig` control queue. |
 | `intent/` | Nikhil | `PlayerState` stream + `VoiceEvent` → `Action` | Turn voice matches into `charge`; turn `push` into `push` actions; rising edges of pose flags → `pose`; windowed step and duck detection → `dodge`. Signal processing only, with no rules about HP or mana. |
 | `voice/` | Nikhil | mics → `VoiceEvent` | Per-player capture from (device, channel) as PCM16 mono at 16 kHz, resampled in-process if the device can't do it; one Muse WebSocket per player in `ENDPOINTING` mode with `CUMULATIVE` partials; keep sending silence during pauses; per-match `keywords`; reconnect with backoff, including at the 60-minute session limit; `rapidfuzz` match against **only that player's** incantations; at most one incantation event per speech turn. |
