@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from magic_box.core.contracts import RELEASE_KINDS
+from magic_box.core.contracts import EFFECT_KINDS, RELEASE_KINDS
 
 Config = dict[str, Any]
 
@@ -206,6 +206,58 @@ def _check_game(cfg: Config, problems: list[str]) -> None:
                 continue
             if str(fallback[0]).lower() == str(fallback[1]).lower():
                 problems.append(f"{where}: slot 0 and slot 1 incantations must differ")
+    _check_game_effects(cfg, classes, problems)
+
+
+GAME_TIMING_KEYS: tuple[str, ...] = (
+    "boot_min_s",
+    "boot_max_s",
+    "hands_up_hold_s",
+    "abandon_after_s",
+    "empowered_mult",
+    "mana_slow_mult",
+    "slow_charge_mult",
+)
+
+
+def _check_game_effects(cfg: Config, classes: dict, problems: list[str]) -> None:
+    """Boot, debounce, abandon and spell-effect keys (Adetola, 2026-10-25)."""
+    for key in GAME_TIMING_KEYS:
+        value = _get(cfg, "game", key)
+        if not isinstance(value, (int, float)) or value < 0:
+            problems.append(f"game.{key}: must be a number >= 0")
+    lo, hi = _get(cfg, "game", "boot_min_s"), _get(cfg, "game", "boot_max_s")
+    if isinstance(lo, (int, float)) and isinstance(hi, (int, float)) and lo > hi:
+        problems.append("game.boot_min_s: must be <= game.boot_max_s")
+    seen: dict[str, str] = {}
+    for cls_name, cls in classes.items():
+        keywords = _get(cls, "keywords")
+        if not isinstance(keywords, list) or not keywords:
+            problems.append(f"game.classes.{cls_name}.keywords: must be a non-empty list")
+            keywords = []
+        for kw in keywords:
+            word = str(kw).lower()
+            if not word.isalpha():
+                problems.append(f"game.classes.{cls_name}.keywords: {kw!r} must be one word")
+            elif word in seen:
+                problems.append(
+                    f"game.classes.{cls_name}.keywords: {kw!r} is also {seen[word]}'s keyword"
+                )
+            seen[word] = cls_name
+        for spell in _get(cls, "spells") or []:
+            where = f"game.classes.{cls_name}.spells.{_get(spell, 'id')}"
+            effect = _get(spell, "effect")
+            if effect is not None:
+                if effect not in EFFECT_KINDS:
+                    problems.append(
+                        f"{where}.effect: must be one of {EFFECT_KINDS}, got {effect!r}"
+                    )
+                effect_s = _get(spell, "effect_s")
+                if not isinstance(effect_s, (int, float)) or effect_s <= 0:
+                    problems.append(f"{where}.effect_s: must be a number > 0 with an effect")
+            hits = _get(spell, "hits")
+            if hits is not None and (not isinstance(hits, int) or hits < 1):
+                problems.append(f"{where}.hits: must be an integer >= 1")
 
 
 def _check_pipeline_render(cfg: Config, problems: list[str]) -> None:

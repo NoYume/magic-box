@@ -118,6 +118,13 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
   victory_max_s: 30.0
   pause_after_s: 2.0
   name_max_chars: 12
+  boot_min_s: 2.0             # boot: shortest self-check screen; leaves once the camera is ok
+  boot_max_s: 8.0             # boot: go to the lobby at this point whatever the checks say
+  hands_up_hold_s: 0.3        # (guess) hands up, or down, must hold this long to count (Jetson flicker)
+  abandon_after_s: 20.0       # a pause this long ends the match: the tracked player wins, draw if both gone
+  empowered_mult: 1.5         # Holy Light: the caster's spells x this while empowered
+  mana_slow_mult: 0.25        # Static Field: the target's mana regen x this while slowed
+  slow_charge_mult: 0.6       # Inferno: the target's next charge window x this
   combat:
     speed_ref_mps: 2.0
     speed_mult_min: 0.6
@@ -130,29 +137,38 @@ game:               # owner: Adetola. DRAFT numbers, see docs/game-design.md
   classes:
     fire_mage:
       name: Fire Mage
+      keywords: [fire]          # saying one of these in the lobby picks the class
       spells:
         - {id: fireball, name: Fireball, cost: 25, damage: 18, travel_s: 1.6, release: push,
            fallback: {0: "embers of the forty acres burn", 1: "ignite the longhorn flame"}}
         - {id: flame_wall, name: Flame Wall, cost: 30, damage: 0, travel_s: 0, release: two_hand_push,
-           fallback: {0: "rise crimson rampart", 1: "wall of burning cedar"}}       # blocks next hit 4 s
+           effect: shield, effect_s: 4,                                               # blocks the next hit
+           fallback: {0: "rise crimson rampart", 1: "wall of burning cedar"}}
         - {id: inferno, name: Inferno, cost: 60, damage: 35, travel_s: 2.2, release: push,
+           effect: slow, effect_s: 3,                                                 # shorter next charge
            fallback: {0: "let the whole sky catch fire", 1: "summon the sixth street inferno"}}
     lightning_mage:
       name: Lightning Mage
+      keywords: [lightning]
       spells:
         - {id: bolt, name: Bolt, cost: 20, damage: 12, travel_s: 0.9, release: push,
            fallback: {0: "storm of speedway strike", 1: "lightning answer my call"}}
         - {id: chain, name: Chain, cost: 35, damage: 7, travel_s: 1.2, release: push,
-           fallback: {0: "thunder binds the tower", 1: "chain the storm across the river"}}  # 3 hits
+           hits: 3, chain_gap_s: 0.25,                                                # 3 bolts, each dodgeable
+           fallback: {0: "thunder binds the tower", 1: "chain the storm across the river"}}
         - {id: static_field, name: Static Field, cost: 30, damage: 0, travel_s: 1.4, release: two_hand_push,
-           fallback: {0: "static fills the air", 1: "hum of the restless grid"}}    # slows mana regen 5 s
+           effect: mana_slow, effect_s: 5,                                            # slows mana regen
+           fallback: {0: "static fills the air", 1: "hum of the restless grid"}}
     holy_knight:
       name: Holy Knight
+      keywords: [holy, knight]
       spells:
         - {id: holy_light, name: Holy Light, cost: 30, damage: 0, travel_s: 0, release: arm_overhead,
-           fallback: {0: "light of the tower guide my blade", 1: "dawn breaks upon my sword"}}  # x1.5 dmg 6 s
+           effect: empowered, effect_s: 6,                                            # x empowered_mult
+           fallback: {0: "light of the tower guide my blade", 1: "dawn breaks upon my sword"}}
         - {id: heal, name: Heal, cost: 40, damage: 0, travel_s: 0, release: hands_together,
-           fallback: {0: "mend me gentle light", 1: "breath of the hill country heal"}}  # +25 HP
+           heal_hp: 25,                                                               # capped at hp_max
+           fallback: {0: "mend me gentle light", 1: "breath of the hill country heal"}}
         - {id: judgment, name: Judgment, cost: 45, damage: 25, travel_s: 1.5, release: push,
            fallback: {0: "judgment falls from above", 1: "steel and sunlight strike true"}}
 
