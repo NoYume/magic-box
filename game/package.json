@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "npx --yes http-server@14.1.1 . -p 5173 -c-1",
+    "voice": "uv run --env-file ../.env python voice_proxy.py",
     "test": "node --test \"test/**/*.test.js\""
   }
 }

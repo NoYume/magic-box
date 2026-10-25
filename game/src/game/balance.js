@@ -55,8 +55,8 @@ export const ROUND = {
   KO_TIME_SCALE: 0.25,
   ROUND_END_MS: 2800,
   RESULTS_MS: 10000,
-  JOIN_HOLD_MS: 1000, // open palm held to join + calibrate
-  JOIN_DECAY: 2, // progress lost per second when the palm drops
+  TUTORIAL_HOLD_MS: 650, // each of the four hand signs must be held this long in onboarding
+  JOIN_DECAY: 2, // tutorial progress lost per second when the requested sign drops
   REMATCH_HOLD_MS: 1000,
   IDLE_RESET_MS: 15000, // nobody in frame -> back to the attract screen
   HIT_STOP_MS: 70,

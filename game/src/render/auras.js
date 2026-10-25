@@ -11,6 +11,7 @@ const WARD_RAISE_RATE = 9; // spring rate of the raise / lower animation
 const CHARGE_RADIUS_PALMS = 0.9;
 const MOTES_PER_SECOND = 55;
 const LOW_MANA = 25;
+const BOT_PALM_SPAN = 0.07; // view-height fraction for the bot's invisible casting hand
 
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -71,9 +72,17 @@ export class AuraLayer {
     for (const slot of [0, 1]) {
       const player = combat.players[slot];
       const caster = view.casters[slot];
+      const charge = this.charges[slot];
+      charge.element = PLAYER_THEME[slot].element;
+      charge.glow.tint = charge.element;
+      charge.ring.tint = charge.element;
+      charge.core.tint = PLAYER_THEME[slot].core;
       this.#updateWard(this.wards[slot], player, caster?.wardHand, dt);
-      const fist = view.slots[slot].find((h) => caster?.handStates.get(h.id)?.phase === PHASE.CHARGING);
-      this.#updateCharge(this.charges[slot], player.charge, fist, dt);
+      const trackedFist = view.slots[slot].find((h) => caster?.handStates.get(h.id)?.phase === PHASE.CHARGING);
+      const botFist = view.botSlot === slot && player.isGathering
+        ? { view: player.core, palmSpan: BOT_PALM_SPAN }
+        : null;
+      this.#updateCharge(charge, player.charge, trackedFist ?? botFist, dt);
     }
   }
 

@@ -23,10 +23,24 @@ export const COLOR = {
   danger: 0xff3b3b,
 };
 
+export const CHARACTERS = Object.freeze([
+  { id: 'ember', name: 'Ember Mage', house: 'Ember', element: COLOR.ember, core: COLOR.emberCore },
+  { id: 'frost', name: 'Frost Mage', house: 'Frost', element: COLOR.frost, core: COLOR.frostCore },
+]);
+
 export const PLAYER_THEME = [
-  { name: 'Player 01', house: 'Ember', numeral: '01', element: COLOR.ember, core: COLOR.emberCore },
-  { name: 'Player 02', house: 'Frost', numeral: '02', element: COLOR.frost, core: COLOR.frostCore },
+  { ...CHARACTERS[0], numeral: '01' },
+  { ...CHARACTERS[1], numeral: '02' },
 ];
+
+export function configurePlayerThemes(characterIds, { botSlot = null } = {}) {
+  characterIds.forEach((id, slot) => {
+    const character = CHARACTERS.find((candidate) => candidate.id === id) ?? CHARACTERS[slot];
+    Object.assign(PLAYER_THEME[slot], character, { numeral: String(slot + 1).padStart(2, '0') });
+    if (slot === botSlot) Object.assign(PLAYER_THEME[slot], { name: 'Mage Bot', house: 'Arcane automaton' });
+  });
+  if (typeof document !== 'undefined') applyThemeToDocument();
+}
 
 export const FONT = {
   display: "'Barlow Condensed', Impact, sans-serif",

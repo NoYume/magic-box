@@ -1,6 +1,6 @@
 // Match flow. Pure state machine, no DOM.
 //
-//   attract (each side: waiting -> calibrating -> ready, by holding an open palm)
+//   attract (each player learns ward -> gather -> aim -> ultimate at their own pace)
 //     -> countdown -> fight -> ko (slow motion) -> roundEnd -> countdown ... (best of three)
 //     -> results -> attract (after a while, or when both players show their palms)
 
@@ -16,8 +16,9 @@ export const PHASE = Object.freeze({
 });
 
 export const SEAT = Object.freeze({ WAITING: 'waiting', CALIBRATING: 'calibrating', READY: 'ready' });
+export const TUTORIAL_SIGNS = Object.freeze(['ward', 'gather', 'aim', 'ultimate']);
 
-const newSeat = () => ({ status: SEAT.WAITING, progress: 0 });
+const newSeat = () => ({ status: SEAT.WAITING, progress: 0, tutorialStep: 0 });
 
 export function createFlow() {
   return {
@@ -39,6 +40,19 @@ export const isCombatLive = (flow) => flow.phase === PHASE.FIGHT;
 export const timeScale = (flow) => (flow.phase === PHASE.KO ? ROUND.KO_TIME_SCALE : 1);
 export const countdownValue = (flow) => Math.max(1, Math.ceil((ROUND.COUNTDOWN_MS - flow.phaseMs) / 1000));
 
+// Voice-controlled matches do not need a hand-sign onboarding gate.
+export function startMatch(flow) {
+  if (flow.phase !== PHASE.ATTRACT) return [];
+  flow.seats.forEach((seat) => Object.assign(seat, {
+    status: SEAT.READY,
+    progress: 1,
+    tutorialStep: TUTORIAL_SIGNS.length,
+  }));
+  const events = [{ kind: 'matchStart' }];
+  enter(flow, PHASE.COUNTDOWN, events);
+  return events;
+}
+
 function enter(flow, phase, events) {
   flow.phase = phase;
   flow.phaseMs = 0;
@@ -51,7 +65,8 @@ function backToAttract(flow, events) {
   events.push({ kind: 'phase', phase: PHASE.ATTRACT });
 }
 
-// input: { palms: [bool, bool], present: [bool, bool], hp: [n, n] }
+// input: { signs: [string[], string[]], palms: [bool, bool], present: [bool, bool], hp: [n, n] }
+// `palms` remains separate because the results screen uses it for the rematch shortcut.
 export function updateFlow(flow, dtMs, input) {
   const events = [];
   flow.phaseMs += dtMs;
@@ -79,12 +94,23 @@ function updateAttract(flow, dtMs, input, events) {
   }
   flow.seats.forEach((seat, slot) => {
     if (seat.status === SEAT.READY) return;
-    const step = dtMs / ROUND.JOIN_HOLD_MS;
-    seat.progress = input.palms[slot] ? seat.progress + step : Math.max(0, seat.progress - step * ROUND.JOIN_DECAY);
+    const expected = TUTORIAL_SIGNS[seat.tutorialStep];
+    const isCorrect = input.signs[slot].includes(expected);
+    const amount = dtMs / ROUND.TUTORIAL_HOLD_MS;
+    seat.progress = isCorrect
+      ? seat.progress + amount
+      : Math.max(0, seat.progress - amount * ROUND.JOIN_DECAY);
     seat.status = seat.progress > 0 ? SEAT.CALIBRATING : SEAT.WAITING;
-    if (seat.progress >= 1) {
+    if (seat.progress < 1) return;
+
+    events.push({ kind: 'tutorialStep', slot, sign: expected });
+    seat.tutorialStep += 1;
+    seat.progress = 0;
+    if (seat.tutorialStep === TUTORIAL_SIGNS.length) {
       Object.assign(seat, { status: SEAT.READY, progress: 1 });
       events.push({ kind: 'joined', slot });
+    } else {
+      seat.status = SEAT.WAITING;
     }
   });
   if (flow.seats.every((s) => s.status === SEAT.READY)) {

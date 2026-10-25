@@ -4,7 +4,7 @@
 import { Container, Graphics, Sprite, Text } from 'pixi.js';
 
 import { PHASE } from '../game/caster.js';
-import { PHASE as FLOW } from '../game/rounds.js';
+import { PHASE as FLOW, SEAT, TUTORIAL_SIGNS } from '../game/rounds.js';
 import { SIGNS } from '../vision/signs.js';
 import { COLOR, FONT, PLAYER_THEME } from '../theme.js';
 
@@ -65,10 +65,13 @@ export class HandMarks {
   update(dt, { view, flow }) {
     this.time += dt;
     this.marks.forEach((m) => (m.seen = false));
-    const isLive = flow.phase === FLOW.FIGHT; // signs only mean something during the duel
     for (const slot of [0, 1]) {
+      if (flow.phase === FLOW.ATTRACT) {
+        this.#tutorial(slot, view, flow, dt);
+        continue;
+      }
       const caster = view.casters[slot];
-      if (!caster || !isLive) continue;
+      if (!caster || flow.phase !== FLOW.FIGHT) continue;
       if (caster.ultimate) {
         const hands = view.slots[slot];
         const palm = hands.reduce((s, h) => s + h.palmSpan, 0) / Math.max(1, hands.length);
@@ -88,6 +91,29 @@ export class HandMarks {
         this.marks.delete(key);
       }
     }
+  }
+
+  #tutorial(slot, view, flow, dt) {
+    const seat = flow.seats[slot];
+    if (!seat || seat.status === SEAT.READY) return;
+    const sign = TUTORIAL_SIGNS[seat.tutorialStep];
+    const hands = view.slots[slot];
+    let at;
+    let palmSpan;
+    if (sign === SIGNS.ULTIMATE) {
+      if (!view.triangles[slot].active || hands.length < 2) return;
+      at = {
+        x: hands.reduce((sum, hand) => sum + hand.view.x, 0) / hands.length,
+        y: hands.reduce((sum, hand) => sum + hand.view.y, 0) / hands.length,
+      };
+      palmSpan = (hands.reduce((sum, hand) => sum + hand.palmSpan, 0) / hands.length) * 1.6;
+    } else {
+      const hand = hands.find((candidate) => candidate.sign === sign);
+      if (!hand) return;
+      at = hand.view;
+      palmSpan = hand.palmSpan;
+    }
+    this.#draw(`tutorial-${slot}`, { phase: PHASE.DETECTED, sign, progress: seat.progress }, at, palmSpan, slot, dt);
   }
 
   #draw(key, state, at, palmSpan, slot, dt) {

@@ -1,10 +1,7 @@
-// Laptop webcam source (dev / fallback). Hands from MediaPipe HandLandmarker, bodies from
-// MediaPipe Pose. No depth stream: hand depth is estimated from apparent palm size by the
-// roster, torso depth from shoulder width, both relative to each player's calibration.
+// Laptop webcam source (dev / fallback). MediaPipe Pose supplies body movement for defense;
+// abilities come from voice, so the expensive hand-landmark model is not loaded.
 
-import { createHandDetector } from '../vision/hands.js';
 import { createPoseDetector } from '../vision/pose.js';
-import { DEPTH_SOURCE } from '../vision/roster.js';
 
 const VIDEO_CONSTRAINTS = { video: { width: { ideal: 1280 }, height: { ideal: 720 } } };
 
@@ -21,14 +18,14 @@ export async function createWebcamSource(onStatus) {
     throw new CameraAccessError('Camera permission was denied or no camera is connected', { cause: err });
   }
   await video.play();
-  const [hands, pose] = await Promise.all([createHandDetector(), createPoseDetector()]);
+  const pose = await createPoseDetector();
   onStatus(null);
 
   const canvas = document.createElement('canvas');
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
   const ctx = canvas.getContext('2d');
-  const stats = { kind: 'webcam', hands: hands.stats };
+  const stats = { kind: 'webcam', hands: null };
   let lastVideoTime = -1;
 
   // Returns { observations?, bodies? } or null when there is nothing new.
@@ -36,11 +33,8 @@ export async function createWebcamSource(onStatus) {
     if (video.currentTime === lastVideoTime) return null;
     lastVideoTime = video.currentTime;
     ctx.drawImage(video, 0, 0);
-    const observations = hands.detect(video, canvas.width, canvas.height, tMs);
-    observations?.forEach((obs) => (obs.depthSource = DEPTH_SOURCE.PALM));
     const bodies = pose.detect(video, tMs);
-    if (!observations && !bodies) return null;
-    return { observations: observations ?? undefined, bodies: bodies ?? undefined };
+    return bodies ? { bodies } : null;
   }
 
   return { kind: 'webcam', canvas, mirror: true, poll, stats, getDepthMap: () => null };

@@ -1,10 +1,7 @@
 // ZED X source: JPEG frames, depth maps and body skeletons over WebSocket from jetson/tracker.py
-// (docs/protocol.md). The ZED tracks bodies; MediaPipe finds hands (fingers) on the decoded frames
-// and each hand's depth is sampled from the depth map of the same capture (CaptureSync).
+// (docs/protocol.md). Abilities come from voice; ZED body tracking remains available for defense.
 
-import { ProtocolError, handDepthFromMap, parseBinaryMessage } from '../vision/depth.js';
-import { createHandDetector } from '../vision/hands.js';
-import { DEPTH_SOURCE } from '../vision/roster.js';
+import { ProtocolError, parseBinaryMessage } from '../vision/depth.js';
 import { CaptureSync } from './capture-sync.js';
 
 const RECONNECT_MS = 1000;
@@ -17,7 +14,6 @@ export async function createZedSource(url, onStatus) {
   const stats = { kind: 'zed', frames: 0, depthMaps: 0, trackerFps: 0, depthSize: null, connected: false };
   const sync = new CaptureSync();
   let frame = { seq: -1, depth: null, bodies: null }; // newest decoded capture
-  let detectedSeq = -1;
   let bodiesSeq = -1;
   let isDecoding = false;
 
@@ -75,31 +71,15 @@ export async function createZedSource(url, onStatus) {
   };
 
   onStatus('Connecting to the camera.');
-  const detector = await createHandDetector();
-  stats.hands = detector.stats;
+  stats.hands = null;
   connect();
 
-  // Hands on the newest decoded frame, each with depth from that same capture's map. A missing
-  // sample stays null: the roster treats it as a stereo dropout, never as a palm-size estimate.
-  function detectHands(tMs) {
-    if (frame.seq === detectedSeq) return undefined;
-    const observations = detector.detect(canvas, canvas.width, canvas.height, tMs);
-    if (!observations) return undefined;
-    detectedSeq = frame.seq;
-    for (const obs of observations) {
-      obs.depth = frame.depth ? handDepthFromMap(frame.depth, obs.landmarks) : null;
-      obs.depthSource = DEPTH_SOURCE.STEREO;
-    }
-    return observations;
-  }
-
-  // Returns { observations?, bodies? } or null when there is nothing new.
-  function poll(tMs) {
+  // Returns a fresh body packet when there is one.
+  function poll() {
     let bodies;
     if (frame.seq !== bodiesSeq && frame.bodies) bodies = frame.bodies;
     bodiesSeq = frame.seq;
-    const observations = detectHands(tMs);
-    return observations || bodies ? { observations, bodies } : null;
+    return bodies ? { bodies } : null;
   }
 
   return { kind: 'zed', canvas, mirror: true, poll, stats, getDepthMap: () => frame.depth };

@@ -6,9 +6,10 @@ import { calibrationScale } from '../vision/depth.js';
 import { PostureDetector, STANCE } from '../vision/posture.js';
 import { HandRoster } from '../vision/roster.js';
 import { SIGNS } from '../vision/signs.js';
-import { ROUND, SEATS } from './balance.js';
+import { GATHER, ROUND, SEATS, WARD } from './balance.js';
 import { PlayerCaster } from './caster.js';
-import { PHASE, createFlow, isCombatLive, knockout, timeScale, updateFlow } from './rounds.js';
+import { MageBot } from './mage-bot.js';
+import { PHASE, SEAT, TUTORIAL_SIGNS, createFlow, isCombatLive, knockout, startMatch, timeScale, updateFlow } from './rounds.js';
 import { applyIntent, castBolt, castUltimate, createCombat, dodge, resetCombat, setAnchors, setStance, stepCombat } from './rules.js';
 
 const INCANTATION_WARD_MS = 1500;
@@ -20,8 +21,10 @@ const INPUT_STALE_MS = 400; // no hand / body input for this long (camera stall)
 const emptyStats = () => ({ casts: 0, hits: 0, blocked: 0, damageDealt: 0, bestHit: 0, evaded: 0 });
 
 export class Match {
-  constructor({ mirror = true } = {}) {
+  constructor({ mirror = true, mode = 'local', botRandom = Math.random } = {}) {
     this.mirror = mirror;
+    this.mode = mode;
+    this.bot = mode === 'bot' ? new MageBot({ slot: 1, random: botRandom }) : null;
     this.roster = new HandRoster({ mirror });
     this.bodyRoster = new BodyRoster({ mirror });
     this.postures = [new PostureDetector(), new PostureDetector()];
@@ -32,7 +35,15 @@ export class Match {
     this.casters = [new PlayerCaster(), new PlayerCaster()];
     this.combat = createCombat();
     this.flow = createFlow();
+    if (this.bot) {
+      this.flow.seats[1] = {
+        status: SEAT.READY,
+        progress: 1,
+        tutorialStep: TUTORIAL_SIGNS.length,
+      };
+    }
     this.view = {
+      botSlot: this.bot?.slot ?? null,
       slots: [[], []],
       triangles: [{ active: false }, { active: false }],
       rejected: [],
@@ -44,6 +55,7 @@ export class Match {
     this.matchStats = [emptyStats(), emptyStats()];
     this.hitStopMs = 0;
     this.incantationWardUntil = [0, 0];
+    this.voiceControlled = false;
   }
 
   // New body skeletons (camera coords, docs/protocol.md). Returns fx events (stance, dodge).
@@ -57,6 +69,7 @@ export class Match {
     const fx = [];
     const live = isCombatLive(this.flow);
     slots.forEach((body, slot) => {
+      if (this.bot && slot === this.bot.slot) return;
       if (body && body.id !== previous[slot]) this.postures[slot].reset();
       const posture = body ? this.postures[slot].update(body.kp, tMs) : null;
       this.view.postures[slot] = posture;
@@ -76,6 +89,11 @@ export class Match {
     const fx = [];
     const live = isCombatLive(this.flow);
     for (const slot of [0, 1]) {
+      if (this.bot && slot === this.bot.slot) {
+        this.view.casters[slot] = null;
+        setAnchors(this.combat, slot, { core: SEATS[slot], wardAt: null });
+        continue;
+      }
       const player = this.combat.players[slot];
       const out = this.casters[slot].update({ hands: slots[slot], triangle: triangles[slot], tMs, player, now: this.combat.clockMs });
       this.view.casters[slot] = out;
@@ -93,9 +111,16 @@ export class Match {
     this.clockMs += dtMs;
     const fx = [...this.#expireStaleInput()];
     const palms = [0, 1].map((slot) => this.view.slots[slot].some((h) => h.sign === SIGNS.WARD));
-    const present = [0, 1].map((slot) => this.view.slots[slot].length > 0 || Boolean(this.view.bodies[slot]));
+    const signs = [0, 1].map((slot) => {
+      const visible = this.view.slots[slot].map((hand) => hand.sign);
+      if (this.view.triangles[slot].active) visible.push(SIGNS.ULTIMATE);
+      return visible;
+    });
+    const present = [0, 1].map((slot) => Boolean(this.bot && slot === this.bot.slot) || this.view.slots[slot].length > 0 || Boolean(this.view.bodies[slot]));
     const hp = this.combat.players.map((p) => p.hp);
-    for (const ev of updateFlow(this.flow, dtMs, { palms, present, hp })) fx.push(...this.#onFlow(ev));
+    for (const ev of updateFlow(this.flow, dtMs, { signs, palms, present, hp })) fx.push(...this.#onFlow(ev));
+    if (this.voiceControlled && this.flow.phase === PHASE.ATTRACT) fx.push(...this.start());
+    if (this.bot && isCombatLive(this.flow)) fx.push(...this.bot.update(this.combat));
     const scaled = dtMs * timeScale(this.flow);
     const combatDt = this.hitStopMs > 0 ? 0 : scaled;
     this.hitStopMs = Math.max(0, this.hitStopMs - dtMs);
@@ -105,15 +130,54 @@ export class Match {
     return fx;
   }
 
+  // Skip the legacy hand-sign tutorial when a player starts a voice-controlled duel.
+  start() {
+    this.voiceControlled = true;
+    return startMatch(this.flow).flatMap((event) => this.#onFlow(event));
+  }
+
+  incantationAvailability(slot, spellName) {
+    if (![0, 1].includes(slot)) return { available: false, reason: 'invalidPlayer' };
+    if (!SPELLS.includes(spellName)) return { available: false, reason: 'unknownAbility' };
+    if (!isCombatLive(this.flow)) return { available: false, reason: 'duelNotLive' };
+    const player = this.combat.players[slot];
+    const now = this.combat.clockMs;
+    if (spellName === 'bolt' && now < player.boltReadyAt) {
+      return { available: false, reason: 'cooldown', remainingMs: player.boltReadyAt - now };
+    }
+    if (spellName === 'ultimate' && now < player.ultimateReadyAt) {
+      return { available: false, reason: 'cooldown', remainingMs: player.ultimateReadyAt - now };
+    }
+    if (spellName === 'ultimate' && player.charge < 1) {
+      return { available: false, reason: 'chargeRequired', charge: player.charge };
+    }
+    if (spellName === 'ward' && now < player.wardBrokenUntil) {
+      return { available: false, reason: 'wardBroken', remainingMs: player.wardBrokenUntil - now };
+    }
+    if (spellName === 'ward' && player.mana < WARD.MIN_MANA_TO_RAISE) {
+      return { available: false, reason: 'manaRequired', mana: player.mana };
+    }
+    if (spellName === 'gather' && player.charge >= 1) {
+      return { available: false, reason: 'chargeFull' };
+    }
+    return { available: true };
+  }
+
   // Voice / AI hook: castIncantation(slot, 'bolt' | 'ward' | 'gather' | 'ultimate', intensity 0..1).
   castIncantation(slot, spellName, intensity = 1) {
-    if (!isCombatLive(this.flow) || !SPELLS.includes(spellName) || ![0, 1].includes(slot)) return [];
+    if (!this.incantationAvailability(slot, spellName).available) return [];
     const power = Math.min(1, Math.max(0, intensity));
     const player = this.combat.players[slot];
     if (spellName === 'bolt') return castBolt(this.combat, slot, { thrust: power, origin: this.#castOrigin(slot) });
     if (spellName === 'ultimate') return castUltimate(this.combat, slot, { origin: this.#castOrigin(slot) });
-    if (spellName === 'gather') player.charge = Math.min(1, player.charge + INCANTATION_GATHER * power);
-    if (spellName === 'ward') this.incantationWardUntil[slot] = this.combat.clockMs + INCANTATION_WARD_MS * power;
+    if (spellName === 'gather') {
+      player.charge = Math.min(1, player.charge + INCANTATION_GATHER * power);
+      player.chargeKeptUntil = this.combat.clockMs + GATHER.HOLD_MS;
+    }
+    if (spellName === 'ward') {
+      this.incantationWardUntil[slot] = this.combat.clockMs + INCANTATION_WARD_MS * power;
+      return applyIntent(this.combat, slot, { gathering: false, warding: true });
+    }
     return [];
   }
 
@@ -166,11 +230,19 @@ export class Match {
   }
 
   #onFlow(ev) {
-    if (ev.kind === 'joined') this.#calibrate(ev.slot);
+    if (ev.kind === 'tutorialStep' && ev.sign === SIGNS.WARD) this.#calibrate(ev.slot);
     if (ev.kind === 'matchStart') this.matchStats = [emptyStats(), emptyStats()];
     if (ev.kind === 'roundStart' || (ev.kind === 'phase' && ev.phase === PHASE.ATTRACT)) {
       resetCombat(this.combat);
       this.casters.forEach((c) => c.reset());
+      this.bot?.reset(this.combat.clockMs);
+      if (this.bot && ev.phase === PHASE.ATTRACT) {
+        this.flow.seats[1] = {
+          status: SEAT.READY,
+          progress: 1,
+          tutorialStep: TUTORIAL_SIGNS.length,
+        };
+      }
     }
     if (ev.kind === 'roundOver') this.#tallyRound();
     return [ev];
@@ -182,7 +254,7 @@ export class Match {
     return [ev];
   }
 
-  // Webcam depth: learn this player's palm-size scale while they hold the joining palm.
+  // Webcam depth: learn this player's palm-size scale during the ward tutorial step.
   #calibrate(slot) {
     this.postures[slot].calibrate();
     const palm = this.view.slots[slot].find((h) => h.sign === SIGNS.WARD);

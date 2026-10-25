@@ -58,6 +58,27 @@ test('incantation_hook_should_cast_only_during_fight', () => {
   assert.deepEqual(match.castIncantation(0, 'fireworks', 1), []);
 });
 
+test('voice_ability_availability_should_explain_rejections', () => {
+  const match = new Match();
+  assert.equal(match.incantationAvailability(0, 'bolt').reason, 'duelNotLive');
+  match.flow.phase = PHASE.FIGHT;
+  assert.equal(match.incantationAvailability(0, 'ultimate').reason, 'chargeRequired');
+  match.combat.players[0].charge = 1;
+  assert.equal(match.incantationAvailability(0, 'ultimate').available, true);
+  match.castIncantation(0, 'bolt', 1);
+  assert.equal(match.incantationAvailability(0, 'bolt').reason, 'cooldown');
+});
+
+test('voice_ward_should_raise_and_expire_without_hand_input', () => {
+  const match = new Match();
+  match.flow.phase = PHASE.FIGHT;
+  assert.equal(match.castIncantation(0, 'ward', 1)[0].kind, 'wardUp');
+  assert.equal(match.combat.players[0].isWarding, true);
+  match.step(1600);
+  match.step(1);
+  assert.equal(match.combat.players[0].isWarding, false);
+});
+
 // Regression (review P1): a camera stall must not keep the last input alive.
 function fightWithFist() {
   const match = new Match();

@@ -16,11 +16,12 @@ import { createStage } from './render/stage.js';
 import { createDemoSource } from './sources/demo.js';
 import { createWebcamSource } from './sources/webcam.js';
 import { createZedSource } from './sources/zed.js';
-import { applyThemeToDocument } from './theme.js';
+import { applyThemeToDocument, configurePlayerThemes } from './theme.js';
 import { DebugPanel } from './ui/debug-panel.js';
 import { Hud } from './ui/hud.js';
 import { Screens } from './ui/screens.js';
-import { Spellbook } from './ui/spellbook.js';
+import { SpellFeedback } from './ui/spell-feedback.js';
+import { MuseVoiceControl } from './voice/muse.js';
 
 const FONT_FACES = ['800 16px "Barlow Condensed"', '600 16px "Barlow Condensed"', '500 16px Barlow', '500 16px "IBM Plex Mono"'];
 const FONT_TIMEOUT_MS = 3000;
@@ -37,7 +38,7 @@ let pendingFx = [];
 // Voice / AI hook (Muse Voice Transcribe layer): castIncantation(0, 'bolt', 0.8).
 // spellName: 'bolt' | 'ward' | 'gather' | 'ultimate'; intensity 0..1. Returns true if it cast.
 export function castIncantation(slot, spellName, intensity = 1) {
-  if (!match) return false;
+  if (!match || match.flow.phase !== PHASE.FIGHT) return false;
   const fx = match.castIncantation(slot, spellName, intensity);
   pendingFx.push(...fx);
   return fx.length > 0 || ['ward', 'gather'].includes(spellName);
@@ -46,6 +47,22 @@ export function castIncantation(slot, spellName, intensity = 1) {
 async function loadFonts() {
   const timeout = new Promise((resolve) => setTimeout(resolve, FONT_TIMEOUT_MS));
   await Promise.race([Promise.all(FONT_FACES.map((f) => document.fonts.load(f))), timeout]);
+}
+
+function unavailableReason(status, ability) {
+  const name = ability[0].toUpperCase() + ability.slice(1);
+  const seconds = status.remainingMs ? Math.ceil(status.remainingMs / 100) / 10 : 0;
+  const reasons = {
+    invalidPlayer: 'That player is not in this duel.',
+    unknownAbility: 'That ability is not in your spellbook.',
+    duelNotLive: 'Wait for the fight bell before casting.',
+    cooldown: `${name} is recharging — ${seconds.toFixed(1)}s remaining.`,
+    chargeRequired: `Ultimate needs full charge — ${Math.round((status.charge ?? 0) * 100)}% ready.`,
+    wardBroken: `Ward is shattered — reforms in ${seconds.toFixed(1)}s.`,
+    manaRequired: `Not enough mana — ${Math.floor(status.mana ?? 0)} remaining.`,
+    chargeFull: 'Charge is already full. Cast Bolt or Ultimate.',
+  };
+  return reasons[status.reason] ?? `${name} cannot be cast right now.`;
 }
 
 function createSource(kind, onStatus) {
@@ -72,51 +89,88 @@ function playSound(sfx, ev) {
   sounds[ev.kind]?.();
 }
 
-function spellbookMode(phase) {
-  if (phase === PHASE.ATTRACT) return 'open';
-  if (HUD_PHASES.has(phase)) return 'compact';
-  return 'hidden';
-}
-
-function bindKeys({ debugLayer, debugPanel, sfx }) {
+function bindKeys({ debugLayer, debugPanel, sfx, resetMatch }) {
   const setDebug = (isOn) => {
     debugLayer.setVisible(isOn);
     debugLayer.setHitboxes(isOn);
     debugPanel.setVisible(isOn);
-    const button = $('debug-toggle');
-    if (button) {
-      button.textContent = isOn ? 'Debug on [D]' : 'Debug [D]';
-      button.setAttribute('aria-pressed', String(isOn));
-    }
   };
   setDebug(params.get('debug') === '1' || params.get('debug') === 'true');
-  $('debug-toggle')?.addEventListener('click', () => setDebug(!debugLayer.visible));
-
   window.addEventListener('keydown', (e) => {
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
     const key = e.key.toLowerCase();
     if (key === 'd' || key === 'h') setDebug(!debugLayer.visible);
     if (key === 'm') sfx.toggleMute();
-    if (key === 'r') match = new Match({ mirror: match.roster.mirror });
+    if (key === 'r') resetMatch();
   });
 }
 
 async function start() {
   applyThemeToDocument();
-  const screens = new Screens($('screens'));
+  let source = null;
+  let activeMode = null;
   const hud = new Hud($('hud'));
-  const books = [0, 1].map((slot) => new Spellbook($(`spellbook-${slot}`), slot));
+  const beginMatch = (mode, characters) => {
+    if (!source) {
+      screens.setStatus('The arena is still waking up. Try again in a moment.');
+      return;
+    }
+    screens.setStatus(null);
+    activeMode = mode;
+    configurePlayerThemes(characters, { botSlot: mode === 'bot' ? 1 : null });
+    match = new Match({ mirror: source.mirror, mode });
+    pendingFx.push(...match.start());
+    hud.setPlayers();
+    screens.setPlayers();
+    screens.showGame();
+  };
+  const screens = new Screens($('screens'), {
+    onStartLocal: (characters) => beginMatch('local', characters),
+    onStartBot: () => beginMatch('bot', ['ember', 'frost']),
+  });
   const debugPanel = new DebugPanel($('debug'));
+  const spellFeedback = new SpellFeedback($('app'));
+  const voice = new MuseVoiceControl($('app'), {
+    onCommand: ({ slot, ability }) => {
+      if (!activeMode) return { accepted: false, message: 'Start a duel first.', slot };
+      if (activeMode === 'local' && slot === null) {
+        return { accepted: false, message: 'Say “player one” or “player two” before the ability.', slot };
+      }
+      const target = activeMode === 'bot' ? 0 : slot;
+      if (activeMode === 'bot' && slot === 1) {
+        return { accepted: false, message: 'Player two is controlled by the Mage Bot.', slot };
+      }
+      const availability = match.incantationAvailability(target, ability);
+      if (!availability.available) {
+        return { accepted: false, message: unavailableReason(availability, ability), slot: target };
+      }
+      const accepted = castIncantation(target, ability, 1);
+      return {
+        accepted,
+        message: accepted ? `${ability} answered the call.` : `${ability} could not be cast.`,
+        slot: target,
+      };
+    },
+    onFeedback: (result) => spellFeedback.show(result),
+  });
   await loadFonts();
-  const source = await createSource(params.get('src') ?? 'webcam', (msg) => screens.setStatus(msg));
-  $('source-label').textContent = { demo: 'Demo / scripted', webcam: 'Live / webcam', zed: 'Live / ZED' }[source.kind] ?? source.kind;
+  source = await createSource(params.get('src') ?? 'webcam', (msg) => screens.setStatus(msg));
   const stage = await createStage(source.canvas, { mirror: source.mirror });
   const effects = new Effects(stage);
   const debugLayer = new DebugLayer(stage);
   const sfx = new Sfx();
   match = new Match({ mirror: source.mirror });
   window.arena = { castIncantation, get match() { return match; } };
-  bindKeys({ debugLayer, debugPanel, sfx });
+  bindKeys({
+    debugLayer,
+    debugPanel,
+    sfx,
+    resetMatch: () => {
+      if (!activeMode) return;
+      match = new Match({ mirror: source.mirror, mode: activeMode });
+      pendingFx.push(...match.start());
+    },
+  });
 
   let renderFps = 60;
   stage.app.ticker.add((ticker) => {
@@ -124,28 +178,22 @@ async function start() {
     const dtMs = Math.min(ticker.deltaMS, MAX_DT_MS);
     renderFps += (1000 / Math.max(ticker.deltaMS, 1) - renderFps) * FPS_SMOOTHING;
     const input = source.poll(now, { phase: match.flow.phase, phaseMs: match.flow.phaseMs, combat: match.combat });
-    if (input?.bodies) pendingFx.push(...match.ingestBodies(input.bodies, now));
-    if (input?.observations) pendingFx.push(...match.ingest(input.observations, now));
-    pendingFx.push(...match.step(dtMs));
+    if (activeMode && input?.bodies) pendingFx.push(...match.ingestBodies(input.bodies, now));
+    if (activeMode) pendingFx.push(...match.step(dtMs));
     for (const ev of pendingFx) {
       effects.onFx(ev);
       playSound(sfx, ev);
     }
     pendingFx = [];
-    const isFight = match.flow.phase === PHASE.FIGHT;
+    const isFight = activeMode && match.flow.phase === PHASE.FIGHT;
     match.combat.players.forEach((p, slot) => sfx.gather(slot, p.charge, isFight && p.isGathering));
     const snapshot = { combat: match.combat, flow: match.flow, view: match.view, matchStats: match.matchStats };
     stage.frame(dtMs / 1000);
     effects.update(dtMs / 1000, snapshot);
     debugLayer.update(snapshot);
-    hud.setVisible(HUD_PHASES.has(match.flow.phase));
+    hud.setVisible(Boolean(activeMode) && HUD_PHASES.has(match.flow.phase));
     hud.update(snapshot);
     screens.update(snapshot);
-    books.forEach((book, slot) => {
-      book.setMode(spellbookMode(match.flow.phase));
-      book.setCaster(match.view.casters[slot]);
-      book.setBody(match.combat.players[slot], match.combat.clockMs);
-    });
     debugPanel.update({ renderFps, source, view: match.view, flow: match.flow });
   });
 }

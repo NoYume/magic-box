@@ -16,6 +16,9 @@ const LEAN_BACK_Z = 0.16;
 const DODGE_SHIFT = 0.12; // view units (about 0.6 shoulder widths at the seat distance)
 const SEAT_X = [0.25, 0.75]; // view space
 const JOIN_DELAY_MS = [900, 1900];
+const TUTORIAL_SHOW_MS = 1050;
+const TUTORIAL_GAP_MS = 250;
+const TUTORIAL_SIGNS = ['open', 'fist', 'sword', 'triangle'];
 const REMATCH_DELAY_MS = 5500;
 const DEFENSE = [['ward', 0.45], ['dodge', 0.3], ['brace', 0.15]]; // the rest: take the hit
 const HAND_SCORE = 0.97;
@@ -64,10 +67,10 @@ export class DemoBot {
   #hands(tMs, { phase, phaseMs, combat, seat, inward }) {
     const rest = { pose: 'relaxed', x: seat + inward * 0.06, y: 0.84, depth: REST_DEPTH, roll: 0.2 * inward };
     const offHand = { pose: 'relaxed', x: seat - inward * 0.07, y: 0.85, depth: REST_DEPTH, roll: -0.2 * inward, handedness: 'Left' };
-    if (phase === FLOW.ATTRACT || phase === FLOW.RESULTS) {
-      const delay = phase === FLOW.ATTRACT ? JOIN_DELAY_MS[this.slot] : REMATCH_DELAY_MS;
+    if (phase === FLOW.ATTRACT) return this.#tutorialHands(phaseMs, seat, inward, rest, offHand);
+    if (phase === FLOW.RESULTS) {
       const palm = { pose: 'open', x: seat + inward * 0.04, y: 0.55, depth: REST_DEPTH, roll: 0.1 * inward };
-      return [phaseMs > delay ? palm : rest, offHand];
+      return [phaseMs > REMATCH_DELAY_MS ? palm : rest, offHand];
     }
     if (phase !== FLOW.FIGHT) return [rest, offHand];
     this.#react(tMs, combat);
@@ -76,6 +79,17 @@ export class DemoBot {
     const isWarding = this.defense.kind === 'ward' && tMs >= this.defense.from && tMs < this.defense.until;
     const ward = { pose: 'open', x: seat - inward * 0.02, y: 0.6, depth: REST_DEPTH - 0.05, roll: -0.15 * inward, handedness: 'Left' };
     return [cast, isWarding ? ward : offHand];
+  }
+
+  #tutorialHands(phaseMs, seat, inward, rest, offHand) {
+    const elapsed = phaseMs - JOIN_DELAY_MS[this.slot];
+    if (elapsed < 0) return [rest, offHand];
+    const span = TUTORIAL_SHOW_MS + TUTORIAL_GAP_MS;
+    const step = Math.min(TUTORIAL_SIGNS.length - 1, Math.floor(elapsed / span));
+    if (elapsed % span >= TUTORIAL_SHOW_MS) return [rest, offHand];
+    const pose = TUTORIAL_SIGNS[step];
+    if (pose === 'triangle') return [{ triangle: true, x: seat + inward * 0.03, y: 0.6, depth: REST_DEPTH }];
+    return [{ pose, x: seat + inward * 0.04, y: 0.58, depth: REST_DEPTH, roll: 0.1 * inward }, offHand];
   }
 
   #castHand(tMs, seat, inward, rest) {
