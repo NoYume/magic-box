@@ -44,6 +44,74 @@ def test_template_time_out_and_draw():
     assert "draw" in template_chronicle(draw, NAMES, CFG).lower()
 
 
+# Task 1's engine ends a match with reason "abandon" after a player is gone 20 s: the tracked
+# player wins, or it is a draw when both are gone.
+ABANDON_LOG = KO_LOG[:4] + [
+    ev("match_end", None, winner=0, reason="abandon", hp={0: 80.0, 1: 70.0})
+]
+ABANDON_DRAW_LOG = KO_LOG[:4] + [
+    ev("match_end", None, winner=None, reason="abandon", hp={0: 80.0, 1: 70.0})
+]
+
+
+def test_template_abandon_says_who_held_the_field():
+    text = template_chronicle(ABANDON_LOG, NAMES, CFG)
+    assert "Ada held the field when Bo left the arena." in text
+    assert "time ran out" not in text and "knocked out" not in text
+    draw = template_chronicle(ABANDON_DRAW_LOG, NAMES, CFG)
+    assert "Both duelists left the arena" in draw and "draw" in draw.lower()
+    assert "time ran out" not in draw
+
+
+def test_spark_prompt_says_how_an_abandoned_match_ended():
+    for log, ending in (
+        (ABANDON_LOG, "Ending: Ada held the field when Bo left the arena."),
+        (ABANDON_DRAW_LOG, "Ending: Both duelists left the arena"),
+    ):
+        client = FakeClient("A tale.")
+        write_chronicle(client, log, NAMES, CFG)
+        assert ending in client.calls[0][1]
+
+
+BLOCK_HEAL_LOG = KO_LOG[:4] + [
+    ev("block", 1, spell_id="fireball", attacker=0),
+    ev("heal", 0, spell_id="heal", amount=25.0, hp=90.0),
+    ev("heal", 0, spell_id="heal", amount=10.0, hp=100.0),
+    ev("buff", 0, spell_id="holy_light", effect="empowered", target=0, duration_s=6.0),
+    ev("match_end", None, winner=1, reason="time", hp={0: 40.0, 1: 60.0}),
+]
+
+
+def test_template_counts_blocks_and_heals():
+    text = template_chronicle(BLOCK_HEAL_LOG, NAMES, CFG)
+    assert "Bo blocked 1 attack" in text and "Ada healed twice" in text
+    assert 2 <= len(_sentences(text)) <= 4
+    assert "blocked" not in template_chronicle(KO_LOG, NAMES, CFG)  # none: not mentioned
+
+
+def test_malformed_block_heal_and_abandon_never_raise():
+    log = [
+        ev("block", 1, spell_id=None, attacker="someone"),
+        ev("heal", 0, spell_id="heal", amount="lots"),
+        ev("match_end", None, winner=7, reason="abandon", hp=None),
+    ]
+    text = template_chronicle(log, NAMES, CFG)
+    assert "Bo blocked 1 attack" in text and "Ada healed once" in text and "left the arena" in text
+    client = FakeClient("A tale.")
+    write_chronicle(client, log, NAMES, CFG)
+    prompt = client.calls[0][1]
+    assert "Bo blocked an attack." in prompt and "Ada healed 0.0 HP." in prompt
+
+
+def test_spark_prompt_counts_and_lists_blocks_and_heals():
+    client = FakeClient("A tale.")
+    write_chronicle(client, BLOCK_HEAL_LOG, NAMES, CFG)
+    prompt = client.calls[0][1]
+    assert "Ada: 1 casts, 1 hits, 0 dodges, 0 blocks, 2 heals." in prompt
+    assert "Bo: 0 casts, 0 hits, 1 dodges, 1 blocks, 0 heals." in prompt
+    assert "Bo blocked Ada's Fireball." in prompt and "Ada healed 25.0 HP." in prompt
+
+
 def test_template_handles_empty_log():
     assert "Ada" in template_chronicle([], NAMES, CFG)
 

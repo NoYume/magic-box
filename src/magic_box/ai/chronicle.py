@@ -47,8 +47,12 @@ def summarize(events: Sequence[GameEvent], names: Mapping[int, str], cfg: Config
     casts = {0: 0, 1: 0}
     hits = {0: 0, 1: 0}
     dodges = {0: 0, 1: 0}
+    blocks = {0: 0, 1: 0}
+    heals = {0: 0, 1: 0}
     hit_list: list[dict] = []
     dodge_list: list[dict] = []
+    block_list: list[dict] = []
+    heal_list: list[dict] = []
     biggest = None
     winner = None
     reason = None
@@ -75,6 +79,19 @@ def summarize(events: Sequence[GameEvent], names: Mapping[int, str], cfg: Config
         elif e.kind == "dodge" and e.slot in dodges:
             dodges[e.slot] += 1
             dodge_list.append({"defender": e.slot, "dodge": d.get("dodge")})
+        elif e.kind == "block" and e.slot in blocks:  # slot: the blocker
+            blocks[e.slot] += 1
+            attacker, sid = d.get("attacker"), d.get("spell_id")
+            block_list.append(
+                {
+                    "defender": e.slot,
+                    "attacker": attacker if attacker in (0, 1) else None,
+                    "spell": spell_names.get(str(sid), str(sid)) if sid else "an attack",
+                }
+            )
+        elif e.kind == "heal" and e.slot in heals:  # slot: the healed player
+            heals[e.slot] += 1
+            heal_list.append({"slot": e.slot, "amount": _num(d.get("amount"))})
         elif e.kind == "match_end":
             winner = d.get("winner")
             try:
@@ -89,8 +106,12 @@ def summarize(events: Sequence[GameEvent], names: Mapping[int, str], cfg: Config
         "casts": casts,
         "hits": hits,
         "dodges": dodges,
+        "blocks": blocks,
+        "heals": heals,
         "hit_list": hit_list,
         "dodge_list": dodge_list,
+        "block_list": block_list,
+        "heal_list": heal_list,
         "biggest_hit": biggest,
         "winner": winner,
         "reason": reason,
@@ -107,14 +128,34 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}" + ("" if n == 1 else "s")
 
 
+def _times(n: int) -> str:
+    return {1: "once", 2: "twice"}.get(n, f"{n} times")
+
+
+def _name(s: dict, slot: int) -> str:
+    return s["names"].get(slot, f"Player {slot + 1}")
+
+
 def _ending(s: dict) -> str:
     winner = s["winner"]
+    abandoned = s["reason"] == "abandon"  # a player was gone 20 s (game.abandon_after_s)
     if winner is None:
+        if abandoned:
+            return "Both duelists left the arena, and the duel ended in a draw."
         return "The duel ended in a draw."
-    name = s["names"].get(winner, f"Player {winner + 1}")
+    name = _name(s, winner)
+    if abandoned:
+        return f"{name} held the field when {_name(s, 1 - winner)} left the arena."
     if s["reason"] == "ko":
         return f"{name} won, and the rival was knocked out."
     return f"{name} won when time ran out."
+
+
+def _counted(s: dict, key: str, phrase) -> str:
+    """'Bo blocked 1 attack and Ada ...' for the players whose count is not 0."""
+    return " and ".join(
+        f"{_name(s, slot)} {phrase(s[key][slot])}" for slot in (0, 1) if s[key][slot]
+    )
 
 
 def template_chronicle(events: Sequence[GameEvent], names: Mapping[int, str], cfg: Config) -> str:
@@ -137,6 +178,12 @@ def template_chronicle(events: Sequence[GameEvent], names: Mapping[int, str], cf
             f"{p0} dodged {_plural(s['dodges'][0], 'attack')} and "
             f"{p1} dodged {_plural(s['dodges'][1], 'attack')}"
         )
+    for key, phrase in (
+        ("blocks", lambda n: f"blocked {_plural(n, 'attack')}"),
+        ("heals", lambda n: f"healed {_times(n)}"),
+    ):
+        if sum(s[key].values()):
+            parts.append(_counted(s, key, phrase))
     if parts:
         text = ", and ".join(parts)
         sentences.append(text[0].upper() + text[1:] + ".")
@@ -150,7 +197,8 @@ def _user_prompt(s: dict, cfg: Config) -> str:
     for slot in (0, 1):
         n = s["names"].get(slot, f"Player {slot + 1}")
         lines.append(
-            f"{n}: {s['casts'][slot]} casts, {s['hits'][slot]} hits, {s['dodges'][slot]} dodges."
+            f"{n}: {s['casts'][slot]} casts, {s['hits'][slot]} hits, {s['dodges'][slot]} dodges, "
+            f"{s['blocks'][slot]} blocks, {s['heals'][slot]} heals."
         )
     for h in s["hit_list"]:
         lines.append(
@@ -158,6 +206,11 @@ def _user_prompt(s: dict, cfg: Config) -> str:
         )
     for dd in s["dodge_list"]:
         lines.append(f"{s['names'].get(dd['defender'])} dodged ({dd['dodge']}).")
+    for b in s["block_list"]:
+        by = "" if b["attacker"] is None else f"{_name(s, b['attacker'])}'s "
+        lines.append(f"{_name(s, b['defender'])} blocked {by}{b['spell']}.")
+    for hl in s["heal_list"]:
+        lines.append(f"{_name(s, hl['slot'])} healed {hl['amount']} HP.")
     lines.append(f"Ending: {_ending(s)}")
     lines.append(
         f"Write the story of this duel in at most {max_words} words, using both players' names."
