@@ -44,7 +44,10 @@ def test_level_to_unit_is_a_db_scale():
 
 @pytest.mark.parametrize("scene", ["lobby", "loading", "fight"])
 def test_each_half_gets_its_players_color_and_the_divider_survives(window, scene):
-    screen = drawn(window, make_full_view(scene))
+    view = make_full_view(scene)
+    if scene == "fight":  # the KO overlay tints the whole screen: check the frame without it
+        view = dataclasses.replace(view, events=(), banner=None)
+    screen = drawn(window, view)
     th = window.theme
     assert tuple(screen.get_at((2, 500)))[:3] == th.slot_rgb(0)  # P1's outer edge
     assert tuple(screen.get_at((window.width - 3, 500)))[:3] == th.slot_rgb(1)
