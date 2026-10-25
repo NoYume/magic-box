@@ -9,12 +9,10 @@ Owner: Nikhil
 import dataclasses
 from pathlib import Path
 
-import numpy as np
-
 from magic_box.core.config import Config
 from magic_box.core.contracts import Frame, PlayerState, VoiceEvent
 from magic_box.core.serde import from_json
-from magic_box.replay.fake_input import draw_silhouettes
+from magic_box.replay.fake_input import background_image, draw_silhouettes
 
 
 def _load(path: Path) -> list:
@@ -30,7 +28,7 @@ class SessionPlayer:
         self._voice: list[VoiceEvent] = _load(voice_path) if voice_path.exists() else []
         cam = cfg["camera"]
         self._w, self._h = int(cam["image_width"]), int(cam["image_height"])
-        self._bg_bgr = tuple(reversed(cfg["render"]["background_rgb"]))
+        self._background = background_image(self._w, self._h, cfg["render"]["background_rgb"])
         self._focal = float(cfg["fake"]["focal_px"])
         self._offset: float | None = None
         self._si = 0
@@ -54,9 +52,7 @@ class SessionPlayer:
         if not states:
             return [], voice, None
         newest = {s.slot: s for s in states}  # sorted by t, so the last per slot wins
-        image = np.empty((self._h, self._w, 4), dtype=np.uint8)
-        image[:, :, :3] = self._bg_bgr
-        image[:, :, 3] = 255
+        image = self._background.copy()
         draw_silhouettes(image, list(newest.values()), self._focal)
         last = states[-1]
         frame = Frame(frame_idx=last.frame_idx, cam_t=last.cam_t, image=image)

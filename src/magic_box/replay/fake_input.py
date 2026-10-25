@@ -28,6 +28,18 @@ _HANDS_UP_Y = -0.9  # wrist height when hands are raised
 _SLOT_BGR = {0: (40, 140, 255), 1: (255, 140, 40)}  # P1 orange, P2 blue
 
 
+def background_image(width: int, height: int, background_rgb: Sequence[int]) -> np.ndarray:
+    """An opaque BGRA image in the background color; copy it per frame (a memcpy).
+
+    Filling the BGR and alpha planes of a new 960x600 image every frame cost about 1.8 ms
+    on a laptop, most of fake mode's poll time; copying a prebuilt one costs about 0.03 ms.
+    """
+    image = np.empty((height, width, 4), dtype=np.uint8)
+    image[:, :, :3] = tuple(reversed(background_rgb))
+    image[:, :, 3] = 255
+    return image
+
+
 def draw_silhouettes(image: np.ndarray, states: Sequence[PlayerState], focal_px: float) -> None:
     """Fill each tracked state's bbox and head box in its slot color (clipped to the image)."""
     for state in states:
@@ -62,7 +74,7 @@ class FakePlayers:
         cam = cfg["camera"]
         self._w = int(cam["image_width"])
         self._h = int(cam["image_height"])
-        self._bg_bgr = tuple(reversed(cfg["render"]["background_rgb"]))
+        self._background = background_image(self._w, self._h, cfg["render"]["background_rgb"])
         self._x = {0: float(fake["start_x_m"]), 1: -float(fake["start_x_m"])}
         self._z = {0: float(fake["start_z_m"]), 1: float(fake["start_z_m"])}
         self._prev_push = {0: False, 1: False}
@@ -70,9 +82,7 @@ class FakePlayers:
         self._frame_idx = 0
 
     def step(self, keys: frozenset[str], now: float, dt: float) -> tuple[list[PlayerState], Frame]:
-        image = np.empty((self._h, self._w, 4), dtype=np.uint8)
-        image[:, :, :3] = self._bg_bgr
-        image[:, :, 3] = 255
+        image = self._background.copy()  # a fresh buffer: the window keeps the last frame
         states = [self._player(slot, keys, now, dt) for slot in (0, 1)]
         draw_silhouettes(image, states, float(self._fake["focal_px"]))
         frame = Frame(frame_idx=self._frame_idx, cam_t=now, image=image)

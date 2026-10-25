@@ -82,3 +82,13 @@ def test_two_hand_key_pushes_with_both_wrists():
     assert p1.wrist_vz == {"L": -FAKE["push_speed_mps"], "R": -FAKE["push_speed_mps"]}
     states, _ = fp.step(frozenset({K0["two_hand_push"]}), now=0.016, dt=0.016)
     assert _p1(states).push is None  # edge-triggered
+
+
+def test_each_frame_is_a_fresh_buffer_on_the_background():
+    fp = FakePlayers(CFG)
+    _, first = fp.step(frozenset(), 0.0, 0.0)
+    first.image[0, 0] = (1, 2, 3, 4)  # the window may still hold the previous frame
+    _, second = fp.step(frozenset(), 1 / 60, 1 / 60)
+    assert second.image is not first.image
+    bg = tuple(reversed(CFG["render"]["background_rgb"])) + (255,)
+    assert tuple(second.image[0, 0]) == bg
