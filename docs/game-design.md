@@ -13,7 +13,7 @@
 
 **Basic attack:** a push with no charged spell. Free, 8 damage, 0.8 s cooldown, 0.7 s travel. The knight's main source of damage.
 
-**Release grace** (**decided overnight, Adetola to confirm**): the voice charge lands about 0.4 s after the player stops speaking, so a player who pushes on the last word would otherwise throw a basic attack. When the player's mic is on and they can afford a spell that push could release, an uncharged push waits up to 0.6 s (`release_grace_s`). If a matching charge lands in that time, the spell fires with that push. Otherwise the basic attack fires when the wait ends. Out of mana for every such spell, the basic fires at once. A push during the basic-attack cooldown is held the same way, but it can only release a spell: with no charge it is dropped. With the mic off (keyboard play) there is no wait. A pose that is already held (arm overhead, hands together) releases a buff charge that lands late, but only if the pose rose within 1 s (`pose_grace_s`) before the charge; hands held up since the lobby don't count. If basic attacks feel laggy, lower `release_grace_s`.
+**Release grace** (**decided overnight, Adetola to confirm**): the voice charge lands about 0.4 s after the player stops speaking, so a player who pushes on the last word would otherwise throw a basic attack. When the player's mic is on and they can afford a spell that push could release by the end of the wait (mana regen over the 0.6 s counts, at the slowed rate while mana-slowed), an uncharged push waits up to 0.6 s (`release_grace_s`). If a matching charge lands in that time, the spell fires with that push. Otherwise the basic attack fires when the wait ends. Out of mana for every such spell, the basic fires at once. A push during the basic-attack cooldown is held the same way, but it can only release a spell: with no charge it is dropped. A push after the cooldown ends replaces such a hold, so spamming basic attacks never stalls: with the mic on they fire about every 1.4 s (the 0.6 s hold plus the 0.8 s cooldown, which starts when the basic fires). With the mic off (keyboard play) there is no wait. A pose that is already held (arm overhead, hands together) releases a buff charge that lands late, but only if the pose rose within 1 s (`pose_grace_s`) before the charge; hands held up since the lobby don't count. If basic attacks feel laggy, lower `release_grace_s`.
 
 ## Damage
 
@@ -57,7 +57,7 @@ Muse Spark writes 3–7 words per spell, themed by class with an Austin or HackT
 | lobby | Players step into the play area. Each picks a class by saying a keyword (`fire`, `lightning`, `holy` or `knight`, plus `lightening`, a spelling Muse sometimes writes; the last one said wins) and sets a name with a prefix ("my name is Ada", "call me Ada", "I am Ada", "I'm Ada") or a one- or two-word reply ("Ada"). One sentence can do both: "my name is Ada, fire". Chatter ("I'm ready", "this is cool") changes nothing. Both hold their hands up for 0.3 s to start. Banner: `SAY NAME · SAY FIRE, LIGHTNING OR HOLY · HANDS UP`. |
 | loading | Spark generates incantations, shown on each half as a tutorial card. No countdown until they arrive; then at least 4 s (`loading_read_s`) to read them. Voice sessions restart with the match's keywords as soon as the incantations are known. |
 | fight | 90 s round. A player out of view for 2 s pauses the fight, and the banner counts down to the abandon ("STEP INTO VIEW · 20"). A pause that lasts 20 s ends the match: the player still tracked wins, a draw if both are gone. While the camera is down the fight freezes ("CAMERA RECONNECTING") and never abandons. After a KO the fight freezes 2.5 s for the finishing effects. |
-| victory | Winner headline, a stats card per player (damage, hits, casts, dodges, blocks, heals, best push speed), and the Duel Chronicle. Both raise hands to go back to the lobby, once 5 s have passed and the chronicle is shown (or it returns after 30 s). Names and classes persist. |
+| victory | Winner headline, a stats card per player (damage, hits, casts, dodges, blocks, heals, best push speed), and the Duel Chronicle. Both raise hands to go back to the lobby, once 5 s have passed and the chronicle has been up for 4 s (`victory_read_s`), or it returns after 30 s. Names and classes persist. |
 
 The lobby and victory rules were **decided overnight, Adetola to confirm**.
 
@@ -74,7 +74,8 @@ The lobby and victory rules were **decided overnight, Adetola to confirm**.
 | `hands_up_hold_s` | 0.3 | hands up (or down) must hold this long to count (guess) |
 | `loading_min_s` / `loading_max_s` | 3.0 / 10.0 | loading scene length bounds (waits for Spark up to the max) |
 | `loading_read_s` | 4.0 | loading also lasts this long after the incantations arrive |
-| `victory_min_s` / `victory_max_s` | 5.0 / 30.0 | victory scene: hands up allowed after the min once the chronicle is shown, auto return at the max |
+| `victory_min_s` / `victory_max_s` | 5.0 / 30.0 | victory scene: hands up allowed after the min, auto return at the max |
+| `victory_read_s` | 4.0 | a hands-up exit from victory also waits this long after the chronicle arrives |
 | `pause_after_s` | 2.0 | a player untracked this long pauses the match ("STEP INTO VIEW") |
 | `abandon_after_s` | 20.0 | a pause this long ends the match |
 | `ko_hold_s` | 2.5 | after a KO the fight stays frozen this long for the finishing effects; keep `render.fx.ko_s` equal (validated <=) |

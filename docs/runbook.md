@@ -209,7 +209,7 @@ Change values in `config.local.yaml` on the Jetson, then quit (`Esc`) and start 
 
 | Symptom | Key (default) | Direction |
 |---|---|---|
-| Basic attacks feel laggy with the mics on | `game.release_grace_s` (0.6) | Lower to 0.3, or 0 to turn the hold off. It holds an uncharged push this long in case a voice charge is about to land, but only while the player can afford a spell that push could release (out of mana, the basic fires at once). First knob to try. |
+| Basic attacks feel laggy with the mics on | `game.release_grace_s` (0.6) | Lower to 0.3, or 0 to turn the hold off. It holds an uncharged push this long in case a voice charge is about to land, but only while the player can afford, by the end of the hold, a spell that push could release (mana regen during the hold counts; out of mana, the basic fires at once). First knob to try. |
 | A spoken spell fizzles before the player can push | `game.charge_window_s` (3.0) | Raise to 3.5. Lower toward 2.5 only if `check_muse.py` suggests it with real voices. |
 | The charge lands too long after speaking | `voice.perfect_hold_s` (0.5) | Lower to 0.25, or 0 (publish the first match). Costs ×1.15 perfect bonuses. |
 | The ×1.15 perfect bonus almost never fires | `voice.perfect_hold_s` (0.5) | Raise to 0.8. Charges land later. |
@@ -232,6 +232,7 @@ Change values in `config.local.yaml` on the Jetson, then quit (`Esc`) and start 
 | Holy Light or Heal doesn't fire when the pose is made on the last word | `game.pose_grace_s` (1.0) | Raise to 1.5. A charge releases a pose that is already held only if the pose rose within this time before the charge. |
 | A buff fires from a pose held since before the incantation | `game.pose_grace_s` (1.0) | Lower to 0.6. Hands up held since the lobby never releases; a new pose edge does. |
 | A child process keeps dying and the box restarts too often | `pipeline.restart_reset_s` (60), `pipeline.max_restarts` (5) | A child that runs `restart_reset_s` without dying gets its restart count back. |
+| Players leave victory before reading the chronicle, or it keeps them waiting | `game.victory_read_s` (4.0) | Raise to 6 to give the chronicle more time; lower it if players stand with hands up and nothing happens. `victory_max_s` (30) still ends victory. |
 | Sound too loud or too quiet | `render.audio.volume` (0.6) | Adjust. `render.audio.enabled: false` mutes. |
 | K.O. effect gets cut off, or the frozen fight outlasts it | `game.ko_hold_s` (2.5), `render.fx.ko_s` (2.5) | Change both together and keep them equal. Validation rejects `fx.ko_s` above `ko_hold_s`. |
 
@@ -307,6 +308,7 @@ Run with `-- --debug` so the overlay is one key away. Tick each line, and write 
 **Fight: everything else**
 - [ ] Basic attack: a push with nothing charged. With mics on it lands about 0.6 s late (`release_grace_s`). Out of mana for every spell that push could release, it fires at once.
 - [ ] Say a spell and push on the last word: the spell fires, not a basic attack. This works even right after a basic attack, during its cooldown.
+- [ ] With mics on, spam basic attacks (push, push, push): they keep firing about every 1.4 s (0.6 s hold plus 0.8 s cooldown) and never stall.
 - [ ] Dodge by a 0.3 m sidestep and by a 0.25 m duck during the red ring: DODGE! and no damage.
 - [ ] Damage rises when the players stand closer: the distance multiplier runs from ×1.4 at 1.2 m to ×0.7 at 2.8 m, for the attacker at release and the defender at impact.
 - [ ] One player steps out for more than 2 s: the fight freezes and the banner counts down (`STEP INTO VIEW · 20`, `· 19`, ...); stepping back resumes it.
@@ -320,7 +322,7 @@ Run with `-- --debug` so the overlay is one key away. Tick each line, and write 
 
 **Victory and rematch**
 - [ ] Winner headline, a stats card per player, the chronicle (Spark-written with Wi-Fi, a template without).
-- [ ] Hands up does nothing until 5 s have passed and the chronicle is on screen (Spark, or the template within 8 s). Then both raise their hands: back to the lobby with names and classes kept. After 30 s it goes back on its own. Hands still up from victory don't start a match: lower them, then raise them again.
+- [ ] Hands up does nothing until 5 s have passed and the chronicle has been on screen for 4 s (`victory_read_s`; Spark, or the template within 8 s). Then both raise their hands: back to the lobby with names and classes kept. After 30 s it goes back on its own. Hands still up from victory don't start a match: lower them, then raise them again.
 
 **Failures**
 - [ ] Network off mid-match: MIC OFF; spell keys still work; the next loading card uses config incantations; the chronicle uses the template. Network back on: mics reconnect within about 10 s.
